@@ -74,22 +74,44 @@ A complete system that converts scanned PDF documents into structured, editable 
 
 **Important**: Install PaddleOCR before running the system:
 
+**macOS/Linux**:
 ```bash
 pip3 install paddleocr paddlepaddle
+```
+
+**Windows**:
+```cmd
+pip install paddleocr paddlepaddle
 ```
 
 This will download approximately 200-300MB and may take 10-20 minutes. The first run will download additional model files (100-200MB).
 
 ### Using the Development Script
 
-The easiest way to start both servers:
+#### Option 1: Cross-Platform Python Script (Recommended)
 
+Works on Windows, macOS, and Linux:
+
+```bash
+python run_dev.py
+```
+
+#### Option 2: Platform-Specific Scripts
+
+**macOS/Linux**:
 ```bash
 chmod +x run_dev.sh
 ./run_dev.sh
 ```
 
-This will:
+**Windows**:
+```cmd
+run_dev.bat
+```
+
+Or double-click `run_dev.bat` in File Explorer.
+
+These scripts will:
 1. Create a Python virtual environment
 2. Install all dependencies
 3. Start the backend on port 5000
@@ -100,24 +122,49 @@ This will:
 #### Backend Setup
 
 1. Create virtual environment:
+
+**macOS/Linux**:
 ```bash
 python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+source venv/bin/activate
+```
+
+**Windows**:
+```cmd
+python -m venv venv
+venv\Scripts\activate
 ```
 
 2. Install dependencies:
+
+**macOS/Linux**:
 ```bash
 pip install -r backend/requirements.txt
 ```
 
+**Windows**:
+```cmd
+pip install -r backend\requirements.txt
+```
+
 3. Install PaddleOCR (required for OCR processing):
+
+**macOS/Linux**:
 ```bash
 pip install paddleocr paddlepaddle
 ```
 
+**Windows**:
+```cmd
+pip install paddleocr paddlepaddle
+```
+
 4. Run backend server:
+
+**All platforms**:
 ```bash
-python3 start_backend.py
+python3 start_backend.py  # macOS/Linux
+python start_backend.py   # Windows
 ```
 
 The backend will be available at `http://localhost:5000` or `http://127.0.0.1:5000`
@@ -187,10 +234,17 @@ Environment variables:
 
 ## System Requirements
 
-- **Target OS**: MacOS 13+ or Windows 11
+- **Target OS**: MacOS 13+, Windows 11, or Linux
 - **CPU**: Intel series (CPU-only processing)
 - **Memory**: Minimum 4GB RAM for OCR processing
 - **Storage**: 1GB free space for temporary files
+- **Python**: 3.8 or higher
+- **Node.js**: 16 or higher
+
+## Platform-Specific Guides
+
+- **Windows Users**: See [WINDOWS_SETUP_GUIDE.md](WINDOWS_SETUP_GUIDE.md) for detailed Windows 11 setup instructions
+- **macOS/Linux Users**: Follow the Quick Start guide above
 
 ## License
 
