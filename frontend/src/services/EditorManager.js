@@ -690,6 +690,9 @@ export class EditorManager {
             // Render new content
             await this.editor.render(normalizedData);
             
+            // Apply font size styles based on metadata
+            this._applyFontSizeStyles(normalizedData.blocks);
+            
             // Store current data
             this.currentData = normalizedData;
             this.editingState.hasUnsavedChanges = false;
@@ -699,6 +702,41 @@ export class EditorManager {
             console.error('Failed to load content into editor:', error);
             throw new Error('Failed to load converted content');
         }
+    }
+    
+    /**
+     * Apply font size styles to rendered blocks based on metadata
+     * @param {Array} blocks - Array of blocks with metadata
+     * @private
+     */
+    _applyFontSizeStyles(blocks) {
+        if (!blocks || !Array.isArray(blocks)) return;
+        
+        // Wait a bit for DOM to be ready
+        setTimeout(() => {
+            const editorBlocks = document.querySelectorAll('.ce-block');
+            
+            blocks.forEach((block, index) => {
+                const fontSize = block.metadata?.estimatedFontSize;
+                if (fontSize && editorBlocks[index]) {
+                    const blockElement = editorBlocks[index];
+                    const contentElement = blockElement.querySelector('.ce-block__content');
+                    
+                    if (contentElement) {
+                        // Apply font size to the content element
+                        contentElement.style.fontSize = `${fontSize}px`;
+                        
+                        // Adjust line height proportionally
+                        contentElement.style.lineHeight = '1.4';
+                        
+                        // Add a data attribute for debugging
+                        contentElement.dataset.estimatedFontSize = fontSize;
+                        
+                        console.log(`Block ${index}: Applied font size ${fontSize}px`);
+                    }
+                }
+            });
+        }, 100);
     }
     
     /**

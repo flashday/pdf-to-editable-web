@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PDF to Editable Web Layout</title>
     <style>
+        * {
+            box-sizing: border-box;
+        }
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             margin: 0;
@@ -12,7 +15,7 @@
             background-color: #f5f5f5;
         }
         .container {
-            max-width: 1200px;
+            max-width: 1600px;
             margin: 0 auto;
             background: white;
             border-radius: 8px;
@@ -22,40 +25,172 @@
         .header {
             background: #2c3e50;
             color: white;
-            padding: 20px;
+            padding: 15px 20px;
             text-align: center;
         }
+        .header h1 {
+            margin: 0 0 5px 0;
+            font-size: 1.5em;
+        }
+        .header p {
+            margin: 0;
+            opacity: 0.8;
+            font-size: 0.9em;
+        }
         .upload-section {
-            padding: 20px;
+            padding: 15px 20px;
             border-bottom: 1px solid #eee;
-        }
-        .editor-section {
-            padding: 20px;
-            min-height: 400px;
-        }
-        #editor {
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            min-height: 300px;
+            background: #fafafa;
         }
         .upload-area {
             border: 2px dashed #ddd;
             border-radius: 8px;
-            padding: 40px;
+            padding: 25px;
             text-align: center;
             cursor: pointer;
-            transition: border-color 0.3s;
+            transition: border-color 0.3s, background-color 0.3s;
         }
         .upload-area:hover {
             border-color: #3498db;
+            background-color: #f0f8ff;
         }
         .upload-area.dragover {
             border-color: #2980b9;
             background-color: #ecf0f1;
         }
+        .upload-area p {
+            margin: 5px 0;
+        }
         .file-input {
             display: none;
         }
+        
+        /* 主内容区域 - 左右分栏 */
+        .main-content {
+            display: none;
+            height: calc(100vh - 200px);
+            min-height: 500px;
+        }
+        .main-content.visible {
+            display: flex;
+        }
+        
+        /* 左侧图像预览区 */
+        .image-panel {
+            flex: 1;
+            border-right: 1px solid #ddd;
+            display: flex;
+            flex-direction: column;
+            background: #f8f9fa;
+        }
+        .image-panel-header {
+            padding: 10px 15px;
+            background: #e9ecef;
+            border-bottom: 1px solid #ddd;
+            font-weight: 600;
+            color: #495057;
+        }
+        .image-container {
+            flex: 1;
+            overflow: auto;
+            padding: 10px;
+            position: relative;
+        }
+        .image-wrapper {
+            position: relative;
+            display: inline-block;
+        }
+        #documentImage {
+            max-width: 100%;
+            height: auto;
+            display: block;
+        }
+        
+        /* OCR 区域框 */
+        .ocr-region {
+            position: absolute;
+            border: 2px solid rgba(52, 152, 219, 0.6);
+            background: rgba(52, 152, 219, 0.1);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .ocr-region:hover {
+            border-color: rgba(231, 76, 60, 0.8);
+            background: rgba(231, 76, 60, 0.2);
+        }
+        .ocr-region.active {
+            border-color: rgba(46, 204, 113, 0.8);
+            background: rgba(46, 204, 113, 0.3);
+        }
+        .ocr-region-tooltip {
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            white-space: nowrap;
+            display: none;
+            z-index: 100;
+        }
+        .ocr-region:hover .ocr-region-tooltip {
+            display: block;
+        }
+        
+        /* 右侧编辑器区 */
+        .editor-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .editor-panel-header {
+            padding: 10px 15px;
+            background: #e9ecef;
+            border-bottom: 1px solid #ddd;
+            font-weight: 600;
+            color: #495057;
+        }
+        .editor-container {
+            flex: 1;
+            overflow: auto;
+            padding: 15px;
+            position: relative;
+        }
+        /* 底层图像背景 */
+        .editor-background-image {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            right: 15px;
+            opacity: 0.15;
+            pointer-events: none;
+            z-index: 0;
+        }
+        .editor-background-image img {
+            width: 100%;
+            height: auto;
+        }
+        #editor {
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            min-height: 300px;
+            background: rgba(255, 255, 255, 0.85);
+            position: relative;
+            z-index: 1;
+        }
+        
+        /* Editor.js 块高亮 */
+        .ce-block.highlighted {
+            background: rgba(46, 204, 113, 0.2);
+            border-radius: 4px;
+            transition: background 0.3s;
+        }
+        
+        /* 状态消息 */
         .status {
             margin-top: 10px;
             padding: 10px;
@@ -87,6 +222,189 @@
             color: #856404;
             border: 1px solid #ffeeba;
         }
+        
+        /* 置信度报告 */
+        #confidenceReport {
+            margin: 10px 0;
+            padding: 12px;
+            background: #f0f9ff;
+            border-left: 4px solid #3498db;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+        #confidenceReport h4 {
+            margin: 0 0 8px 0;
+            color: #2c3e50;
+        }
+        #confidenceReport p {
+            margin: 0 0 8px 0;
+            color: #666;
+        }
+        #confidenceReport ul {
+            margin: 5px 0 0 20px;
+            padding: 0;
+            color: #666;
+        }
+        
+        /* 进度条 */
+        .progress-bar {
+            height: 4px;
+            background: #e9ecef;
+            border-radius: 2px;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+        .progress-bar-fill {
+            height: 100%;
+            background: #3498db;
+            transition: width 0.3s;
+        }
+        
+        /* 图例 */
+        .legend {
+            padding: 8px 15px;
+            background: #f8f9fa;
+            border-top: 1px solid #ddd;
+            font-size: 0.85em;
+            color: #666;
+        }
+        .legend-item {
+            display: inline-flex;
+            align-items: center;
+            margin-right: 15px;
+        }
+        .legend-color {
+            width: 16px;
+            height: 16px;
+            border-radius: 3px;
+            margin-right: 5px;
+        }
+        .legend-color.normal {
+            background: rgba(52, 152, 219, 0.3);
+            border: 2px solid rgba(52, 152, 219, 0.6);
+        }
+        .legend-color.hover {
+            background: rgba(231, 76, 60, 0.3);
+            border: 2px solid rgba(231, 76, 60, 0.8);
+        }
+        .legend-color.active {
+            background: rgba(46, 204, 113, 0.3);
+            border: 2px solid rgba(46, 204, 113, 0.8);
+        }
+        
+        /* 下载按钮 */
+        .download-buttons {
+            display: flex;
+            gap: 8px;
+        }
+        .download-btn {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.8em;
+            transition: background 0.2s;
+            white-space: nowrap;
+        }
+        .download-btn:hover {
+            background: #2980b9;
+        }
+        .download-btn:nth-child(2) {
+            background: #27ae60;
+        }
+        .download-btn:nth-child(2):hover {
+            background: #219a52;
+        }
+        .download-btn:nth-child(3) {
+            background: #9b59b6;
+        }
+        .download-btn:nth-child(3):hover {
+            background: #8e44ad;
+        }
+        .editor-panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        /* 文本编辑弹窗 */
+        .text-edit-popup {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+            width: 300px;
+            z-index: 1000;
+            overflow: hidden;
+        }
+        .text-edit-header {
+            padding: 10px 15px;
+            background: #f5f5f5;
+            border-bottom: 1px solid #ddd;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: 600;
+        }
+        .text-edit-header .close-btn {
+            background: none;
+            border: none;
+            font-size: 16px;
+            cursor: pointer;
+            color: #666;
+        }
+        .text-edit-header .close-btn:hover {
+            color: #333;
+        }
+        .text-edit-input {
+            width: 100%;
+            min-height: 100px;
+            padding: 12px;
+            border: none;
+            border-bottom: 1px solid #eee;
+            font-family: inherit;
+            font-size: 14px;
+            resize: vertical;
+            box-sizing: border-box;
+        }
+        .text-edit-input:focus {
+            outline: none;
+            background: #fffef5;
+        }
+        .text-edit-footer {
+            padding: 10px 15px;
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+        }
+        .text-edit-footer button {
+            padding: 6px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        .text-edit-footer .save-btn {
+            background: #4285f4;
+            color: white;
+        }
+        .text-edit-footer .save-btn:hover {
+            background: #3367d6;
+        }
+        .text-edit-footer .cancel-btn {
+            background: #e0e0e0;
+            color: #333;
+        }
+        .text-edit-footer .cancel-btn:hover {
+            background: #d0d0d0;
+        }
+        
+        /* 已修改的区域标记 */
+        .ocr-region.modified {
+            border-color: rgba(46, 204, 113, 0.8) !important;
+            background: rgba(46, 204, 113, 0.2) !important;
+        }
     </style>
 </head>
 <body>
@@ -98,16 +416,57 @@
         
         <div class="upload-section">
             <div class="upload-area" id="uploadArea">
-                <p>Drop your PDF, JPG, or PNG file here or click to select</p>
-                <p><small>Maximum file size: 10MB</small></p>
+                <p>📄 Drop your PDF, JPG, or PNG file here or click to select</p>
+                <p><small>Maximum file size: 10MB | Supported: PDF, JPG, PNG</small></p>
             </div>
             <input type="file" id="fileInput" class="file-input" accept=".pdf,.jpg,.jpeg,.png">
             <div id="status" class="status"></div>
+            <div class="progress-bar" id="progressBar" style="display: none;">
+                <div class="progress-bar-fill" id="progressBarFill" style="width: 0%"></div>
+            </div>
         </div>
         
-        <div class="editor-section">
-            <h3>Editable Content</h3>
-            <div id="editor"></div>
+        <div class="main-content" id="mainContent">
+            <!-- 左侧：原始图像 -->
+            <div class="image-panel">
+                <div class="image-panel-header">📷 Original Document</div>
+                <div class="image-container" id="imageContainer">
+                    <div class="image-wrapper" id="imageWrapper">
+                        <img id="documentImage" src="" alt="Document preview">
+                        <!-- OCR 区域框将动态添加到这里 -->
+                    </div>
+                </div>
+                <div class="legend">
+                    <span class="legend-item"><span class="legend-color normal"></span>识别区域</span>
+                    <span class="legend-item"><span class="legend-color hover"></span>悬停</span>
+                    <span class="legend-item"><span class="legend-color active"></span>选中</span>
+                </div>
+            </div>
+            
+            <!-- 右侧：编辑器 -->
+            <div class="editor-panel">
+                <div class="editor-panel-header">
+                    <span>✏️ Editable Content</span>
+                    <div class="download-buttons" id="downloadButtons" style="display: none;">
+                        <button id="downloadRawJsonBtn" class="download-btn" title="PaddleOCR 原始 JSON">
+                            📥 原始JSON
+                        </button>
+                        <button id="downloadRawHtmlBtn" class="download-btn" title="PaddleOCR 原始 HTML">
+                            📥 原始HTML
+                        </button>
+                        <button id="downloadOcrBtn" class="download-btn" title="OCR 处理结果">
+                            📥 OCR结果
+                        </button>
+                    </div>
+                </div>
+                <div id="confidenceReport"></div>
+                <div class="editor-container">
+                    <div class="editor-background-image" id="editorBackgroundImage">
+                        <img id="editorBgImg" src="" alt="">
+                    </div>
+                    <div id="editor"></div>
+                </div>
+            </div>
         </div>
     </div>
     

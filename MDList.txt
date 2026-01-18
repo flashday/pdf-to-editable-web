@@ -1,0 +1,222 @@
+# Markdown 文件分类清单
+
+## 📂 项目根目录（保留 - 核心文档）
+
+### 主要文档
+1. README.md
+   - 项目主文档
+   - 用途：项目介绍、快速开始、功能说明
+   - 重要性：⭐⭐⭐⭐⭐ 必须保留
+
+### 安装相关（核心）
+2. INSTALLATION_GUIDE.md
+   - 完整安装指南
+   - 用途：详细的安装步骤、系统要求、常见问题
+   - 重要性：⭐⭐⭐⭐⭐ 必须保留
+
+3. QUICK_SETUP.md
+   - 快速安装参考卡
+   - 用途：一键复制命令、快速启动
+   - 重要性：⭐⭐⭐⭐⭐ 必须保留
+
+4. SETUP_CHECKLIST.md
+   - 安装检查清单
+   - 用途：逐项验证安装过程
+   - 重要性：⭐⭐⭐⭐ 推荐保留
+
+5. README_INSTALLATION.md
+   - 安装文档导航
+   - 用途：引导用户选择合适的安装文档
+   - 重要性：⭐⭐⭐⭐ 推荐保留
+
+### 使用指南（核心）
+6. QUICK_START_GUIDE.md
+   - 快速开始指南
+   - 用途：项目快速上手
+   - 重要性：⭐⭐⭐⭐ 推荐保留
+
+7. TROUBLESHOOTING.md
+   - 故障排查指南
+   - 用途：常见问题解决方案
+   - 重要性：⭐⭐⭐⭐ 推荐保留
+
+---
+
+## 📁 MDFiles 目录（归档 - 参考文档）
+
+### 安装相关（参考）
+8. VERSION_VERIFICATION.md
+   - 版本验证报告
+   - 用途：详细的版本信息和验证记录
+   - 重要性：⭐⭐⭐ 参考文档
+   - 移动原因：详细的技术文档，日常使用频率低
+
+9. FINAL_VERSION_CHECK.md
+   - 最终版本检查报告
+   - 用途：版本检查的最终确认报告
+   - 重要性：⭐⭐⭐ 参考文档
+   - 移动原因：一次性检查报告，已完成验证
+
+10. DEPENDENCY_INSTALLATION_COMPLETE.md
+    - 依赖安装完成报告
+    - 用途：记录安装过程和结果
+    - 重要性：⭐⭐⭐ 参考文档
+    - 移动原因：历史记录，已完成安装
+
+11. PYTHON_VERSION_COMPATIBILITY_ANALYSIS.md
+    - Python 版本兼容性分析
+    - 用途：详细的版本兼容性分析
+    - 重要性：⭐⭐⭐ 参考文档
+    - 移动原因：技术分析文档，核心信息已在 INSTALLATION_GUIDE.md
+
+12. PYTHON_39_INSTALLATION_GUIDE.md
+    - Python 3.9 安装指南
+    - 用途：Python 3.9 的安装说明（已弃用）
+    - 重要性：⭐⭐ 过时文档
+    - 移动原因：项目使用 Python 3.10.11，此文档已过时
+
+### 系统相关（参考）
+13. WINDOWS_SETUP_GUIDE.md
+    - Windows 安装指南
+    - 用途：Windows 特定的安装说明
+    - 重要性：⭐⭐⭐ 参考文档
+    - 移动原因：内容已整合到 INSTALLATION_GUIDE.md
+
+14. SYSTEM_VERIFICATION.md
+    - 系统验证文档
+    - 用途：系统功能验证记录
+    - 重要性：⭐⭐⭐ 参考文档
+    - 移动原因：验证记录，日常使用频率低
+
+### 实现总结（参考）
+15. INTEGRATION_STATUS_REPORT.md
+    - 集成状态报告
+    - 用途：记录集成过程和状态
+    - 重要性：⭐⭐⭐ 参考文档
+    - 移动原因：历史记录，项目已完成集成
+
+16. EDITOR_IMPLEMENTATION_SUMMARY.md
+    - Editor.js 实现总结
+    - 用途：前端编辑器实现的详细说明
+    - 重要性：⭐⭐⭐ 参考文档
+    - 移动原因：技术实现细节，开发完成后参考价值降低
+
+17. PERFORMANCE_AND_RESOURCE_MANAGEMENT_SUMMARY.md
+    - 性能和资源管理总结
+    - 用途：性能优化和资源管理的实现说明
+    - 重要性：⭐⭐⭐ 参考文档
+    - 移动原因：技术实现细节，开发完成后参考价值降低
+
+18. REAL_TIME_STATUS_IMPLEMENTATION.md
+    - 实时状态实现说明
+    - 用途：实时状态更新功能的实现细节
+    - 重要性：⭐⭐⭐ 参考文档
+    - 移动原因：技术实现细节，开发完成后参考价值降低
+
+19. FINAL_CHECKPOINT_SUMMARY.md
+    - 最终检查点总结
+    - 用途：项目最终验证的总结报告
+    - 重要性：⭐⭐⭐ 参考文档
+    - 移动原因：历史记录，项目已完成验证
+
+20. PROJECT_SUMMARY.md
+    - 项目总结
+    - 用途：项目整体总结和说明
+    - 重要性：⭐⭐⭐ 参考文档
+    - 移动原因：内容可能与 README.md 重复
+
+### GitHub 相关（参考）
+21. GITHUB_UPLOAD_GUIDE.md
+    - GitHub 上传指南
+    - 用途：如何上传项目到 GitHub
+    - 重要性：⭐⭐ 参考文档
+    - 移动原因：一次性操作指南，已完成上传
+
+22. GitHub上传成功.md
+    - GitHub 上传成功记录
+    - 用途：记录上传成功的状态
+    - 重要性：⭐⭐ 历史记录
+    - 移动原因：历史记录，已完成上传
+
+23. 上传到GitHub的步骤.md
+    - GitHub 上传步骤（中文）
+    - 用途：GitHub 上传的中文说明
+    - 重要性：⭐⭐ 参考文档
+    - 移动原因：与 GITHUB_UPLOAD_GUIDE.md 内容重复
+
+### 演示相关（参考）
+24. DEMO_INSTRUCTIONS.md
+    - 演示说明
+    - 用途：项目演示的操作说明
+    - 重要性：⭐⭐⭐ 参考文档
+    - 移动原因：演示用文档，日常使用频率低
+
+---
+
+## 📊 统计信息
+
+### 文件总数：24 个
+
+### 保留在根目录：7 个
+- README.md
+- INSTALLATION_GUIDE.md
+- QUICK_SETUP.md
+- SETUP_CHECKLIST.md
+- README_INSTALLATION.md
+- QUICK_START_GUIDE.md
+- TROUBLESHOOTING.md
+
+### 移动到 MDFiles：17 个
+- 安装相关参考文档：5 个
+- 系统相关参考文档：2 个
+- 实现总结文档：7 个
+- GitHub 相关文档：3 个
+- 演示相关文档：0 个
+
+---
+
+## 🎯 整理原则
+
+### 保留在根目录的标准
+1. ⭐⭐⭐⭐⭐ 必须保留：核心文档，日常使用频率高
+2. ⭐⭐⭐⭐ 推荐保留：重要文档，经常参考
+3. 用户第一次接触项目时需要的文档
+4. 快速开始和问题排查文档
+
+### 移动到 MDFiles 的标准
+1. ⭐⭐⭐ 参考文档：技术细节，使用频率低
+2. ⭐⭐ 历史记录：一次性文档，已完成的任务
+3. 重复内容：信息已整合到其他文档
+4. 过时文档：不再使用的版本或方案
+
+---
+
+## 📝 建议
+
+### 根目录文档结构（整理后）
+```
+项目根目录/
+├── README.md                    # 项目主文档
+├── INSTALLATION_GUIDE.md        # 完整安装指南
+├── QUICK_SETUP.md               # 快速安装
+├── SETUP_CHECKLIST.md           # 安装检查清单
+├── README_INSTALLATION.md       # 安装文档导航
+├── QUICK_START_GUIDE.md         # 快速开始
+├── TROUBLESHOOTING.md           # 故障排查
+└── MDFiles/                     # 参考文档归档
+    ├── installation/            # 安装相关
+    ├── implementation/          # 实现总结
+    ├── github/                  # GitHub 相关
+    └── archive/                 # 历史归档
+```
+
+### 进一步优化建议
+1. 考虑将 MDFiles 下的文档按类别分子目录
+2. 在 README.md 中添加文档导航链接
+3. 定期审查 MDFiles 中的文档，删除完全过时的内容
+4. 保持根目录简洁，只保留最常用的 5-7 个文档
+
+---
+
+生成时间：2026-01-18
+生成者：Kiro AI Assistant

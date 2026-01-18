@@ -5,7 +5,6 @@ import os
 from typing import Tuple, Optional
 from werkzeug.datastructures import FileStorage
 from werkzeug.utils import secure_filename
-import magic
 from pathlib import Path
 from backend.services.error_handler import error_handler, ErrorCategory
 
@@ -75,17 +74,17 @@ class FileValidator:
             if file_size == 0:
                 raise ValidationError("File is empty")
             
-            # Validate MIME type
-            file_content = file.read(1024)  # Read first 1KB for MIME detection
+            # Validate file signature (magic bytes) for common formats
+            file_content = file.read(8)  # Read first 8 bytes for signature detection
             file.seek(0)  # Reset file pointer
             
-            try:
-                mime_type = magic.from_buffer(file_content, mime=True)
-                if mime_type not in cls.SUPPORTED_TYPES[file_ext]:
-                    raise ValidationError(f"File content does not match extension. Expected {file_ext.upper()} format")
-            except Exception:
-                # If magic fails, continue with extension-based validation
-                pass
+            # Check file signatures
+            if file_ext == 'pdf' and not file_content.startswith(b'%PDF'):
+                raise ValidationError(f"File content does not match extension. Expected PDF format")
+            elif file_ext in ['jpg', 'jpeg'] and not (file_content.startswith(b'\xff\xd8\xff')):
+                raise ValidationError(f"File content does not match extension. Expected JPEG format")
+            elif file_ext == 'png' and not file_content.startswith(b'\x89PNG\r\n\x1a\n'):
+                raise ValidationError(f"File content does not match extension. Expected PNG format")
             
             return True, None
             

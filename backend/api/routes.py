@@ -409,3 +409,208 @@ def get_conversion_history(job_id):
             }
         )
         return jsonify(response_data), status_code
+
+
+@api_bp.route('/convert/<job_id>/image', methods=['GET'])
+def get_document_image(job_id):
+    """
+    Get the processed document image for display
+    Returns the PDF page converted to image or the original image
+    """
+    from flask import send_file
+    from pathlib import Path
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    try:
+        # Get configured folders
+        temp_folder = current_app.config['TEMP_FOLDER']
+        upload_folder = current_app.config['UPLOAD_FOLDER']
+        
+        # Also check root-level folders (for when running from project root)
+        root_temp = Path('temp')
+        root_uploads = Path('uploads')
+        
+        # List of temp folders to check
+        temp_folders = [temp_folder, root_temp]
+        upload_folders = [upload_folder, root_uploads]
+        
+        # Check temp folders first (for PDF first page images)
+        for tf in temp_folders:
+            image_path = tf / f"{job_id}_page1.png"
+            if image_path.exists():
+                logger.info(f"Serving image from temp folder: {image_path}")
+                return send_file(str(image_path.resolve()), mimetype='image/png')
+            
+            # Check for preprocessed image
+            preprocessed_path = tf / f"{job_id}_page1_preprocessed.png"
+            if preprocessed_path.exists():
+                logger.info(f"Serving preprocessed image: {preprocessed_path}")
+                return send_file(str(preprocessed_path.resolve()), mimetype='image/png')
+        
+        # Check upload folders for original file
+        for uf in upload_folders:
+            # Try different extensions
+            for ext in ['png', 'jpg', 'jpeg', 'pdf']:
+                file_path = uf / f"{job_id}.{ext}"
+                if file_path.exists():
+                    if ext == 'pdf':
+                        # Convert PDF to image on the fly
+                        # Use the first available temp folder
+                        target_temp = temp_folder if temp_folder.exists() else root_temp
+                        target_temp.mkdir(exist_ok=True)
+                        temp_image_path = target_temp / f"{job_id}_page1.png"
+                        success, error = PDFProcessor.extract_first_page_as_image(file_path, temp_image_path)
+                        if success:
+                            logger.info(f"Converted PDF to image: {temp_image_path}")
+                            return send_file(str(temp_image_path.resolve()), mimetype='image/png')
+                        else:
+                            return jsonify({'error': f'Failed to convert PDF: {error}'}), 500
+                    else:
+                        logger.info(f"Serving original image: {file_path}")
+                        mimetype = 'image/png' if ext == 'png' else 'image/jpeg'
+                        return send_file(str(file_path.resolve()), mimetype=mimetype)
+        
+        logger.warning(f"Image not found for job_id: {job_id}")
+        return jsonify({
+            'job_id': job_id,
+            'error': 'Image not found',
+            'status': 'not_found'
+        }), 404
+        
+    except Exception as e:
+        response_data, status_code = error_handler.handle_error(
+            e,
+            context={
+                'operation': 'get_document_image',
+                'job_id': job_id,
+                'endpoint': f'/convert/{job_id}/image'
+            }
+        )
+        return jsonify(response_data), status_code
+
+    except Exception as e:
+        response_data, status_code = error_handler.handle_error(
+            e,
+            context={
+                'operation': 'get_document_image',
+                'job_id': job_id,
+                'endpoint': f'/convert/{job_id}/image'
+            }
+        )
+        return jsonify(response_data), status_code
+
+
+@api_bp.route('/convert/<job_id>/raw-output', methods=['GET'])
+def get_raw_ocr_output(job_id):
+    """
+    Get the raw PaddleOCR output (JSON and HTML)
+    Returns the original OCR results before processing
+    """
+    from pathlib import Path
+    import json
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    try:
+        # Check for raw output files
+        temp_folder = current_app.config['TEMP_FOLDER']
+        root_temp = Path('temp')
+        
+        temp_folders = [temp_folder, root_temp]
+        
+        raw_json = None
+        raw_html = None
+        
+        for tf in temp_folders:
+            json_path = tf / f"{job_id}_raw_ocr.json"
+            html_path = tf / f"{job_id}_raw_ocr.html"
+            
+            if json_path.exists():
+                with open(json_path, 'r', encoding='utf-8') as f:
+                    raw_json = json.load(f)
+                logger.info(f"Found raw JSON at: {json_path}")
+            
+            if html_path.exists():
+                with open(html_path, 'r', encoding='utf-8') as f:
+                    raw_html = f.read()
+                logger.info(f"Found raw HTML at: {html_path}")
+            
+            if raw_json or raw_html:
+                break
+        
+        if not raw_json and not raw_html:
+            return jsonify({
+                'job_id': job_id,
+                'error': 'Raw OCR output not found',
+                'message': 'Raw output files may not have been saved for this job'
+            }), 404
+        
+        return jsonify({
+            'job_id': job_id,
+            'raw_json': raw_json,
+            'raw_html': raw_html
+        })
+        
+    except Exception as e:
+        response_data, status_code = error_handler.handle_error(
+            e,
+            context={
+                'operation': 'get_raw_ocr_output',
+                'job_id': job_id,
+                'endpoint': f'/convert/{job_id}/raw-output'
+            }
+        )
+        return jsonify(response_data), status_code
+
+
+@api_bp.route('/convert/<job_id>/editable-html', methods=['GET'])
+def get_editable_html(job_id):
+    """
+    Get editable HTML content for the OCR result
+    Returns HTML with data attributes for inline editing
+    """
+    from pathlib import Path
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    try:
+        # Check for raw HTML file first (it contains the editable structure)
+        temp_folder = current_app.config['TEMP_FOLDER']
+        root_temp = Path('temp')
+        
+        temp_folders = [temp_folder, root_temp]
+        
+        editable_html = None
+        
+        for tf in temp_folders:
+            html_path = tf / f"{job_id}_raw_ocr.html"
+            
+            if html_path.exists():
+                with open(html_path, 'r', encoding='utf-8') as f:
+                    editable_html = f.read()
+                logger.info(f"Found editable HTML at: {html_path}")
+                break
+        
+        if not editable_html:
+            return jsonify({
+                'job_id': job_id,
+                'error': 'Editable HTML not found',
+                'message': 'HTML output file may not have been saved for this job'
+            }), 404
+        
+        return jsonify({
+            'job_id': job_id,
+            'editable_html': editable_html
+        })
+        
+    except Exception as e:
+        response_data, status_code = error_handler.handle_error(
+            e,
+            context={
+                'operation': 'get_editable_html',
+                'job_id': job_id,
+                'endpoint': f'/convert/{job_id}/editable-html'
+            }
+        )
+        return jsonify(response_data), status_code

@@ -23,6 +23,7 @@ MANIFEST
 
 # Virtual environments
 venv/
+venv310/
 env/
 ENV/
 
@@ -69,9 +70,13 @@ uploads/
 temp/
 *.log
 logs/
+backend/uploads/
+backend/temp/
+backend/logs/
 
 # Hypothesis testing
 .hypothesis/
+backend/.hypothesis/
 
 # Environment variables
 .env
@@ -79,6 +84,9 @@ logs/
 .env.development.local
 .env.test.local
 .env.production.local
+
+# Debug scripts (temporary)
+debug_*.py
 
 # Test files (optional - remove if you want to keep them)
 test_upload_debug.html

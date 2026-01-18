@@ -140,11 +140,15 @@ class DocumentProcessor(DocumentProcessorInterface):
                 f'Detected {len(layout_result.regions)} regions'
             )
             
-            # Extract tables
-            if any(r.classification.value == 'table' for r in layout_result.regions):
+            # Always try to extract tables using PPStructure
+            # This provides better table detection than simple heuristics
+            try:
                 tables = self.ocr_service.extract_tables(str(image_path), layout_result.regions)
-                layout_result.tables = tables
-                logger.info(f"Extracted {len(tables)} tables")
+                if tables:
+                    layout_result.tables = tables
+                    logger.info(f"Extracted {len(tables)} tables using PPStructure")
+            except Exception as e:
+                logger.warning(f"Table extraction failed: {e}")
             
             status_tracker.update_status(
                 document.id,

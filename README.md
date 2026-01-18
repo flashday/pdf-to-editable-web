@@ -7,9 +7,11 @@ A complete system that converts scanned PDF documents into structured, editable 
 - Upload PDF, JPG, or PNG files (up to 10MB)
 - **Full support for Chinese filenames and content**
 - OCR processing with layout analysis using PaddleOCR PP-Structure
-- Convert to Editor.js compatible format
-- Interactive web-based editing interface
-- Preserve document structure (headings, paragraphs, tables)
+- **Split-view layout**: Left side shows original PDF image, right side shows editable content
+- **Table detection and editing**: PPStructure detects tables and generates editable HTML
+- **Text editing**: Click on text blocks in the right panel to edit
+- **Download options**: Download raw OCR JSON, raw HTML, or processed OCR results
+- Preserve document structure (headings, paragraphs, tables, captions)
 - Real-time processing status updates
 - Confidence reporting for conversion quality
 - Multi-page PDF support (processes first page)
@@ -18,8 +20,8 @@ A complete system that converts scanned PDF documents into structured, editable 
 ## Architecture
 
 - **Backend**: Python Flask API with OCR processing pipeline
-- **Frontend**: JavaScript with Editor.js for content editing
-- **OCR Engine**: PaddleOCR PP-Structure for layout analysis
+- **Frontend**: JavaScript with split-view layout for editing
+- **OCR Engine**: PaddleOCR PP-Structure for layout analysis and table detection
 
 ### End-to-End Workflow
 
@@ -32,8 +34,26 @@ A complete system that converts scanned PDF documents into structured, editable 
                                                                 ▼
 ┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
 │   Edit      │◀───│   Render    │◀───│  Validate   │◀───│  Convert to │
-│  Content    │    │  Editor.js  │    │   Schema    │    │  Editor.js  │
+│  Content    │    │  Split View │    │   Schema    │    │  Editor.js  │
 └─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘
+```
+
+### Split-View Layout
+
+```
+┌────────────────────────────────────────────────────────────────────┐
+│                         Header / Upload Area                        │
+├─────────────────────────────┬──────────────────────────────────────┤
+│                             │                                       │
+│    Original PDF Image       │      Editable Content                 │
+│    (with OCR overlays)      │      (Text + Tables)                  │
+│                             │                                       │
+│    - Click to highlight     │      - Click text to edit             │
+│    - View OCR regions       │      - Click tables to edit           │
+│                             │                                       │
+├─────────────────────────────┴──────────────────────────────────────┤
+│                    Download Buttons (JSON/HTML/OCR)                 │
+└────────────────────────────────────────────────────────────────────┘
 ```
 
 ## Project Structure
@@ -241,10 +261,37 @@ Environment variables:
 - **Python**: 3.8 or higher
 - **Node.js**: 16 or higher
 
+## 📚 Documentation
+
+### Core Documentation (Root Directory)
+- **[README.md](README.md)** - This file, project overview and quick start
+- **[INSTALLATION_GUIDE.md](INSTALLATION_GUIDE.md)** - Complete installation guide with troubleshooting
+- **[QUICK_SETUP.md](QUICK_SETUP.md)** - Quick reference card with copy-paste commands
+- **[SETUP_CHECKLIST.md](SETUP_CHECKLIST.md)** - Step-by-step installation checklist
+- **[README_INSTALLATION.md](README_INSTALLATION.md)** - Installation documentation navigator
+- **[QUICK_START_GUIDE.md](QUICK_START_GUIDE.md)** - Quick start guide for using the system
+- **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** - Common issues and solutions
+
+### Reference Documentation (MDFiles Directory)
+Additional technical documentation and historical records are organized in the `MDFiles/` directory:
+
+- **[MDFiles/installation/](MDFiles/installation/)** - Detailed version verification and compatibility analysis
+- **[MDFiles/implementation/](MDFiles/implementation/)** - Implementation summaries and technical details
+- **[MDFiles/github/](MDFiles/github/)** - GitHub upload guides and records
+
+See **[MDFiles/README.md](MDFiles/README.md)** for the complete reference documentation index.
+
+### Documentation Quick Links
+- 🚀 **First time setup?** → [INSTALLATION_GUIDE.md](INSTALLATION_GUIDE.md)
+- ⚡ **Quick install?** → [QUICK_SETUP.md](QUICK_SETUP.md)
+- ✅ **Need checklist?** → [SETUP_CHECKLIST.md](SETUP_CHECKLIST.md)
+- ❓ **Having issues?** → [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
+- 📖 **All docs?** → [README_INSTALLATION.md](README_INSTALLATION.md)
+
 ## Platform-Specific Guides
 
-- **Windows Users**: See [WINDOWS_SETUP_GUIDE.md](WINDOWS_SETUP_GUIDE.md) for detailed Windows 11 setup instructions
-- **macOS/Linux Users**: Follow the Quick Start guide above
+- **Windows Users**: See [INSTALLATION_GUIDE.md](INSTALLATION_GUIDE.md) for detailed Windows 11 setup instructions
+- **macOS/Linux Users**: Follow the Quick Start guide above or see [INSTALLATION_GUIDE.md](INSTALLATION_GUIDE.md)
 
 ## License
 

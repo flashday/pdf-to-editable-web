@@ -199,6 +199,9 @@ class DataNormalizer(DataNormalizerInterface):
                 # Default to paragraph for unknown types
                 block_data = self._create_paragraph_block_data(region)
             
+            # Estimate font size based on bounding box height
+            estimated_font_size = self._estimate_font_size(region)
+            
             # Add metadata for traceability
             metadata = {
                 "confidence": region.confidence,
@@ -209,6 +212,7 @@ class DataNormalizer(DataNormalizerInterface):
                     "height": region.coordinates.height
                 },
                 "originalClassification": region.classification.value,
+                "estimatedFontSize": estimated_font_size,
                 "processingNotes": []
             }
             
@@ -222,6 +226,42 @@ class DataNormalizer(DataNormalizerInterface):
         except Exception as e:
             logger.warning(f"Failed to convert region to block: {e}")
             return None
+    
+    def _estimate_font_size(self, region: Region) -> int:
+        """
+        Estimate font size based on bounding box height and text content
+        
+        Args:
+            region: OCR region with coordinates and content
+            
+        Returns:
+            Estimated font size in pixels
+        """
+        if not region.content or not region.coordinates:
+            return 14  # Default font size
+        
+        # Get bounding box height
+        bbox_height = region.coordinates.height
+        
+        # Count number of lines in the text
+        text = region.content.strip()
+        line_count = max(1, text.count('\n') + 1)
+        
+        # Estimate line height (bbox height / number of lines)
+        line_height = bbox_height / line_count
+        
+        # Font size is typically about 70-80% of line height
+        # We use 0.75 as a reasonable factor
+        estimated_size = int(line_height * 0.75)
+        
+        # Clamp to reasonable range (8px - 72px)
+        estimated_size = max(8, min(72, estimated_size))
+        
+        # Round to common font sizes for cleaner display
+        common_sizes = [8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 32, 36, 48, 72]
+        closest_size = min(common_sizes, key=lambda x: abs(x - estimated_size))
+        
+        return closest_size
     
     def _create_header_block_data(self, region: Region) -> Dict[str, Any]:
         """
