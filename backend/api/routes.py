@@ -504,7 +504,7 @@ def get_document_image(job_id):
 @api_bp.route('/convert/<job_id>/raw-output', methods=['GET'])
 def get_raw_ocr_output(job_id):
     """
-    Get the raw PaddleOCR output (JSON and HTML)
+    Get the raw PaddleOCR output (JSON and HTML) and PPStructure output
     Returns the original OCR results before processing
     """
     from pathlib import Path
@@ -521,25 +521,32 @@ def get_raw_ocr_output(job_id):
         
         raw_json = None
         raw_html = None
+        ppstructure_json = None
         
         for tf in temp_folders:
             json_path = tf / f"{job_id}_raw_ocr.json"
             html_path = tf / f"{job_id}_raw_ocr.html"
+            ppstructure_path = tf / f"{job_id}_ppstructure.json"
             
-            if json_path.exists():
+            if json_path.exists() and raw_json is None:
                 with open(json_path, 'r', encoding='utf-8') as f:
                     raw_json = json.load(f)
                 logger.info(f"Found raw JSON at: {json_path}")
             
-            if html_path.exists():
+            if html_path.exists() and raw_html is None:
                 with open(html_path, 'r', encoding='utf-8') as f:
                     raw_html = f.read()
                 logger.info(f"Found raw HTML at: {html_path}")
             
-            if raw_json or raw_html:
+            if ppstructure_path.exists() and ppstructure_json is None:
+                with open(ppstructure_path, 'r', encoding='utf-8') as f:
+                    ppstructure_json = json.load(f)
+                logger.info(f"Found PPStructure JSON at: {ppstructure_path}")
+            
+            if raw_json and raw_html and ppstructure_json:
                 break
         
-        if not raw_json and not raw_html:
+        if not raw_json and not raw_html and not ppstructure_json:
             return jsonify({
                 'job_id': job_id,
                 'error': 'Raw OCR output not found',
@@ -549,7 +556,8 @@ def get_raw_ocr_output(job_id):
         return jsonify({
             'job_id': job_id,
             'raw_json': raw_json,
-            'raw_html': raw_html
+            'raw_html': raw_html,
+            'ppstructure_json': ppstructure_json
         })
         
     except Exception as e:

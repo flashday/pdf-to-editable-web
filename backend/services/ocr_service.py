@@ -400,6 +400,50 @@ class PaddleOCRService(OCRServiceInterface):
             
             output_folder = Path(image_path).parent
             
+            # 保存 PPStructure 原始结果到 JSON 文件
+            ppstructure_json_path = output_folder / f"{job_id}_ppstructure.json"
+            ppstructure_json_data = {
+                'job_id': job_id,
+                'image_path': str(image_path),
+                'total_items': len(ppstructure_result),
+                'items': []
+            }
+            
+            for idx, item in enumerate(ppstructure_result):
+                item_data = {
+                    'index': idx,
+                    'type': item.get('type', 'unknown'),
+                    'bbox': item.get('bbox', []),
+                    'res': None
+                }
+                
+                # 处理 res 字段
+                res = item.get('res', {})
+                if isinstance(res, dict):
+                    # 表格类型，包含 html 和 cell_bbox
+                    item_data['res'] = {
+                        'html': res.get('html', ''),
+                        'cell_bbox': res.get('cell_bbox', [])
+                    }
+                elif isinstance(res, list):
+                    # 文本类型，包含文本行列表
+                    item_data['res'] = []
+                    for text_item in res:
+                        if isinstance(text_item, dict):
+                            item_data['res'].append({
+                                'text': text_item.get('text', ''),
+                                'confidence': text_item.get('confidence', 0),
+                                'text_region': text_item.get('text_region', [])
+                            })
+                elif isinstance(res, str):
+                    item_data['res'] = res
+                
+                ppstructure_json_data['items'].append(item_data)
+            
+            with open(ppstructure_json_path, 'w', encoding='utf-8') as f:
+                json.dump(ppstructure_json_data, f, ensure_ascii=False, indent=2)
+            logger.info(f"Saved PPStructure JSON to: {ppstructure_json_path}")
+            
             # 读取普通 OCR 结果（包含所有文本行）
             ocr_json_path = output_folder / f"{job_id}_raw_ocr.json"
             ocr_text_items = []

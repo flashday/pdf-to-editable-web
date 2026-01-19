@@ -3,10 +3,10 @@
  */
 export class UIManager {
     constructor() {
-        this.uploadArea = document.getElementById('uploadArea');
-        this.fileInput = document.getElementById('fileInput');
-        this.statusDiv = document.getElementById('status');
-        this.editorSection = document.querySelector('.editor-section');
+        this.uploadArea = null;
+        this.fileInput = null;
+        this.statusDiv = null;
+        this.editorSection = null;
         this.progressContainer = null;
         this.progressBar = null;
         this.progressText = null;
@@ -16,6 +16,18 @@ export class UIManager {
      * Initialize UI components
      */
     initialize() {
+        // Get DOM elements after DOM is ready
+        this.uploadArea = document.getElementById('uploadArea');
+        this.fileInput = document.getElementById('fileInput');
+        this.statusDiv = document.getElementById('status');
+        this.editorSection = document.querySelector('.editor-section');
+        
+        console.log('UIManager initialize:', {
+            uploadArea: !!this.uploadArea,
+            fileInput: !!this.fileInput,
+            statusDiv: !!this.statusDiv
+        });
+        
         this.createProgressIndicator();
         this.setupEventListeners();
     }
@@ -65,14 +77,19 @@ export class UIManager {
      */
     setupEventListeners() {
         if (!this.uploadArea || !this.fileInput) {
+            console.error('UIManager: uploadArea or fileInput not found!');
             return;
         }
 
+        console.log('UIManager: Setting up event listeners');
+
         this.uploadArea.addEventListener('click', () => {
+            console.log('Upload area clicked');
             this.fileInput.click();
         });
 
         this.fileInput.addEventListener('change', (e) => {
+            console.log('File input changed');
             const file = e.target.files[0];
             if (file) {
                 this.onFileSelected(file);

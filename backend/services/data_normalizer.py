@@ -495,7 +495,8 @@ class DataNormalizer(DataNormalizerInterface):
             block_data = {
                 "withHeadings": table.has_headers,
                 "content": validated_content,
-                "stretched": False  # Don't stretch table by default
+                "stretched": False,  # Don't stretch table by default
+                "tableHtml": self._generate_table_html(validated_content, table.has_headers)
             }
             
             # Add comprehensive metadata
@@ -550,6 +551,34 @@ class DataNormalizer(DataNormalizerInterface):
             processed_content.append(processed_row)
         
         return processed_content
+    
+    def _generate_table_html(self, content: List[List[str]], has_headers: bool = False) -> str:
+        """
+        Generate HTML table from content
+        
+        Args:
+            content: Table content as 2D list
+            has_headers: Whether first row is header
+            
+        Returns:
+            HTML table string
+        """
+        if not content:
+            return "<table><tr><td>Empty table</td></tr></table>"
+        
+        html_parts = ["<table>"]
+        
+        for row_idx, row in enumerate(content):
+            html_parts.append("<tr>")
+            for cell in row:
+                if row_idx == 0 and has_headers:
+                    html_parts.append(f"<th>{cell}</th>")
+                else:
+                    html_parts.append(f"<td>{cell}</td>")
+            html_parts.append("</tr>")
+        
+        html_parts.append("</table>")
+        return "".join(html_parts)
     
     def _clean_table_cell(self, cell_content: str) -> str:
         """

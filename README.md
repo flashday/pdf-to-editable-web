@@ -1,298 +1,122 @@
 # PDF to Editable Web Layout System
 
-A complete system that converts scanned PDF documents into structured, editable web content using OCR and Editor.js. The system provides an end-to-end workflow from file upload through OCR processing to interactive web-based editing.
+将扫描的 PDF 文档转换为结构化、可编辑的 Web 内容。使用 PaddleOCR PP-Structure 进行 OCR 处理和布局分析。
 
-## Features
+## 功能特点
 
-- Upload PDF, JPG, or PNG files (up to 10MB)
-- **Full support for Chinese filenames and content**
-- OCR processing with layout analysis using PaddleOCR PP-Structure
-- **Split-view layout**: Left side shows original PDF image, right side shows editable content
-- **Table detection and editing**: PPStructure detects tables and generates editable HTML
-- **Text editing**: Click on text blocks in the right panel to edit
-- **Download options**: Download raw OCR JSON, raw HTML, or processed OCR results
-- Preserve document structure (headings, paragraphs, tables, captions)
-- Real-time processing status updates
-- Confidence reporting for conversion quality
-- Multi-page PDF support (processes first page)
-- IPv4/IPv6 compatible networking
+- 支持上传 PDF、JPG、PNG 文件（最大 10MB）
+- 完整支持中文文件名和内容
+- 使用 PaddleOCR PP-Structure 进行 OCR 和布局分析
+- **分屏布局**：左侧显示原始文档图像，右侧显示 Block 列表
+- **双击编辑**：双击左侧 OCR 区域或右侧 Block 进行编辑
+- **表格编辑**：表格类型 Block 支持直接编辑单元格
+- **文本编辑**：文本类型 Block 弹出文本编辑框
+- **实时高亮**：选中时左右两侧同步高亮
+- **下载功能**：下载文本行 JSON、布局 JSON、编辑后 Block 数据
+- 实时处理状态更新
+- 置信度报告
 
-## Architecture
-
-- **Backend**: Python Flask API with OCR processing pipeline
-- **Frontend**: JavaScript with split-view layout for editing
-- **OCR Engine**: PaddleOCR PP-Structure for layout analysis and table detection
-
-### End-to-End Workflow
-
-```
-┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
-│   Upload    │───▶│  Validate   │───▶│    OCR      │───▶│  Normalize  │
-│   File      │    │   File      │    │  Process    │    │   Data      │
-└─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘
-                                                                │
-                                                                ▼
-┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
-│   Edit      │◀───│   Render    │◀───│  Validate   │◀───│  Convert to │
-│  Content    │    │  Split View │    │   Schema    │    │  Editor.js  │
-└─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘
-```
-
-### Split-View Layout
+## 界面布局
 
 ```
 ┌────────────────────────────────────────────────────────────────────┐
-│                         Header / Upload Area                        │
+│                         上传区域                                    │
 ├─────────────────────────────┬──────────────────────────────────────┤
 │                             │                                       │
-│    Original PDF Image       │      Editable Content                 │
-│    (with OCR overlays)      │      (Text + Tables)                  │
+│    原始文档图像              │      Block 列表                       │
+│    (OCR 区域框)             │      (识别结果)                        │
 │                             │                                       │
-│    - Click to highlight     │      - Click text to edit             │
-│    - View OCR regions       │      - Click tables to edit           │
+│    - 单击选中高亮            │      - 单击选中高亮                    │
+│    - 双击弹出编辑框          │      - 双击弹出编辑框                  │
 │                             │                                       │
 ├─────────────────────────────┴──────────────────────────────────────┤
-│                    Download Buttons (JSON/HTML/OCR)                 │
+│              下载按钮：文本行JSON | 布局JSON | 编辑后Block           │
 └────────────────────────────────────────────────────────────────────┘
 ```
 
-## Project Structure
+## 项目结构
 
 ```
-├── backend/                 # Python backend
-│   ├── api/                # REST API endpoints
-│   ├── models/             # Data models
-│   ├── services/           # Business logic services
-│   │   ├── ocr_service.py      # PaddleOCR integration
-│   │   ├── data_normalizer.py  # OCR to Editor.js conversion
-│   │   ├── document_processor.py # Main processing pipeline
-│   │   └── status_tracker.py   # Real-time status updates
-│   ├── tests/              # Backend tests
-│   ├── app.py              # Application entry point
-│   ├── config.py           # Configuration settings
-│   └── requirements.txt    # Python dependencies
-├── frontend/               # JavaScript frontend
-│   ├── src/                # Source code
-│   │   ├── services/       # Frontend services
-│   │   │   ├── APIClient.js        # Backend API communication
-│   │   │   ├── DocumentProcessor.js # File upload handling
-│   │   │   ├── EditorManager.js    # Editor.js integration
-│   │   │   ├── StatusPoller.js     # Real-time status polling
-│   │   │   └── UIManager.js        # UI state management
-│   │   ├── __tests__/      # Frontend tests
-│   │   ├── index.html      # Main HTML file
-│   │   └── index.js        # Application entry point
-│   ├── package.json        # Node.js dependencies
-│   └── vite.config.js      # Build configuration
-├── run_dev.sh              # Development startup script
-└── README.md               # This file
+├── backend/                 # Python 后端
+│   ├── api/                # REST API
+│   ├── services/           # 业务逻辑
+│   │   ├── ocr_service.py      # PaddleOCR 集成
+│   │   ├── data_normalizer.py  # 数据转换
+│   │   └── document_processor.py # 处理流程
+│   ├── app.py              # 应用入口
+│   └── requirements.txt    # Python 依赖
+├── frontend/               # JavaScript 前端
+│   ├── src/
+│   │   ├── services/       # 前端服务
+│   │   ├── index.html      # 主页面
+│   │   └── index.js        # 应用入口
+│   └── package.json        # Node.js 依赖
+└── README.md
 ```
 
-## Quick Start
+## 快速开始
 
-### Prerequisites
+### 环境要求
 
-**Important**: Install PaddleOCR before running the system:
+- Python 3.10+
+- Node.js 16+
+- PaddleOCR
 
-**macOS/Linux**:
+### 安装 PaddleOCR
+
 ```bash
-pip3 install paddleocr paddlepaddle
-```
-
-**Windows**:
-```cmd
 pip install paddleocr paddlepaddle
 ```
 
-This will download approximately 200-300MB and may take 10-20 minutes. The first run will download additional model files (100-200MB).
-
-### Using the Development Script
-
-#### Option 1: Cross-Platform Python Script (Recommended)
-
-Works on Windows, macOS, and Linux:
-
-```bash
-python run_dev.py
-```
-
-#### Option 2: Platform-Specific Scripts
-
-**macOS/Linux**:
-```bash
-chmod +x run_dev.sh
-./run_dev.sh
-```
+### 启动服务
 
 **Windows**:
 ```cmd
 run_dev.bat
 ```
 
-Or double-click `run_dev.bat` in File Explorer.
+或手动启动：
 
-These scripts will:
-1. Create a Python virtual environment
-2. Install all dependencies
-3. Start the backend on port 5000
-4. Start the frontend on port 3000
-
-### Manual Setup
-
-#### Backend Setup
-
-1. Create virtual environment:
-
-**macOS/Linux**:
-```bash
-python3 -m venv venv
-source venv/bin/activate
-```
-
-**Windows**:
 ```cmd
-python -m venv venv
-venv\Scripts\activate
-```
+# 后端
+.\venv310\Scripts\Activate.ps1
+$env:PYTHONPATH="."
+python backend/app.py
 
-2. Install dependencies:
-
-**macOS/Linux**:
-```bash
-pip install -r backend/requirements.txt
-```
-
-**Windows**:
-```cmd
-pip install -r backend\requirements.txt
-```
-
-3. Install PaddleOCR (required for OCR processing):
-
-**macOS/Linux**:
-```bash
-pip install paddleocr paddlepaddle
-```
-
-**Windows**:
-```cmd
-pip install paddleocr paddlepaddle
-```
-
-4. Run backend server:
-
-**All platforms**:
-```bash
-python3 start_backend.py  # macOS/Linux
-python start_backend.py   # Windows
-```
-
-The backend will be available at `http://localhost:5000` or `http://127.0.0.1:5000`
-
-#### Frontend Setup
-
-1. Install dependencies:
-```bash
+# 前端 (新终端)
 cd frontend
 npm install
-```
-
-2. Run development server:
-```bash
 npm run dev
 ```
 
-The frontend will be available at `http://localhost:3000` or `http://127.0.0.1:3000`
+### 访问
 
-**Note**: If you encounter connection issues, use `http://127.0.0.1:3000` instead of `localhost` due to IPv4/IPv6 compatibility.
+- 前端: http://localhost:3000
+- 后端: http://localhost:5000
 
-## Usage
+## 使用方法
 
-1. Open `http://127.0.0.1:3000` in your browser
-2. Drag and drop a PDF, JPG, or PNG file (or click to select)
-   - **Chinese filenames are fully supported** (e.g., "上海理工大学 2026 硕士初试参考书目.pdf")
-3. Wait for OCR processing (status updates shown in real-time)
-4. Edit the converted content in the Editor.js interface
-5. Use Ctrl/Cmd+S to save your changes
+1. 打开 http://localhost:3000
+2. 拖放或点击上传 PDF/JPG/PNG 文件
+3. 等待 OCR 处理完成
+4. 左侧查看原始文档，右侧查看识别结果
+5. 双击区域进行编辑（文本或表格）
+6. 点击下载按钮导出结果
 
-## Testing
+## API 接口
 
-### Backend Tests
-```bash
-python3 -m pytest backend/tests/ -v
-```
+- `POST /api/convert` - 上传文件
+- `GET /api/convert/{job_id}/status` - 查询状态
+- `GET /api/convert/{job_id}/result` - 获取结果
+- `GET /api/convert/{job_id}/image` - 获取文档图像
+- `GET /api/convert/{job_id}/raw-output` - 获取原始 OCR 输出
 
-### Frontend Tests
-```bash
-cd frontend
-npm test
-```
+## 系统要求
 
-## API Endpoints
-
-- `GET /api/health` - Health check
-- `POST /api/convert` - Upload file for conversion
-- `GET /api/convert/{job_id}/status` - Check conversion status with progress
-- `GET /api/convert/{job_id}/result` - Get conversion result with confidence report
-- `GET /api/convert/{job_id}/history` - Get status update history
-
-## Configuration
-
-Environment variables:
-- `OCR_USE_GPU` - Enable GPU acceleration (default: false)
-- `OCR_LANG` - OCR language (default: ch for Chinese/English)
-- `MEMORY_LIMIT_MB` - Memory limit for OCR processing (default: 1024)
-- `UPLOAD_FOLDER` - Path for uploaded files
-- `TEMP_FOLDER` - Path for temporary files
-
-## Requirements
-
-- Python 3.8+
-- Node.js 16+
-- 10MB maximum file size
-- Supported formats: PDF, JPG, PNG
-
-## System Requirements
-
-- **Target OS**: MacOS 13+, Windows 11, or Linux
-- **CPU**: Intel series (CPU-only processing)
-- **Memory**: Minimum 4GB RAM for OCR processing
-- **Storage**: 1GB free space for temporary files
-- **Python**: 3.8 or higher
-- **Node.js**: 16 or higher
-
-## 📚 Documentation
-
-### Core Documentation (Root Directory)
-- **[README.md](README.md)** - This file, project overview and quick start
-- **[INSTALLATION_GUIDE.md](INSTALLATION_GUIDE.md)** - Complete installation guide with troubleshooting
-- **[QUICK_SETUP.md](QUICK_SETUP.md)** - Quick reference card with copy-paste commands
-- **[SETUP_CHECKLIST.md](SETUP_CHECKLIST.md)** - Step-by-step installation checklist
-- **[README_INSTALLATION.md](README_INSTALLATION.md)** - Installation documentation navigator
-- **[QUICK_START_GUIDE.md](QUICK_START_GUIDE.md)** - Quick start guide for using the system
-- **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** - Common issues and solutions
-
-### Reference Documentation (MDFiles Directory)
-Additional technical documentation and historical records are organized in the `MDFiles/` directory:
-
-- **[MDFiles/installation/](MDFiles/installation/)** - Detailed version verification and compatibility analysis
-- **[MDFiles/implementation/](MDFiles/implementation/)** - Implementation summaries and technical details
-- **[MDFiles/github/](MDFiles/github/)** - GitHub upload guides and records
-
-See **[MDFiles/README.md](MDFiles/README.md)** for the complete reference documentation index.
-
-### Documentation Quick Links
-- 🚀 **First time setup?** → [INSTALLATION_GUIDE.md](INSTALLATION_GUIDE.md)
-- ⚡ **Quick install?** → [QUICK_SETUP.md](QUICK_SETUP.md)
-- ✅ **Need checklist?** → [SETUP_CHECKLIST.md](SETUP_CHECKLIST.md)
-- ❓ **Having issues?** → [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
-- 📖 **All docs?** → [README_INSTALLATION.md](README_INSTALLATION.md)
-
-## Platform-Specific Guides
-
-- **Windows Users**: See [INSTALLATION_GUIDE.md](INSTALLATION_GUIDE.md) for detailed Windows 11 setup instructions
-- **macOS/Linux Users**: Follow the Quick Start guide above or see [INSTALLATION_GUIDE.md](INSTALLATION_GUIDE.md)
+- **操作系统**: Windows 11, macOS 13+, Linux
+- **内存**: 最少 4GB RAM
+- **存储**: 1GB 可用空间
 
 ## License
 
-This project is part of the PDF to Editable Web Layout specification.
+MIT
