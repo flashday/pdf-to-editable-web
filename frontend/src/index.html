@@ -344,6 +344,65 @@
         .download-btn:nth-child(4):hover {
             background: #d35400;
         }
+        .download-btn:nth-child(5) {
+            background: #1abc9c;
+        }
+        .download-btn:nth-child(5):hover {
+            background: #16a085;
+        }
+        
+        /* 编辑模式切换按钮 */
+        .edit-mode-toggle {
+            display: flex;
+            gap: 2px;
+            background: #ddd;
+            border-radius: 4px;
+            padding: 2px;
+        }
+        .mode-btn {
+            background: transparent;
+            color: #666;
+            border: none;
+            padding: 3px 8px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 0.75em;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+        .mode-btn:hover {
+            background: rgba(255,255,255,0.5);
+        }
+        .mode-btn.active {
+            background: white;
+            color: #333;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        /* Markdown 编辑器 */
+        .markdown-editor {
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+        .markdown-textarea {
+            flex: 1;
+            width: 100%;
+            min-height: 400px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.6;
+            resize: none;
+            background: #fafafa;
+        }
+        .markdown-textarea:focus {
+            outline: none;
+            border-color: #3498db;
+            background: #fff;
+        }
         
         /* 文本编辑弹窗 */
         .text-edit-popup {
@@ -652,9 +711,14 @@
             <div class="editor-panel">
                 <div class="editor-panel-header">
                     <span>📋 识别结果</span>
+                    <div class="edit-mode-toggle" id="editModeToggle" style="display: none;">
+                        <button id="blockModeBtn" class="mode-btn active" title="Block 编辑模式">📦 Block</button>
+                        <button id="markdownModeBtn" class="mode-btn" title="Markdown 编辑模式">📝 Markdown</button>
+                    </div>
                     <div class="download-buttons" id="downloadButtons" style="display: none;">
                         <button id="downloadRawJsonBtn" class="download-btn" title="PaddleOCR 文本行识别结果">📥 文本行JSON</button>
                         <button id="downloadPPStructureBtn" class="download-btn" title="PPStructure 布局分析结果">📥 布局JSON</button>
+                        <button id="downloadMarkdownBtn" class="download-btn" title="Markdown 格式输出">📥 Markdown</button>
                         <button id="downloadOcrBtn" class="download-btn" title="编辑后的 Block 数据">📥 编辑后Block</button>
                     </div>
                 </div>
@@ -662,6 +726,9 @@
                 <div class="editor-container">
                     <div id="blockList" class="block-list">
                         <!-- Block 列表将动态添加到这里 -->
+                    </div>
+                    <div id="markdownEditor" class="markdown-editor" style="display: none;">
+                        <textarea id="markdownTextarea" class="markdown-textarea" placeholder="Markdown 内容..."></textarea>
                     </div>
                 </div>
             </div>

@@ -489,17 +489,6 @@ def get_document_image(job_id):
         )
         return jsonify(response_data), status_code
 
-    except Exception as e:
-        response_data, status_code = error_handler.handle_error(
-            e,
-            context={
-                'operation': 'get_document_image',
-                'job_id': job_id,
-                'endpoint': f'/convert/{job_id}/image'
-            }
-        )
-        return jsonify(response_data), status_code
-
 
 @api_bp.route('/convert/<job_id>/raw-output', methods=['GET'])
 def get_raw_ocr_output(job_id):
@@ -622,3 +611,218 @@ def get_editable_html(job_id):
             }
         )
         return jsonify(response_data), status_code
+
+
+@api_bp.route('/convert/<job_id>/markdown', methods=['GET'])
+def get_markdown_output(job_id):
+    """
+    Get Markdown output for the OCR result
+    
+    PaddleOCR 3.x 新功能：支持 Markdown 格式输出
+    将 PPStructure 识别结果转换为 Markdown 格式
+    """
+    from pathlib import Path
+    import json
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    try:
+        temp_folder = current_app.config['TEMP_FOLDER']
+        root_temp = Path('temp')
+        temp_folders = [temp_folder, root_temp]
+        
+        # 首先检查是否有预生成的 Markdown 文件
+        markdown_content = None
+        
+        for tf in temp_folders:
+            md_path = tf / f"{job_id}_raw_ocr.md"
+            if md_path.exists():
+                with open(md_path, 'r', encoding='utf-8') as f:
+                    markdown_content = f.read()
+                logger.info(f"Found pre-generated Markdown at: {md_path}")
+                break
+        
+        # 如果没有预生成的 Markdown，从 PPStructure JSON 生成
+        if not markdown_content:
+            ppstructure_json = None
+            for tf in temp_folders:
+                ppstructure_path = tf / f"{job_id}_ppstructure.json"
+                if ppstructure_path.exists():
+                    with open(ppstructure_path, 'r', encoding='utf-8') as f:
+                        ppstructure_json = json.load(f)
+                    logger.info(f"Found PPStructure JSON at: {ppstructure_path}")
+                    break
+            
+            if ppstructure_json:
+                markdown_content = _convert_ppstructure_to_markdown(ppstructure_json)
+            else:
+                # 尝试从 raw_ocr.json 生成简单的 Markdown
+                for tf in temp_folders:
+                    json_path = tf / f"{job_id}_raw_ocr.json"
+                    if json_path.exists():
+                        with open(json_path, 'r', encoding='utf-8') as f:
+                            raw_json = json.load(f)
+                        markdown_content = _convert_raw_ocr_to_markdown(raw_json)
+                        logger.info(f"Generated Markdown from raw OCR JSON")
+                        break
+        
+        if not markdown_content:
+            return jsonify({
+                'job_id': job_id,
+                'error': 'Markdown output not available',
+                'message': 'No OCR data found to generate Markdown'
+            }), 404
+        
+        return jsonify({
+            'job_id': job_id,
+            'markdown': markdown_content,
+            'format': 'markdown'
+        })
+        
+    except Exception as e:
+        response_data, status_code = error_handler.handle_error(
+            e,
+            context={
+                'operation': 'get_markdown_output',
+                'job_id': job_id,
+                'endpoint': f'/convert/{job_id}/markdown'
+            }
+        )
+        return jsonify(response_data), status_code
+
+
+def _convert_ppstructure_to_markdown(ppstructure_json):
+    """
+    将 PPStructure JSON 转换为 Markdown 格式
+    
+    Args:
+        ppstructure_json: PPStructure 输出的 JSON 数据
+        
+    Returns:
+        Markdown 格式字符串
+    """
+    from bs4 import BeautifulSoup
+    
+    markdown_parts = []
+    items = ppstructure_json.get('items', [])
+    
+    # 按 y 坐标排序
+    sorted_items = sorted(items, key=lambda x: x.get('bbox', [0, 0, 0, 0])[1] if x.get('bbox') else 0)
+    
+    for item in sorted_items:
+        item_type = item.get('type', 'unknown')
+        res = item.get('res', {})
+        
+        if item_type == 'title':
+            text = _extract_text_from_res(res)
+            if text:
+                markdown_parts.append(f"# {text}")
+                markdown_parts.append("")
+                
+        elif item_type == 'text':
+            text = _extract_text_from_res(res)
+            if text:
+                markdown_parts.append(text)
+                markdown_parts.append("")
+                
+        elif item_type == 'header':
+            text = _extract_text_from_res(res)
+            if text:
+                markdown_parts.append(f"*{text}*")
+                markdown_parts.append("")
+                
+        elif item_type == 'table':
+            if isinstance(res, dict) and 'html' in res:
+                table_md = _html_table_to_markdown(res['html'])
+                if table_md:
+                    markdown_parts.append(table_md)
+                    markdown_parts.append("")
+                    
+        elif item_type == 'figure_caption':
+            text = _extract_text_from_res(res)
+            if text:
+                markdown_parts.append(f"*图: {text}*")
+                markdown_parts.append("")
+                
+        elif item_type == 'equation':
+            text = _extract_text_from_res(res)
+            if text:
+                markdown_parts.append(f"${text}$")
+                markdown_parts.append("")
+    
+    return '\n'.join(markdown_parts)
+
+
+def _convert_raw_ocr_to_markdown(raw_json):
+    """
+    将原始 OCR JSON 转换为简单的 Markdown 格式
+    
+    Args:
+        raw_json: 原始 OCR 输出的 JSON 数据
+        
+    Returns:
+        Markdown 格式字符串
+    """
+    markdown_parts = []
+    ocr_results = raw_json.get('ocr_result', [])
+    
+    # 按 y 坐标排序
+    sorted_results = sorted(ocr_results, key=lambda x: x.get('bbox', {}).get('y', 0))
+    
+    for item in sorted_results:
+        text = item.get('text', '').strip()
+        if text:
+            markdown_parts.append(text)
+    
+    return '\n\n'.join(markdown_parts)
+
+
+def _extract_text_from_res(res):
+    """从 res 字段提取文本"""
+    if isinstance(res, str):
+        return res.strip()
+    
+    if isinstance(res, list):
+        texts = []
+        for item in res:
+            if isinstance(item, dict) and 'text' in item:
+                texts.append(item['text'])
+        return ' '.join(texts)
+    
+    if isinstance(res, dict) and 'text' in res:
+        return res['text']
+    
+    return ''
+
+
+def _html_table_to_markdown(html_content):
+    """HTML 表格转 Markdown"""
+    from bs4 import BeautifulSoup
+    
+    if not html_content:
+        return ""
+    
+    soup = BeautifulSoup(html_content, 'html.parser')
+    table = soup.find('table')
+    
+    if not table:
+        return ""
+    
+    rows = table.find_all('tr')
+    markdown_rows = []
+    
+    for row_idx, row in enumerate(rows):
+        cells = row.find_all(['td', 'th'])
+        cell_texts = [cell.get_text(strip=True).replace('|', '\\|') for cell in cells]
+        
+        if not cell_texts:
+            continue
+            
+        markdown_rows.append('| ' + ' | '.join(cell_texts) + ' |')
+        
+        # 第一行后添加分隔符
+        if row_idx == 0:
+            separator = '| ' + ' | '.join(['---'] * len(cell_texts)) + ' |'
+            markdown_rows.append(separator)
+    
+    return '\n'.join(markdown_rows)
