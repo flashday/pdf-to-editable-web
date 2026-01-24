@@ -2,12 +2,16 @@
 PDF processing service for multi-page handling and page extraction
 """
 import io
+import logging
 from typing import Tuple, Optional, Dict, Any
 from pathlib import Path
 import PyPDF2
 from PIL import Image
 import fitz  # PyMuPDF for better PDF to image conversion
 from backend.services.error_handler import error_handler, ErrorCategory
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 class PDFProcessingError(Exception):
     """Custom exception for PDF processing errors"""
@@ -83,12 +87,35 @@ class PDFProcessor:
             # Get the first page
             first_page = pdf_document[0]
             
-            # Convert to image with specified DPI
-            mat = fitz.Matrix(dpi/72, dpi/72)  # 72 is default DPI
+            # 获取页面尺寸（以点为单位，72点=1英寸）
+            page_rect = first_page.rect
+            page_width_inches = page_rect.width / 72
+            page_height_inches = page_rect.height / 72
+            
+            # 计算在指定 DPI 下的图像尺寸
+            target_width = int(page_width_inches * dpi)
+            target_height = int(page_height_inches * dpi)
+            
+            # 限制最大图像尺寸为 4000 像素（与 PPStructureV3 的 max_side_limit 一致）
+            # 这样可以避免处理超大图像导致的性能问题
+            max_dimension = 4000
+            if max(target_width, target_height) > max_dimension:
+                # 计算缩放比例
+                scale = max_dimension / max(target_width, target_height)
+                effective_dpi = int(dpi * scale)
+                logger.info(f"PDF page is large ({target_width}x{target_height} at {dpi} DPI), "
+                           f"reducing to {effective_dpi} DPI to fit within {max_dimension}px limit")
+            else:
+                effective_dpi = dpi
+            
+            # Convert to image with effective DPI
+            mat = fitz.Matrix(effective_dpi/72, effective_dpi/72)  # 72 is default DPI
             pix = first_page.get_pixmap(matrix=mat)
             
             # Save as PNG
             pix.save(str(output_path))
+            
+            logger.info(f"Extracted PDF page as image: {pix.width}x{pix.height} pixels")
             
             pdf_document.close()
             
@@ -125,6 +152,74 @@ class PDFProcessor:
                 f"To process additional pages, please upload them as separate files."
             )
         return None
+    
+    @classmethod
+    def detect_pdf_type(cls, file_path: Path, min_text_length: int = 50) -> str:
+        """
+        检测 PDF 类型（文本型/图像型/混合型）
+        
+        目前仅做日志记录，为后续优化做准备。
+        TODO: 后续可根据类型分流处理，文本型 PDF 直接提取文本，跳过 OCR
+        
+        Args:
+            file_path: PDF 文件路径
+            min_text_length: 判断为文本型的最小文本长度阈值
+            
+        Returns:
+            'text': 文本型 PDF - 包含可提取的文本层，可直接提取
+            'image': 图像型 PDF - 扫描文档，需要 OCR
+            'mixed': 混合型 PDF - 部分页面有文本，部分是图像
+        """
+        try:
+            doc = fitz.open(str(file_path))
+            text_pages = 0
+            image_pages = 0
+            page_details = []
+            
+            # 只检查前 5 页或全部页面（取较小值）
+            pages_to_check = min(5, len(doc))
+            
+            for page_num in range(pages_to_check):
+                page = doc[page_num]
+                text = page.get_text().strip()
+                text_len = len(text)
+                
+                if text_len >= min_text_length:
+                    text_pages += 1
+                    page_details.append(f"P{page_num+1}:text({text_len}字符)")
+                else:
+                    image_pages += 1
+                    page_details.append(f"P{page_num+1}:image({text_len}字符)")
+            
+            doc.close()
+            
+            # 判断类型
+            if text_pages == pages_to_check:
+                pdf_type = 'text'
+            elif image_pages == pages_to_check:
+                pdf_type = 'image'
+            else:
+                pdf_type = 'mixed'
+            
+            # 记录日志
+            logger.info(f"PDF 类型检测: {pdf_type} | "
+                       f"检查页数: {pages_to_check} | "
+                       f"文本页: {text_pages}, 图像页: {image_pages} | "
+                       f"详情: {', '.join(page_details)}")
+            
+            # TODO: 后续优化 - 根据类型分流处理
+            # if pdf_type == 'text':
+            #     # 文本型 PDF 可直接提取文本，跳过 OCR，处理时间 <1 秒
+            #     pass
+            # else:
+            #     # 图像型/混合型 PDF 需要 OCR 处理
+            #     pass
+            
+            return pdf_type
+            
+        except Exception as e:
+            logger.warning(f"PDF 类型检测失败: {e}，默认按图像型处理")
+            return 'image'
     
     @classmethod
     def validate_pdf_structure(cls, file_path: Path) -> Tuple[bool, Optional[str]]:

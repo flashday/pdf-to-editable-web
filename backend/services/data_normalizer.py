@@ -128,18 +128,23 @@ class DataNormalizer(DataNormalizerInterface):
             ConfidenceMetrics object
         """
         # Calculate text confidence from regions
+        # 【修复】过滤掉 None 值，因为某些区域（如表格）没有置信度
         text_confidences = [region.confidence for region in layout_result.regions 
-                          if region.classification in [RegionType.PARAGRAPH, RegionType.HEADER]]
+                          if region.classification in [RegionType.PARAGRAPH, RegionType.HEADER]
+                          and region.confidence is not None]
         text_confidence = sum(text_confidences) / len(text_confidences) if text_confidences else 0.5
         
         # Calculate layout confidence from overall structure
         layout_confidence = layout_result.confidence_score if hasattr(layout_result, 'confidence_score') else 0.7
         
         # Calculate table confidence from table structures
+        # 【修复】过滤掉 None 值
         table_confidences = []
         for block in blocks:
             if block.type == "table" and block.metadata and "confidence" in block.metadata:
-                table_confidences.append(block.metadata["confidence"])
+                conf = block.metadata["confidence"]
+                if conf is not None:
+                    table_confidences.append(conf)
         table_confidence = sum(table_confidences) / len(table_confidences) if table_confidences else 0.6
         
         # Calculate overall confidence as weighted average
@@ -195,6 +200,10 @@ class DataNormalizer(DataNormalizerInterface):
                 block_data = self._create_list_block_data(region)
             elif region.classification == RegionType.IMAGE:
                 block_data = self._create_image_block_data(region)
+            elif region.classification == RegionType.TABLE:
+                # 【修复】处理表格类型的 region
+                # 表格的 content 是 HTML 字符串
+                block_data = self._create_table_block_data_from_html(region)
             else:
                 # Default to paragraph for unknown types
                 block_data = self._create_paragraph_block_data(region)
@@ -346,20 +355,13 @@ class DataNormalizer(DataNormalizerInterface):
             Text with preserved formatting
         """
         # Basic formatting preservation
-        # This can be enhanced with more sophisticated formatting detection
+        # 注意：不再自动将全大写单词转换为 <b> 标签
+        # 因为前端可能不会正确渲染这些 HTML 标签
         
         # Preserve line breaks as <br> tags for Editor.js
         formatted_text = text.replace('\n', '<br>')
         
-        # Detect and preserve bold text (simple heuristic)
-        # Look for text in ALL CAPS (likely bold/emphasized)
-        words = formatted_text.split()
-        for i, word in enumerate(words):
-            if (len(word) > 3 and word.isupper() and 
-                not any(char.isdigit() for char in word)):
-                words[i] = f"<b>{word}</b>"
-        
-        return ' '.join(words)
+        return formatted_text
     
     def _create_list_block_data(self, region: Region) -> Dict[str, Any]:
         """
@@ -468,6 +470,80 @@ class DataNormalizer(DataNormalizerInterface):
             "stretched": False
         }
     
+    def _create_table_block_data_from_html(self, region: Region) -> Dict[str, Any]:
+        """
+        从 HTML 字符串创建表格 block 数据
+        
+        PPStructureV3 返回的表格内容是 HTML 格式，需要解析为 Editor.js 表格格式
+        
+        Args:
+            region: 包含 HTML 表格内容的 Region
+            
+        Returns:
+            Dictionary containing table block data
+        """
+        import re
+        
+        html_content = region.content or ""
+        
+        # 解析 HTML 表格为二维数组
+        content = []
+        has_headers = False
+        
+        try:
+            # 提取所有行
+            row_pattern = r'<tr[^>]*>(.*?)</tr>'
+            rows = re.findall(row_pattern, html_content, re.DOTALL | re.IGNORECASE)
+            
+            for row_idx, row_html in enumerate(rows):
+                row_cells = []
+                
+                # 提取表头单元格
+                th_pattern = r'<th[^>]*>(.*?)</th>'
+                th_cells = re.findall(th_pattern, row_html, re.DOTALL | re.IGNORECASE)
+                
+                if th_cells:
+                    has_headers = True
+                    for cell in th_cells:
+                        # 清理 HTML 标签
+                        cell_text = re.sub(r'<[^>]+>', '', cell).strip()
+                        row_cells.append(cell_text)
+                
+                # 提取普通单元格
+                td_pattern = r'<td[^>]*>(.*?)</td>'
+                td_cells = re.findall(td_pattern, row_html, re.DOTALL | re.IGNORECASE)
+                
+                for cell in td_cells:
+                    # 清理 HTML 标签
+                    cell_text = re.sub(r'<[^>]+>', '', cell).strip()
+                    row_cells.append(cell_text)
+                
+                if row_cells:
+                    content.append(row_cells)
+            
+            # 确保所有行有相同的列数
+            if content:
+                max_cols = max(len(row) for row in content)
+                for row in content:
+                    while len(row) < max_cols:
+                        row.append("")
+        
+        except Exception as e:
+            logger.warning(f"Failed to parse table HTML: {e}")
+            # 如果解析失败，创建一个包含原始 HTML 的单元格表格
+            content = [[html_content]]
+        
+        # 如果解析结果为空，使用原始 HTML
+        if not content:
+            content = [[html_content]]
+        
+        return {
+            "withHeadings": has_headers,
+            "content": content,
+            "stretched": False,
+            "tableHtml": html_content  # 保留原始 HTML 用于渲染
+        }
+
     def _convert_table_to_block(self, table: TableStructure) -> Optional[EditorJSBlock]:
         """
         Convert table structure to Editor.js table block with enhanced processing

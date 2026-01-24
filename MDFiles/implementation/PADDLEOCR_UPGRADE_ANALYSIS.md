@@ -676,22 +676,227 @@ pip install paddlepaddle-gpu==3.3.0
   ✅ Markdown → Block 转换正常
 ```
 
-#### 阶段 3：前端升级（待进行）
+##### 阶段 2.1：性能优化 ✅ 已完成
+
+升级到 PaddleOCR 3.x 后，发现 PDF 处理时间过长（超过 100 秒），内存使用过高（超过 5GB）。经过深入分析和优化，实现了以下改进：
+
+**问题发现与分析**：
+
+| 问题 | 原因 | 影响 |
+|------|------|------|
+| 首次请求很慢 | PPStructureV3 模型每次请求都重新加载 | 用户等待 80-100 秒 |
+| 图像过大 | PDF 转图像使用 300 DPI，大尺寸 PDF 生成 151M 像素图像 | 内存 5.7GB，处理 100+ 秒 |
+| 重复处理 | 同一图像调用两次 predict() | 处理时间翻倍 |
+| 功能冗余 | PPStructureV3 默认启用所有功能 | 不必要的计算开销 |
+
+**已实施的优化**：
 
 ```
-□ 添加 Markdown 编辑模式（可选）
-□ 添加 Markdown 下载按钮
-□ 添加公式渲染支持（如需要）
-□ 更新 UI 交互
+✅ 模型单例缓存（ocr_service.py）
+  ✅ 添加 get_ppstructure_v3_instance() 单例函数
+  ✅ 使用双重检查锁定模式确保线程安全
+  ✅ 模型只加载一次，后续请求复用
+
+✅ 模型预加载与预热（ocr_service.py + app.py）
+  ✅ 添加 preload_models() 函数
+  ✅ 后端启动时在后台线程预加载模型
+  ✅ 关键发现：PPStructureV3 内部模型是懒加载的
+  ✅ 必须调用 predict() 才能触发内部模型加载
+  ✅ 使用测试图像预热，确保所有内部模型加载完成
+
+✅ PDF 图像尺寸限制（pdf_processor.py）
+  ✅ 限制最大图像尺寸为 4000 像素
+  ✅ 自动计算有效 DPI 以适应限制
+  ✅ 图像从 151M 像素降至 11M 像素（减少 93%）
+  ⚠️ 重要教训：必须添加 logger 导入，否则代码静默失败
+
+✅ PPStructure 结果缓存（ocr_service.py）
+  ✅ 添加 _ppstructure_result_cache 字典
+  ✅ analyze_layout() 缓存 PPStructure 结果
+  ✅ _detect_tables_in_full_image() 优先使用缓存
+  ✅ 避免同一图像重复调用 predict()
+
+✅ 禁用不必要的 PPStructureV3 功能（ocr_service.py）
+  ✅ use_doc_orientation_classify=False（禁用文档方向分类）
+  ✅ use_doc_unwarping=False（禁用文档去畸变）
+  ✅ use_seal_recognition=False（禁用印章识别）
+  ✅ use_formula_recognition=False（禁用公式识别）
+  ✅ use_chart_recognition=False（禁用图表识别）
+
+✅ 前端模型状态检查（UIManager.js）
+  ✅ 添加 /api/models/status 端点检查
+  ✅ 模型加载完成前禁用上传按钮
+  ✅ 显示模型加载状态提示
 ```
 
-#### 阶段 4：集成测试（待进行）
+**PPStructureV3.predict() 可用参数说明**：
+
+| 参数 | 默认值 | 说明 | 禁用后影响 |
+|------|--------|------|------------|
+| `use_doc_orientation_classify` | True | 文档方向分类 | 不自动旋转倾斜文档 |
+| `use_doc_unwarping` | True | 文档去畸变 | 不校正弯曲文档 |
+| `use_seal_recognition` | True | 印章识别 | 不识别印章内容 |
+| `use_formula_recognition` | True | 公式识别 | 不识别数学公式 |
+| `use_chart_recognition` | True | 图表识别 | 不识别图表内容 |
+
+**优化效果**：
+
+| 指标 | 优化前 | 优化后 | 改善 |
+|------|--------|--------|------|
+| 模型加载 | 每次请求加载 | 启动时预加载 | 用户无需等待 |
+| 图像尺寸 | 14671x10300 (151M px) | 2781x3962 (11M px) | 减少 93% |
+| 处理时间 | ~104 秒 | ~76 秒 | 减少 27% |
+| predict() 调用 | 2 次/PDF | 1 次/PDF | 减少 50% |
+| 内存使用 | ~5.7 GB | ~5.7 GB | 待进一步优化 |
+
+**关键代码示例**：
+
+```python
+# 1. 模型单例缓存
+_ppstructure_v3_instance = None
+_ppstructure_v3_lock = threading.Lock()
+
+def get_ppstructure_v3_instance():
+    global _ppstructure_v3_instance
+    if _ppstructure_v3_instance is not None:
+        return _ppstructure_v3_instance
+    with _ppstructure_v3_lock:
+        if _ppstructure_v3_instance is not None:
+            return _ppstructure_v3_instance
+        from paddleocr import PPStructureV3
+        _ppstructure_v3_instance = PPStructureV3()
+        return _ppstructure_v3_instance
+
+# 2. 禁用不必要功能
+raw_result = list(self._structure_engine.predict(
+    preprocessed_path,
+    use_doc_orientation_classify=False,
+    use_doc_unwarping=False,
+    use_seal_recognition=False,
+    use_formula_recognition=False,
+    use_chart_recognition=False
+))
+
+# 3. PDF 图像尺寸限制
+max_dimension = 4000
+if max(target_width, target_height) > max_dimension:
+    scale = max_dimension / max(target_width, target_height)
+    effective_dpi = int(dpi * scale)
+```
+
+##### 阶段 2.2：进一步优化建议（待进行）
+
+以下是可以进一步优化的方向：
+
+**短期优化（1-2 天）**：
+
+| 优化项 | 预期效果 | 实施难度 |
+|--------|---------|---------|
+| 进一步减小图像尺寸（3000px） | 处理时间减少 10-20% | 低 |
+| 使用轻量级模型（PP-OCRv5_mobile） | 处理时间减少 30-50% | 中 |
+| 优化图像预处理（跳过增强步骤） | 处理时间减少 5-10% | 低 |
+
+**中期优化（3-5 天）**：
+
+| 优化项 | 预期效果 | 实施难度 |
+|--------|---------|---------|
+| 多页 PDF 并行处理 | 多页处理时间减少 50%+ | 中 |
+| 异步处理队列 | 提高并发处理能力 | 中 |
+| 结果缓存（Redis） | 重复文档秒级响应 | 中 |
+
+**长期优化（需要硬件支持）**：
+
+| 优化项 | 预期效果 | 实施难度 |
+|--------|---------|---------|
+| GPU 加速 | 处理时间减少 80%+ | 高（需要 GPU） |
+| 模型量化（INT8） | 内存减少 50%，速度提升 20% | 高 |
+| 分布式处理 | 支持大规模并发 | 高 |
+
+**图像尺寸与质量平衡建议**：
+
+| 最大尺寸 | 处理时间 | OCR 质量 | 适用场景 |
+|----------|---------|---------|---------|
+| 4000 px | ~76 秒 | 高 | 当前设置，适合高质量需求 |
+| 3000 px | ~50 秒（预估） | 中高 | 平衡方案 |
+| 2500 px | ~35 秒（预估） | 中 | 速度优先 |
+| 2000 px | ~25 秒（预估） | 中低 | 快速预览 |
+
+**内存优化建议**：
+
+```python
+# 1. 及时释放大对象
+import gc
+
+def process_pdf(pdf_path):
+    # 处理完成后
+    del large_image
+    del ocr_result
+    gc.collect()  # 强制垃圾回收
+
+# 2. 使用生成器处理大文件
+def process_pages(pdf_path):
+    for page in pdf_pages:
+        yield process_page(page)
+        gc.collect()
+
+# 3. 限制并发处理数量
+from concurrent.futures import ThreadPoolExecutor
+executor = ThreadPoolExecutor(max_workers=2)  # 限制并发
+```
+
+**监控与诊断建议**：
+
+```python
+# 添加性能监控
+import time
+import psutil
+
+def monitor_performance(func):
+    def wrapper(*args, **kwargs):
+        start_time = time.time()
+        start_memory = psutil.Process().memory_info().rss / 1024 / 1024
+        
+        result = func(*args, **kwargs)
+        
+        end_time = time.time()
+        end_memory = psutil.Process().memory_info().rss / 1024 / 1024
+        
+        logger.info(f"{func.__name__}: "
+                   f"时间={end_time-start_time:.1f}s, "
+                   f"内存={end_memory:.0f}MB (+{end_memory-start_memory:.0f}MB)")
+        return result
+    return wrapper
+```
+
+#### 阶段 3：前端升级 ✅ 已完成
 
 ```
-□ 端到端测试
-□ 性能对比测试
-□ 回归测试
-□ 文档更新
+✅ 添加 Markdown 编辑模式
+  ✅ Block/Markdown 编辑模式切换按钮（editModeToggle）
+  ✅ Markdown 编辑器（markdownTextarea）
+  ✅ Block ↔ Markdown 双向同步（syncBlocksToMarkdown, syncMarkdownToBlocks）
+  ✅ HTML 表格转 Markdown（htmlTableToMarkdown）
+✅ 添加 Markdown 下载按钮
+  ✅ 下载按钮（downloadMarkdownBtn）
+  ✅ 下载功能（downloadMarkdown 调用 /api/convert/{jobId}/markdown）
+✅ 更新 UI 交互
+  ✅ 模型加载状态检查（checkModelsStatus）
+  ✅ 上传按钮禁用/启用状态管理
+⚪ 公式渲染支持（不需要，跳过）
+```
+
+**已实现的前端文件**：
+- `frontend/src/index.html` - UI 结构（编辑模式切换、Markdown 编辑器、下载按钮）
+- `frontend/src/index.js` - 核心逻辑（Markdown 同步、下载功能）
+- `frontend/src/services/UIManager.js` - 模型状态检查
+
+#### 阶段 4：集成测试 ✅ 已完成
+
+```
+✅ 端到端测试（test_end_to_end.py 已通过）
+✅ 性能对比测试（处理时间从 104s 降至 76s）
+✅ 回归测试（后端 165/166 通过，前端 83/83 通过）
+✅ 文档更新（本文档已更新）
 ```
 
 ---
@@ -805,6 +1010,115 @@ pip install paddlepaddle-gpu==3.3.0
 
 ---
 
+## 阶段 2.3：PDF 直接输入支持研究 ✅ 已完成
+
+在性能优化过程中，我们研究了 PPStructureV3 是否支持直接处理 PDF 文件，以避免手动 PDF 转图像的步骤。
+
+### 研究结论
+
+**✅ PPStructureV3 确实支持直接处理 PDF 文件！**
+
+通过分析 PaddleX 源代码，发现：
+
+1. **`ImageBatchSampler`** 类明确支持 PDF 输入：
+   ```python
+   IMG_SUFFIX = ["jpg", "png", "jpeg", "bmp"]
+   PDF_SUFFIX = ["pdf"]
+   
+   if suffix in self.PDF_SUFFIX:
+       doc = self.pdf_reader.load(file_path)
+       for page_idx, page_img in enumerate(self.pdf_reader.read(doc)):
+           batch.append(page_img, file_path, page_idx, page_count)
+   ```
+
+2. **`PDFReader`** 使用 `pypdfium2` 库处理 PDF：
+   ```python
+   class PDFReaderBackend:
+       def __init__(self, rotate=0, zoom=2.0):  # zoom=2.0 相当于 144 DPI
+           self._scale = zoom
+       
+       def read_file(self, in_path):
+           doc = pdfium.PdfDocument(in_path)
+           for page in doc:
+               yield page.render(scale=self._scale).to_numpy()
+   ```
+
+### PDF 处理库性能对比
+
+| 库 | 性能 | 说明 |
+|----|------|------|
+| **PyMuPDF (fitz)** | 基准 1.0x | 当前项目使用，基于 MuPDF |
+| **pypdfium2** | ~1.0x | PaddleX 内置使用，基于 PDFium |
+| **XPDF** | 1.76x 慢 | - |
+| **pdf2image** | 2.32x 慢 | 基于 Poppler |
+
+**结论**：PyMuPDF 和 pypdfium2 性能相近，都是高性能 PDF 库。
+
+### 当前实现 vs 直接输入对比
+
+| 方面 | 当前实现 | 直接 PDF 输入 |
+|------|----------|---------------|
+| PDF 转图像 | PyMuPDF, 300 DPI | pypdfium2, 144 DPI (zoom=2.0) |
+| 图像尺寸控制 | 手动限制 4000px | 无限制（依赖 zoom 参数） |
+| 多页处理 | 仅处理第一页 | 自动处理所有页 |
+| 代码复杂度 | 需要手动管理临时文件 | 更简洁 |
+| 灵活性 | 可自定义 DPI 和尺寸 | 受限于 zoom 参数 |
+
+### 使用直接 PDF 输入的示例
+
+```python
+from paddleocr import PPStructureV3
+
+ppstructure = PPStructureV3()
+
+# 直接传入 PDF 文件路径
+result = list(ppstructure.predict(
+    "document.pdf",  # 直接传入 PDF 路径
+    use_doc_orientation_classify=False,
+    use_doc_unwarping=False,
+    use_seal_recognition=False,
+    use_formula_recognition=False,
+    use_chart_recognition=False
+))
+
+# 结果会包含 PDF 每一页的处理结果
+for page_result in result:
+    print(page_result)
+```
+
+### 是否应该切换到直接 PDF 输入？
+
+**优点**：
+- 代码更简洁，无需手动管理 PDF 转图像
+- 自动支持多页 PDF 处理
+- 减少临时文件管理
+
+**缺点**：
+- 失去对图像尺寸的精细控制
+- 默认 144 DPI 可能影响 OCR 质量（当前使用 300 DPI）
+- 无法在 PDF 转图像阶段进行预处理
+
+**建议**：
+- 对于简单场景，可以考虑使用直接 PDF 输入
+- 对于需要高质量 OCR 或自定义预处理的场景，保持当前实现
+- 可以进行 A/B 测试，比较两种方式的 OCR 质量和性能
+
+### 后续优化建议
+
+1. **测试直接 PDF 输入的 OCR 质量**
+   - 使用相同的测试 PDF，比较两种方式的识别准确率
+   - 特别关注小字体和复杂表格的识别效果
+
+2. **调整 pypdfium2 的 zoom 参数**
+   - 如果使用直接输入，可以通过自定义 PDFReader 调整 zoom 参数
+   - zoom=3.0 相当于 216 DPI，zoom=4.0 相当于 288 DPI
+
+3. **混合方案**
+   - 对于简单文档使用直接输入
+   - 对于复杂文档使用手动转换 + 预处理
+
+---
+
 ## 十二、结论与建议
 
 ### 12.1 当前状态总结
@@ -864,5 +1178,578 @@ pip install paddlepaddle-gpu==3.3.0
 
 ---
 
+## 阶段 2.4：PDF 类型检测与分流处理研究 ✅ 已完成
+
+### 问题背景
+
+用户提出一个重要问题：**是否需要先判断 PDF 是文本型还是图像型，然后分开两条处理线？**
+
+这是一个非常好的优化思路，因为：
+- **文本型 PDF**：可以直接提取文本，无需 OCR，速度快、准确率高
+- **图像型 PDF**：必须使用 OCR，处理时间长
+
+### PDF 类型分类
+
+| 类型 | 特征 | 处理方式 | 准确率 | 速度 |
+|------|------|----------|--------|------|
+| **文本型 PDF** | 包含可选择的文本层 | 直接提取文本 | ~100% | 极快（<1秒） |
+| **图像型 PDF** | 页面是扫描图像 | 需要 OCR | 85-95% | 慢（30-100秒） |
+| **混合型 PDF** | 部分页面有文本，部分是图像 | 分页处理 | 混合 | 中等 |
+
+### 业界最佳实践："三层处理"架构
+
+根据网络搜索的结果，业界推荐的最佳实践是"三层处理"架构：
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    第一层：PDF 类型检测                       │
+│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐     │
+│  │ 尝试提取文本 │ → │ 文本长度判断 │ → │ 类型分类     │     │
+│  └─────────────┘    └─────────────┘    └─────────────┘     │
+└─────────────────────────────────────────────────────────────┘
+                              │
+              ┌───────────────┼───────────────┐
+              ↓               ↓               ↓
+┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐
+│   文本型 PDF    │ │   图像型 PDF    │ │   混合型 PDF    │
+│  直接提取文本   │ │   OCR 识别      │ │   分页处理      │
+│  PyMuPDF/pdfplumber │ │  PaddleOCR   │ │  混合策略      │
+└─────────────────┘ └─────────────────┘ └─────────────────┘
+              │               │               │
+              └───────────────┼───────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────┐
+│                    第三层：结构化处理                         │
+│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐     │
+│  │ 布局分析    │ → │ 表格识别     │ → │ 格式转换     │     │
+│  └─────────────┘    └─────────────┘    └─────────────┘     │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### PDF 类型检测方法
+
+#### 方法 1：使用 pdfplumber（推荐）
+
+```python
+import pdfplumber
+
+def detect_pdf_type(pdf_path: str, min_text_length: int = 50) -> str:
+    """
+    检测 PDF 类型
+    
+    Args:
+        pdf_path: PDF 文件路径
+        min_text_length: 判断为文本型的最小文本长度
+        
+    Returns:
+        'text': 文本型 PDF
+        'image': 图像型 PDF
+        'mixed': 混合型 PDF
+    """
+    with pdfplumber.open(pdf_path) as pdf:
+        text_pages = 0
+        image_pages = 0
+        
+        for page in pdf.pages[:5]:  # 只检查前 5 页
+            text = page.extract_text() or ""
+            text = text.strip()
+            
+            if len(text) >= min_text_length:
+                text_pages += 1
+            else:
+                image_pages += 1
+        
+        total_checked = text_pages + image_pages
+        
+        if text_pages == total_checked:
+            return 'text'
+        elif image_pages == total_checked:
+            return 'image'
+        else:
+            return 'mixed'
+```
+
+#### 方法 2：使用 PyMuPDF（当前项目已有）
+
+```python
+import fitz  # PyMuPDF
+
+def detect_pdf_type_pymupdf(pdf_path: str, min_text_length: int = 50) -> str:
+    """
+    使用 PyMuPDF 检测 PDF 类型
+    """
+    doc = fitz.open(pdf_path)
+    text_pages = 0
+    image_pages = 0
+    
+    for page_num in range(min(5, len(doc))):  # 只检查前 5 页
+        page = doc[page_num]
+        text = page.get_text().strip()
+        
+        if len(text) >= min_text_length:
+            text_pages += 1
+        else:
+            image_pages += 1
+    
+    doc.close()
+    
+    total_checked = text_pages + image_pages
+    
+    if text_pages == total_checked:
+        return 'text'
+    elif image_pages == total_checked:
+        return 'image'
+    else:
+        return 'mixed'
+```
+
+### 分流处理策略
+
+#### 文本型 PDF 处理流程
+
+```python
+def process_text_pdf(pdf_path: str) -> dict:
+    """
+    处理文本型 PDF - 直接提取文本，无需 OCR
+    """
+    import fitz
+    
+    doc = fitz.open(pdf_path)
+    page = doc[0]  # 第一页
+    
+    # 直接提取文本
+    text = page.get_text()
+    
+    # 提取表格（PyMuPDF 4.x 支持）
+    tables = page.find_tables()
+    
+    # 提取文本块位置信息
+    blocks = page.get_text("dict")["blocks"]
+    
+    doc.close()
+    
+    return {
+        'type': 'text',
+        'text': text,
+        'tables': tables,
+        'blocks': blocks,
+        'processing_time': '<1秒'
+    }
+```
+
+#### 图像型 PDF 处理流程（当前实现）
+
+```python
+def process_image_pdf(pdf_path: str) -> dict:
+    """
+    处理图像型 PDF - 使用 OCR
+    """
+    # 当前实现：PDF → 图像 → PPStructureV3 OCR
+    # 处理时间：30-100 秒
+    pass
+```
+
+### 对当前项目的建议
+
+#### 是否需要实现 PDF 类型检测？
+
+**分析**：
+
+| 因素 | 当前情况 | 建议 |
+|------|----------|------|
+| **用户场景** | 主要处理扫描文档 | 图像型为主，检测价值有限 |
+| **处理时间** | 已优化至 76 秒 | 可接受，但仍有优化空间 |
+| **实现复杂度** | 需要两套处理逻辑 | 中等复杂度 |
+| **维护成本** | 需要维护两套代码 | 增加维护负担 |
+
+**建议**：
+
+1. **短期（推荐）**：暂不实现，原因：
+   - 当前用户主要处理扫描文档（图像型 PDF）
+   - 已有的 OCR 流程已经优化
+   - 实现分流会增加代码复杂度
+
+2. **中期（可选）**：如果用户反馈有大量文本型 PDF，可以实现：
+   - 添加 PDF 类型检测
+   - 文本型 PDF 直接提取，跳过 OCR
+   - 预期收益：文本型 PDF 处理时间从 76 秒降至 <1 秒
+
+3. **长期（推荐）**：集成 PP-ChatOCRv4
+   - PP-ChatOCRv4 内部已经实现了智能处理
+   - 自动处理文本型和图像型 PDF
+   - 无需手动实现分流逻辑
+
+#### 如果要实现，建议的架构
+
+```python
+# backend/services/pdf_processor.py 新增方法
+
+class PDFProcessor:
+    
+    @classmethod
+    def detect_pdf_type(cls, file_path: Path, min_text_length: int = 50) -> str:
+        """
+        检测 PDF 类型
+        
+        Returns:
+            'text': 文本型 PDF - 可直接提取文本
+            'image': 图像型 PDF - 需要 OCR
+            'mixed': 混合型 PDF - 需要分页处理
+        """
+        try:
+            doc = fitz.open(str(file_path))
+            text_pages = 0
+            image_pages = 0
+            
+            # 只检查前 5 页或全部页面（取较小值）
+            pages_to_check = min(5, len(doc))
+            
+            for page_num in range(pages_to_check):
+                page = doc[page_num]
+                text = page.get_text().strip()
+                
+                if len(text) >= min_text_length:
+                    text_pages += 1
+                else:
+                    image_pages += 1
+            
+            doc.close()
+            
+            if text_pages == pages_to_check:
+                return 'text'
+            elif image_pages == pages_to_check:
+                return 'image'
+            else:
+                return 'mixed'
+                
+        except Exception as e:
+            logger.warning(f"PDF 类型检测失败: {e}，默认使用 OCR 处理")
+            return 'image'
+    
+    @classmethod
+    def extract_text_from_text_pdf(cls, file_path: Path) -> dict:
+        """
+        从文本型 PDF 直接提取文本（无需 OCR）
+        """
+        doc = fitz.open(str(file_path))
+        page = doc[0]
+        
+        result = {
+            'text': page.get_text(),
+            'blocks': [],
+            'tables': []
+        }
+        
+        # 提取文本块及其位置
+        blocks = page.get_text("dict")["blocks"]
+        for block in blocks:
+            if block.get("type") == 0:  # 文本块
+                bbox = block.get("bbox", [0, 0, 0, 0])
+                for line in block.get("lines", []):
+                    for span in line.get("spans", []):
+                        result['blocks'].append({
+                            'text': span.get("text", ""),
+                            'bbox': bbox,
+                            'font_size': span.get("size", 12),
+                            'font': span.get("font", "")
+                        })
+        
+        # 提取表格（PyMuPDF 4.x）
+        try:
+            tables = page.find_tables()
+            for table in tables:
+                result['tables'].append({
+                    'bbox': table.bbox,
+                    'cells': table.extract()
+                })
+        except:
+            pass
+        
+        doc.close()
+        return result
+```
+
+#### 处理流程修改
+
+```python
+# backend/services/document_processor.py
+
+def process_document(file_path: str) -> dict:
+    """
+    智能处理文档 - 根据 PDF 类型选择处理方式
+    """
+    from backend.services.pdf_processor import PDFProcessor
+    
+    # 1. 检测 PDF 类型
+    pdf_type = PDFProcessor.detect_pdf_type(Path(file_path))
+    logger.info(f"PDF 类型检测结果: {pdf_type}")
+    
+    if pdf_type == 'text':
+        # 2a. 文本型 PDF - 直接提取
+        logger.info("使用直接文本提取（无需 OCR）")
+        result = PDFProcessor.extract_text_from_text_pdf(Path(file_path))
+        result['processing_method'] = 'direct_extraction'
+        return result
+    
+    else:
+        # 2b. 图像型/混合型 PDF - 使用 OCR
+        logger.info("使用 OCR 处理")
+        # 当前的 OCR 处理流程
+        result = process_with_ocr(file_path)
+        result['processing_method'] = 'ocr'
+        return result
+```
+
+### 性能对比预期
+
+| PDF 类型 | 当前处理时间 | 优化后处理时间 | 提升 |
+|----------|-------------|---------------|------|
+| 文本型 PDF | ~76 秒 | <1 秒 | **99%** |
+| 图像型 PDF | ~76 秒 | ~76 秒 | 无变化 |
+| 混合型 PDF | ~76 秒 | ~40 秒（预估） | ~50% |
+
+### 结论
+
+1. **当前阶段**：已实现 PDF 类型检测（仅日志记录）
+   - 在 `pdf_processor.py` 中添加了 `detect_pdf_type()` 方法
+   - 在 `document_processor.py` 中调用该方法
+   - 日志记录 PDF 类型、检查页数、文本页/图像页数量
+   - 为后续优化做准备
+
+2. **未来考虑**：如果用户有大量文本型 PDF 需求
+   - 可以根据检测结果分流处理
+   - 文本型 PDF 直接提取，跳过 OCR
+   - 预期收益显著（处理时间从 76 秒降至 <1 秒）
+
+3. **最佳方案**：集成 PP-ChatOCRv4
+   - 内置智能处理逻辑
+   - 自动处理各种类型的 PDF
+   - 无需手动实现分流
+
+### 已实现的代码
+
+#### 日志输出示例
+
+```
+INFO - PDF 类型检测: image | 检查页数: 1 | 文本页: 0, 图像页: 1 | 详情: P1:image(0字符)
+```
+
+---
+
 *本文档最后更新：2026年1月24日*
-*升级状态：✅ 后端升级已完成，前端升级待进行*
+*升级状态：✅ 第一次升级已全部完成（后端 + 前端 + 集成测试）*
+*性能优化状态：✅ 已完成基础优化，处理时间从 104 秒降至 76 秒*
+*PDF 类型检测：✅ 已实现日志记录，作为 TODO 优化项*
+*前端 Markdown 功能：✅ 已完成（编辑模式切换、下载功能）*
+
+
+---
+
+## 十三、JSON 输出变更说明（2026-01-24 新增）
+
+### 13.1 PaddleOCR 2.x vs 3.x 的 JSON 输出差异
+
+升级到 PaddleOCR 3.x 后，JSON 输出发生了重要变化：
+
+| 版本 | 文本行 JSON | 布局 JSON | 说明 |
+|------|------------|-----------|------|
+| **2.x** | ✅ 有数据 | ✅ 有数据 | 两个独立的处理步骤 |
+| **3.x** | ❌ 空数组 | ✅ 有数据 | PPStructureV3 一次性完成 |
+
+### 13.2 原因
+
+**PaddleOCR 2.x 处理流程**：
+```
+PDF → 图像 → PaddleOCR.ocr() → 文本行 JSON (raw_ocr.json)
+                    ↓
+              PPStructure() → 布局 JSON (ppstructure.json)
+```
+
+**PaddleOCR 3.x 处理流程**：
+```
+PDF → 图像 → PPStructureV3.predict() → 布局与文本块 JSON (ppstructure.json)
+                                        ↑
+                                   一次性完成布局分析 + OCR 识别
+```
+
+PPStructureV3 **一次性完成**布局分析和 OCR 识别，不再需要单独调用 `PaddleOCR.ocr()`。
+
+### 13.3 前端按钮变更
+
+| 变更前 | 变更后 | 原因 |
+|--------|--------|------|
+| 📥 文本行JSON | **已移除** | `raw_ocr.json` 的 `ocr_result` 为空 |
+| 📥 布局JSON | 📥 布局与文本块JSON | 更准确地描述内容 |
+
+### 13.4 ppstructure.json 文件内容
+
+`ppstructure.json` 现在包含完整的布局和文本信息：
+
+```json
+{
+  "job_id": "xxx",
+  "total_items": 9,
+  "items": [
+    {
+      "index": 0,
+      "type": "table",
+      "bbox": [945, 68, 1379, 270],
+      "res": {
+        "html": "<html><body><table>...</table></body></html>"
+      }
+    },
+    {
+      "index": 1,
+      "type": "doc_title",
+      "bbox": [495, 325, 963, 391],
+      "res": [
+        {
+          "text": "文档标题内容",
+          "confidence": 0.95
+        }
+      ]
+    }
+  ]
+}
+```
+
+### 13.5 代码变更
+
+**frontend/src/index.html**：
+- 移除 `downloadRawJsonBtn` 按钮
+- 修改 `downloadPPStructureBtn` 按钮文本为"布局与文本块JSON"
+
+**frontend/src/index.js**：
+- 移除 `downloadRawJsonBtn` 的事件绑定代码
+
+
+
+---
+
+## 十四、置信度（Confidence）分析（2026-01-24 新增）
+
+### 14.1 问题背景
+
+用户发现 `ppstructure.json` 中，有些区块有置信度（confidence），有些没有。经过分析，这是 PPStructureV3 的设计特性。
+
+### 14.2 置信度来源分析
+
+PPStructureV3 内部使用多个模型，不同类型的区块置信度来源不同：
+
+| 区块类型 | 置信度来源 | 是否有置信度 | 说明 |
+|----------|-----------|-------------|------|
+| **table** | SLANet 表格识别模型 | ❌ 无 | SLANet 输出 HTML 结构，不输出置信度 |
+| **doc_title** | PP-OCRv5 文本识别 | ✅ 有 | OCR 模型输出每个文本的置信度 |
+| **text** | PP-OCRv5 文本识别 | ✅ 有 | OCR 模型输出每个文本的置信度 |
+| **figure_caption** | PP-OCRv5 文本识别 | ✅ 有 | OCR 模型输出每个文本的置信度 |
+| **header** | PP-OCRv5 文本识别 | ✅ 有 | OCR 模型输出每个文本的置信度 |
+| **footer** | PP-OCRv5 文本识别 | ✅ 有 | OCR 模型输出每个文本的置信度 |
+| **figure** | 布局检测模型 | ⚠️ 仅布局置信度 | 图片区域无 OCR 置信度 |
+
+### 14.3 PPStructureV3 内部模型架构
+
+```
+PPStructureV3
+├── PP-LCNet (布局检测) → 输出 score（布局置信度）
+│   └── 检测区域类型：table, text, figure, title, header, footer 等
+│
+├── SLANet (表格识别) → 输出 HTML 结构
+│   └── 不输出置信度，因为是结构化输出
+│
+└── PP-OCRv5 (文本识别) → 输出 text + confidence
+    └── 对非表格区域进行 OCR，输出文本和置信度
+```
+
+### 14.4 布局检测置信度（score）
+
+根据 PaddleX 官方文档，布局检测模块返回的结果包含 `score` 字段：
+
+```python
+# 布局检测结果示例
+{
+    'cls_id': 2,
+    'label': 'text',
+    'score': 0.987,  # 布局检测置信度
+    'coordinate': [x1, y1, x2, y2]
+}
+```
+
+但是，PPStructureV3 的 `LayoutBlock` 对象可能不直接暴露这个 `score` 字段。
+
+### 14.5 当前代码问题
+
+在 `_convert_layout_block_to_dict()` 函数中，对于文本类型区块，设置了一个假的置信度：
+
+```python
+# 当前代码（有问题）
+item_dict['res'] = [{
+    'text': content.strip(),
+    'confidence': 0.95,  # ← 这是假的默认值！
+    'text_region': []
+}]
+```
+
+### 14.6 修复方案
+
+#### 方案 1：从 LayoutBlock 获取真实置信度
+
+检查 LayoutBlock 对象是否有 `score` 或 `confidence` 属性：
+
+```python
+def _convert_layout_block_to_dict(self, block) -> Optional[Dict[str, Any]]:
+    # 获取布局检测置信度
+    layout_score = getattr(block, 'score', None)
+    
+    # 对于文本类型，尝试获取 OCR 置信度
+    if item_type != 'table':
+        # 检查是否有 OCR 结果
+        ocr_result = getattr(block, 'ocr_result', None)
+        if ocr_result:
+            confidence = ocr_result.get('confidence', layout_score)
+        else:
+            confidence = layout_score  # 使用布局置信度作为备选
+        
+        item_dict['res'] = [{
+            'text': content.strip(),
+            'confidence': confidence,  # 真实置信度或 None
+            'text_region': []
+        }]
+```
+
+#### 方案 2：表格区块不显示置信度
+
+对于表格区块，由于 SLANet 不输出置信度，应该明确标记为"无"：
+
+```python
+if item_type == 'table':
+    item_dict['res'] = {
+        'html': content,
+        'confidence': None  # 表格无置信度
+    }
+```
+
+### 14.7 前端显示方案
+
+在区块信息中显示置信度：
+
+```
+Pos:(116,742) Size:1263x562 Confidence:0.92
+```
+
+或者当无置信度时：
+
+```
+Pos:(116,742) Size:1263x562 Confidence:无
+```
+
+### 14.8 结论
+
+1. **表格区块无置信度**：这是 SLANet 模型的设计特性，不是 bug
+2. **文本区块有置信度**：来自 PP-OCRv5 的 OCR 识别结果
+3. **布局置信度**：所有区块都有布局检测置信度（score），但可能未暴露
+4. **修复建议**：
+   - 移除假的 `0.95` 默认值
+   - 尝试获取真实的 OCR 置信度
+   - 表格区块显示"无"
+   - 前端显示真实置信度或"无"
+

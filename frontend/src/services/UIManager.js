@@ -10,6 +10,8 @@ export class UIManager {
         this.progressContainer = null;
         this.progressBar = null;
         this.progressText = null;
+        this.modelsReady = false;
+        this.modelCheckInterval = null;
     }
 
     /**
@@ -30,6 +32,87 @@ export class UIManager {
         
         this.createProgressIndicator();
         this.setupEventListeners();
+        
+        // 检查模型加载状态
+        this.checkModelsStatus();
+    }
+
+    /**
+     * Check if OCR models are loaded
+     */
+    async checkModelsStatus() {
+        this.disableUpload('正在加载 OCR 模型，请稍候...');
+        
+        const checkStatus = async () => {
+            try {
+                const response = await fetch('http://localhost:5000/api/models/status');
+                const data = await response.json();
+                
+                if (data.ready) {
+                    this.enableUpload();
+                    if (this.modelCheckInterval) {
+                        clearInterval(this.modelCheckInterval);
+                        this.modelCheckInterval = null;
+                    }
+                    this.showStatus('OCR 模型已就绪，可以上传 PDF 文件', 'success');
+                } else if (data.loading) {
+                    this.disableUpload('OCR 模型加载中，请稍候...');
+                } else {
+                    this.disableUpload('等待 OCR 模型加载...');
+                }
+            } catch (error) {
+                console.log('Model status check failed:', error);
+                // 如果无法连接后端，可能后端还没启动
+                this.disableUpload('等待后端服务启动...');
+            }
+        };
+        
+        // 立即检查一次
+        await checkStatus();
+        
+        // 每 2 秒检查一次，直到模型加载完成
+        if (!this.modelsReady) {
+            this.modelCheckInterval = setInterval(checkStatus, 2000);
+        }
+    }
+
+    /**
+     * Disable upload functionality
+     */
+    disableUpload(message) {
+        this.modelsReady = false;
+        if (this.uploadArea) {
+            this.uploadArea.style.opacity = '0.5';
+            this.uploadArea.style.pointerEvents = 'none';
+            this.uploadArea.innerHTML = `
+                <div class="upload-icon">⏳</div>
+                <p>${message}</p>
+                <p class="upload-hint">模型加载完成后将自动启用上传功能</p>
+            `;
+        }
+    }
+
+    /**
+     * Enable upload functionality
+     */
+    enableUpload() {
+        this.modelsReady = true;
+        if (this.uploadArea) {
+            this.uploadArea.style.opacity = '1';
+            this.uploadArea.style.pointerEvents = 'auto';
+            this.uploadArea.innerHTML = `
+                <div class="upload-icon">📄</div>
+                <p>点击或拖拽 PDF 文件到此处</p>
+                <p class="upload-hint">支持 PDF 格式，最大 50MB</p>
+            `;
+        }
+    }
+
+    /**
+     * Check if upload is allowed
+     */
+    isUploadAllowed() {
+        return this.modelsReady;
     }
 
     /**
@@ -119,6 +202,12 @@ export class UIManager {
      * Handle file selection
      */
     onFileSelected(file) {
+        // 检查模型是否已加载
+        if (!this.modelsReady) {
+            this.showStatus('OCR 模型尚未加载完成，请稍候再试', 'error');
+            return;
+        }
+        
         this.showFilePreview(file);
         this.showStatus(`Selected: ${file.name} (${this.formatFileSize(file.size)})`, 'info');
         

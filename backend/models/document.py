@@ -35,7 +35,7 @@ class Region:
     """OCR detected region with classification"""
     coordinates: BoundingBox
     classification: RegionType
-    confidence: float
+    confidence: Optional[float]  # 置信度，None 表示无置信度（如表格区块）
     content: Optional[str] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
 

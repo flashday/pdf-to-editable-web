@@ -1,4 +1,4 @@
-锘縤mport { DocumentProcessor } from './services/DocumentProcessor.js';
+import { DocumentProcessor } from './services/DocumentProcessor.js';
 import { UIManager } from './services/UIManager.js';
 
 class App {
@@ -198,7 +198,15 @@ class App {
             var meta = document.createElement('div');
             meta.className = 'block-meta';
             var co = region.coordinates;
-            meta.textContent = 'Pos:(' + Math.round(co.x) + ',' + Math.round(co.y) + ') Size:' + Math.round(co.width) + 'x' + Math.round(co.height);
+            // 显示位置、尺寸和置信度
+            var metaText = 'Pos:(' + Math.round(co.x) + ',' + Math.round(co.y) + ') Size:' + Math.round(co.width) + 'x' + Math.round(co.height);
+            // 置信度显示：有值显示数值，null/undefined 显示"无"
+            if (region.confidence !== null && region.confidence !== undefined) {
+                metaText += ' Confidence:' + region.confidence.toFixed(2);
+            } else {
+                metaText += ' Confidence:无';
+            }
+            meta.textContent = metaText;
             item.appendChild(hdr);
             item.appendChild(cnt);
             item.appendChild(meta);

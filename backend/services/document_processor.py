@@ -331,6 +331,10 @@ class DocumentProcessor(DocumentProcessorInterface):
             Path to image ready for OCR
         """
         if document.file_type == 'pdf':
+            # 检测 PDF 类型（仅记录日志，为后续优化做准备）
+            # TODO: 后续可根据类型分流处理，文本型 PDF 直接提取文本
+            pdf_type = PDFProcessor.detect_pdf_type(file_path)
+            
             # Extract first page as image
             image_path = self.temp_folder / f"{document.id}_page1.png"
             

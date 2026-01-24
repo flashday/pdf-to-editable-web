@@ -10,9 +10,14 @@ PaddleOCR 版本兼容性：
 - PaddleOCR 类：基本兼容，use_structure 参数已废弃
 - PPStructure 类：layout_score_threshold/layout_nms_threshold 参数已移除
 - 结果格式：基本兼容
+
+模型缓存策略：
+- PPStructureV3 实例在模块级别缓存，避免重复加载
+- 支持启动时预加载模型
 """
 import os
 import logging
+import threading
 from typing import List, Optional, Dict, Any, Tuple
 from pathlib import Path
 import numpy as np
@@ -26,6 +31,209 @@ from backend.services.retry_handler import retry_handler, RetryConfig, NetworkRe
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# ============================================================================
+# 模型缓存 - 单例模式，避免重复加载模型
+# ============================================================================
+_ppstructure_v3_instance = None
+_ppstructure_v3_lock = threading.Lock()
+_models_loaded = False
+_models_loading = False
+
+
+def get_ppstructure_v3_instance():
+    """
+    获取 PPStructureV3 的单例实例
+    
+    使用双重检查锁定模式确保线程安全
+    模型只会在第一次调用时加载，后续调用直接返回缓存的实例
+    
+    Returns:
+        PPStructureV3 实例，如果不可用则返回 None
+    """
+    global _ppstructure_v3_instance
+    
+    if _ppstructure_v3_instance is not None:
+        return _ppstructure_v3_instance
+    
+    with _ppstructure_v3_lock:
+        # 双重检查
+        if _ppstructure_v3_instance is not None:
+            return _ppstructure_v3_instance
+        
+        try:
+            from paddleocr import PPStructureV3
+            logger.info("正在加载 PPStructureV3 模型（首次加载，请耐心等待）...")
+            import time
+            start_time = time.time()
+            _ppstructure_v3_instance = PPStructureV3()
+            elapsed = time.time() - start_time
+            logger.info(f"PPStructureV3 模型加载完成，耗时 {elapsed:.1f} 秒")
+            return _ppstructure_v3_instance
+        except ImportError as e:
+            logger.warning(f"PPStructureV3 不可用: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"PPStructureV3 加载失败: {e}")
+            return None
+
+
+def preload_models():
+    """
+    预加载所有 OCR 模型
+    
+    在后端启动时调用此函数，确保模型在接收请求前已加载完成
+    这样用户上传 PDF 时不需要等待模型加载
+    
+    重要：PPStructureV3 内部的模型是懒加载的，仅创建实例不会加载模型
+    必须调用 predict() 方法才能触发内部模型的加载
+    
+    注意：PPStructureV3 已经包含了完整的 OCR 功能，不需要单独加载 PaddleOCR
+    
+    Returns:
+        bool: 模型是否加载成功
+    """
+    global _models_loaded, _models_loading
+    
+    if _models_loaded:
+        logger.info("模型已加载，跳过预加载")
+        return True
+    
+    if _models_loading:
+        logger.info("模型正在加载中...")
+        return False
+    
+    _models_loading = True
+    logger.info("=" * 60)
+    logger.info("开始预加载 OCR 模型...")
+    logger.info("=" * 60)
+    
+    import time
+    total_start = time.time()
+    
+    try:
+        # 预加载 PPStructureV3（包含布局分析、表格识别、OCR 等多个模型）
+        # PPStructureV3 已经包含了完整的 OCR 功能，不需要单独加载 PaddleOCR
+        logger.info("加载 PPStructureV3 模型（包含 OCR 功能）...")
+        ppstructure = get_ppstructure_v3_instance()
+        if ppstructure is None:
+            logger.warning("PPStructureV3 加载失败，将使用回退方案")
+        else:
+            # 重要：PPStructureV3 内部模型是懒加载的
+            # 必须调用 predict() 才能触发内部模型（PP-LCNet, PP-OCRv5 等）的加载
+            # 创建一个小的测试图像来触发模型加载
+            logger.info("触发 PPStructureV3 内部模型加载（首次 predict 调用）...")
+            try:
+                # 创建一个 100x100 的白色测试图像
+                test_image = np.ones((100, 100, 3), dtype=np.uint8) * 255
+                # 添加一些文字区域（黑色矩形）以触发 OCR 模型
+                test_image[20:40, 20:80] = 0
+                
+                # 保存临时测试图像
+                import tempfile
+                with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp:
+                    tmp_path = tmp.name
+                    Image.fromarray(test_image).save(tmp_path)
+                
+                # 调用 predict 触发内部模型加载
+                warmup_start = time.time()
+                # 使用与实际处理相同的参数，禁用不必要的功能
+                _ = list(ppstructure.predict(
+                    tmp_path,
+                    use_doc_orientation_classify=False,
+                    use_doc_unwarping=False,
+                    use_seal_recognition=False,
+                    use_formula_recognition=False,
+                    use_chart_recognition=False
+                ))
+                warmup_elapsed = time.time() - warmup_start
+                logger.info(f"PPStructureV3 内部模型加载完成，耗时 {warmup_elapsed:.1f} 秒")
+                
+                # 删除临时文件
+                try:
+                    os.remove(tmp_path)
+                except:
+                    pass
+                    
+            except Exception as e:
+                logger.warning(f"PPStructureV3 预热失败: {e}")
+                import traceback
+                logger.warning(traceback.format_exc())
+        
+        total_elapsed = time.time() - total_start
+        logger.info("=" * 60)
+        logger.info(f"所有模型预加载完成！总耗时: {total_elapsed:.1f} 秒")
+        logger.info("=" * 60)
+        
+        _models_loaded = True
+        _models_loading = False
+        return True
+        
+    except Exception as e:
+        logger.error(f"模型预加载失败: {e}")
+        _models_loading = False
+        return False
+
+
+def is_models_loaded() -> bool:
+    """检查模型是否已加载完成"""
+    return _models_loaded
+
+
+def is_models_loading() -> bool:
+    """检查模型是否正在加载中"""
+    return _models_loading
+
+
+# ============================================================================
+# PaddleOCR 基础引擎缓存
+# ============================================================================
+_paddleocr_instance = None
+_paddleocr_lock = threading.Lock()
+
+
+def get_paddleocr_instance(lang: str = 'ch'):
+    """
+    获取 PaddleOCR 基础引擎的单例实例
+    
+    Args:
+        lang: 语言设置
+        
+    Returns:
+        PaddleOCR 实例
+    """
+    global _paddleocr_instance
+    
+    if _paddleocr_instance is not None:
+        return _paddleocr_instance
+    
+    with _paddleocr_lock:
+        if _paddleocr_instance is not None:
+            return _paddleocr_instance
+        
+        try:
+            from paddleocr import PaddleOCR
+            import paddleocr
+            
+            version = getattr(paddleocr, '__version__', '2.0.0')
+            is_v3 = version.startswith('3.')
+            
+            logger.info(f"正在加载 PaddleOCR 基础引擎 (版本: {version})...")
+            import time
+            start_time = time.time()
+            
+            if is_v3:
+                _paddleocr_instance = PaddleOCR(use_textline_orientation=True, lang=lang)
+            else:
+                _paddleocr_instance = PaddleOCR(use_angle_cls=True, lang=lang, use_gpu=False, show_log=False)
+            
+            elapsed = time.time() - start_time
+            logger.info(f"PaddleOCR 基础引擎加载完成，耗时 {elapsed:.1f} 秒")
+            return _paddleocr_instance
+            
+        except Exception as e:
+            logger.error(f"PaddleOCR 基础引擎加载失败: {e}")
+            return None
 
 class OCRProcessingError(Exception):
     """Custom exception for OCR processing errors"""
@@ -49,69 +257,56 @@ class PaddleOCRService(OCRServiceInterface):
         self._ocr_engine = None
         self._structure_engine = None
         
+        # 缓存 PPStructure 的结果，避免重复处理
+        # key: image_path, value: processed_result
+        self._ppstructure_result_cache = {}
+        
         # Initialize engines lazily to avoid import errors during testing
         self._initialize_engines()
     
     def _initialize_engines(self):
-        """Initialize PaddleOCR engines with error handling and retry mechanism
+        """Initialize PaddleOCR engines with error handling
         
-        PaddleOCR 3.x API 适配说明：
-        - 3.x 版本参数有重大变化
-        - use_angle_cls 改为 use_textline_orientation
-        - show_log 参数已移除
-        - use_gpu 参数已移除，使用 PaddlePaddle 的设备配置
+        使用缓存的单例实例，避免重复加载模型
+        PaddleOCR 3.x 中，PPStructureV3 已经包含了完整的 OCR 功能，
+        不需要单独创建 PaddleOCR 实例
         """
-        @retry_handler.retry(RetryConfig(max_retries=2, base_delay=2.0))
-        def initialize_with_retry():
-            try:
-                from paddleocr import PaddleOCR
-                import paddleocr
-                
-                # 检测 PaddleOCR 版本
-                version = getattr(paddleocr, '__version__', '2.0.0')
-                is_v3 = version.startswith('3.')
-                logger.info(f"PaddleOCR version: {version}, is_v3: {is_v3}")
-                
-                if is_v3:
-                    # PaddleOCR 3.x 初始化参数
-                    self._ocr_engine = PaddleOCR(
-                        use_textline_orientation=True,
-                        lang=self.lang
-                    )
-                    
-                    # 3.x 版本使用相同的引擎进行结构分析
-                    self._structure_engine = self._ocr_engine
-                else:
-                    # PaddleOCR 2.x 初始化参数（向后兼容）
-                    self._ocr_engine = PaddleOCR(
-                        use_angle_cls=True,
-                        lang=self.lang,
-                        use_gpu=self.use_gpu,
-                        show_log=False
-                    )
-                    
-                    self._structure_engine = PaddleOCR(
-                        use_angle_cls=True,
-                        lang=self.lang,
-                        use_gpu=self.use_gpu,
-                        show_log=False
-                    )
-                
-                logger.info(f"PaddleOCR engines initialized successfully (version: {version})")
-                
-            except ImportError as e:
-                raise OCRProcessingError(f"PaddleOCR not installed: {e}")
-            except Exception as e:
-                # Convert to retryable error for network-related issues
-                if any(keyword in str(e).lower() for keyword in ['network', 'connection', 'download', 'model']):
-                    raise NetworkRetryError(f"Failed to initialize PaddleOCR engines (network issue): {e}")
-                else:
-                    raise OCRProcessingError(f"Failed to initialize PaddleOCR engines: {e}")
-        
         try:
-            initialize_with_retry()
-        except NetworkRetryError as e:
-            raise OCRProcessingError(f"Failed to initialize after retries: {e}")
+            import paddleocr
+            version = getattr(paddleocr, '__version__', '2.0.0')
+            is_v3 = version.startswith('3.')
+            
+            if is_v3:
+                # PaddleOCR 3.x: 使用缓存的 PPStructureV3 实例
+                # PPStructureV3 已经包含了 OCR 功能，不需要单独的 PaddleOCR 实例
+                ppstructure = get_ppstructure_v3_instance()
+                if ppstructure is not None:
+                    # 使用 PPStructureV3 作为主引擎
+                    self._ocr_engine = ppstructure
+                    self._structure_engine = ppstructure
+                    logger.info("使用缓存的 PPStructureV3 作为 OCR 引擎")
+                    return
+                
+                # 如果 PPStructureV3 不可用，回退到 PaddleOCR
+                cached_ocr = get_paddleocr_instance(self.lang)
+                if cached_ocr is not None:
+                    self._ocr_engine = cached_ocr
+                    self._structure_engine = cached_ocr
+                    logger.info("使用缓存的 PaddleOCR 引擎实例")
+                    return
+            
+            # PaddleOCR 2.x 或缓存不可用时，创建新实例
+            logger.warning("缓存实例不可用，创建新的 PaddleOCR 实例...")
+            from paddleocr import PaddleOCR
+            
+            if is_v3:
+                self._ocr_engine = PaddleOCR(use_textline_orientation=True, lang=self.lang)
+            else:
+                self._ocr_engine = PaddleOCR(use_angle_cls=True, lang=self.lang, use_gpu=self.use_gpu, show_log=False)
+            
+            self._structure_engine = self._ocr_engine
+            logger.info(f"PaddleOCR engines initialized (version: {version})")
+            
         except Exception as e:
             raise OCRProcessingError(f"Engine initialization failed: {e}")
     
@@ -344,24 +539,56 @@ class PaddleOCRService(OCRServiceInterface):
                 
                 if is_v3:
                     # PaddleOCR 3.x: 使用 predict 方法
-                    structure_result = list(self._structure_engine.predict(preprocessed_path))
-                    # 转换为旧格式以兼容现有代码
-                    structure_result = self._convert_v3_result_to_legacy(structure_result)
+                    # 禁用不必要的功能以加速处理：
+                    # - use_doc_orientation_classify=False: 禁用文档方向分类
+                    # - use_doc_unwarping=False: 禁用文档去畸变
+                    # - use_seal_recognition=False: 禁用印章识别
+                    # - use_formula_recognition=False: 禁用公式识别
+                    # - use_chart_recognition=False: 禁用图表识别
+                    raw_result = list(self._structure_engine.predict(
+                        preprocessed_path,
+                        use_doc_orientation_classify=False,
+                        use_doc_unwarping=False,
+                        use_seal_recognition=False,
+                        use_formula_recognition=False,
+                        use_chart_recognition=False
+                    ))
+                    
+                    # 处理 PPStructureV3 的返回格式并缓存
+                    # 这样 extract_tables 可以直接使用缓存的结果，避免重复调用 predict()
+                    processed_ppstructure_result = self._process_ppstructure_v3_result(raw_result, preprocessed_path)
+                    self._ppstructure_result_cache[preprocessed_path] = processed_ppstructure_result
+                    # 同时缓存原始图像路径的结果
+                    self._ppstructure_result_cache[image_path] = processed_ppstructure_result
+                    
+                    # 保存 PPStructure HTML 输出
+                    self._save_ppstructure_html(image_path, processed_ppstructure_result)
+                    
+                    # 【修复】使用 PPStructureV3 的布局分析结果创建 regions
+                    # 而不是使用 OCR 文本行结果
+                    regions = self._parse_ppstructure_v3_to_regions(processed_ppstructure_result)
+                    
+                    # 同时保存 OCR 文本行结果用于下载
+                    structure_result = self._convert_v3_result_to_legacy(raw_result)
+                    self._save_raw_ocr_output(image_path, structure_result, scale_info)
                 else:
                     # PaddleOCR 2.x: 使用 ocr 方法
                     structure_result = self._structure_engine.ocr(preprocessed_path, cls=True)
-                
-                # Save raw OCR output for download
-                self._save_raw_ocr_output(image_path, structure_result, scale_info)
-                
-                # Parse structure results with enhanced classification
-                regions = self._parse_structure_result(structure_result)
+                    
+                    # Save raw OCR output for download
+                    self._save_raw_ocr_output(image_path, structure_result, scale_info)
+                    
+                    # Parse structure results with enhanced classification
+                    regions = self._parse_structure_result(structure_result)
                 
                 # Convert coordinates back to original image scale
                 regions = self._scale_regions_to_original(regions, scale_info)
                 
-                # Perform advanced layout analysis (use original image path for correct dimensions)
-                regions = self._enhance_layout_classification(regions, image_path)
+                # 【重要】只在 PaddleOCR 2.x 时进行启发式布局分类增强
+                # PaddleOCR 3.x (PPStructureV3) 已经内置了深度学习布局分析，
+                # 不需要也不应该用启发式规则覆盖其分类结果
+                if not is_v3:
+                    regions = self._enhance_layout_classification(regions, image_path)
                 
                 # Sort regions by reading order (top to bottom, left to right)
                 regions = self._sort_regions_by_reading_order(regions)
@@ -527,18 +754,22 @@ class PaddleOCRService(OCRServiceInterface):
                 res = item.get('res', {})
                 if isinstance(res, dict):
                     # 表格类型，包含 html 和 cell_bbox
+                    # 表格无 OCR 置信度（SLANet 模型不输出置信度）
                     item_data['res'] = {
                         'html': res.get('html', ''),
-                        'cell_bbox': res.get('cell_bbox', [])
+                        'cell_bbox': res.get('cell_bbox', []),
+                        'confidence': res.get('confidence', None)  # 表格置信度为 None
                     }
                 elif isinstance(res, list):
                     # 文本类型，包含文本行列表
                     item_data['res'] = []
                     for text_item in res:
                         if isinstance(text_item, dict):
+                            # 保留真实的置信度，None 表示无置信度
+                            conf = text_item.get('confidence')
                             item_data['res'].append({
                                 'text': text_item.get('text', ''),
-                                'confidence': text_item.get('confidence', 0),
+                                'confidence': conf,  # 保留 None 或真实值
                                 'text_region': text_item.get('text_region', [])
                             })
                 elif isinstance(res, str):
@@ -1446,6 +1677,9 @@ table tr:nth-child(even) {
         """
         Refine region classification using advanced heuristics
         
+        注意：此函数仅在 PaddleOCR 2.x 时使用
+        PaddleOCR 3.x (PPStructureV3) 已经内置了深度学习布局分析，不需要此函数
+        
         Args:
             region: Region to classify
             image_height: Total image height
@@ -1528,7 +1762,8 @@ table tr:nth-child(even) {
             }
         
         # Calculate text confidence (average of all text confidences)
-        text_confidences = [r.confidence for r in regions if r.confidence > 0]
+        # 【修复】过滤掉 None 值，因为某些区域（如表格）没有置信度
+        text_confidences = [r.confidence for r in regions if r.confidence is not None and r.confidence > 0]
         text_confidence = sum(text_confidences) / len(text_confidences) if text_confidences else 0.0
         
         # Calculate layout confidence based on region distribution and classification
@@ -1548,6 +1783,11 @@ table tr:nth-child(even) {
         """
         Calculate confidence score for layout analysis quality
         
+        【修复】调整置信度计算逻辑：
+        - 降低类型多样性的权重（文档可能只有表格也是正常的）
+        - 增加内容质量的权重
+        - 使用加权平均而非简单平均
+        
         Args:
             regions: List of analyzed regions
             
@@ -1557,33 +1797,179 @@ table tr:nth-child(even) {
         if not regions:
             return 0.0
         
-        confidence_factors = []
-        
-        # Factor 1: Region diversity (good layout should have different types)
+        # Factor 1: Region diversity (降低权重，因为文档可能只有特定类型)
+        # 只要有 1 种以上类型就给较高分数
         region_types = set(r.classification for r in regions)
-        type_diversity = len(region_types) / len(RegionType)
-        confidence_factors.append(type_diversity)
+        num_types = len(region_types)
+        if num_types >= 3:
+            type_diversity = 1.0
+        elif num_types == 2:
+            type_diversity = 0.9
+        else:
+            type_diversity = 0.7  # 即使只有一种类型也给 0.7
         
         # Factor 2: Reasonable region sizes (not too small or too large)
         reasonable_sizes = 0
         for region in regions:
             area = region.coordinates.width * region.coordinates.height
-            if 100 < area < 500000:  # Reasonable area range
+            # 放宽面积范围，PPStructureV3 的区域通常较大
+            if 50 < area < 10000000:  # 更宽松的面积范围
                 reasonable_sizes += 1
-        size_factor = reasonable_sizes / len(regions)
-        confidence_factors.append(size_factor)
+        size_factor = reasonable_sizes / len(regions) if regions else 0.5
         
         # Factor 3: Text content quality (regions should have meaningful content)
         meaningful_content = 0
         for region in regions:
             if region.content and len(region.content.strip()) > 3:
                 meaningful_content += 1
-        content_factor = meaningful_content / len(regions)
-        confidence_factors.append(content_factor)
+        content_factor = meaningful_content / len(regions) if regions else 0.5
         
-        # Return average of all factors
-        return sum(confidence_factors) / len(confidence_factors)
+        # 加权平均：内容质量权重最高，类型多样性权重最低
+        # 权重：内容质量 0.5, 尺寸合理性 0.3, 类型多样性 0.2
+        layout_confidence = (
+            content_factor * 0.5 +
+            size_factor * 0.3 +
+            type_diversity * 0.2
+        )
+        
+        return layout_confidence
     
+    def _parse_ppstructure_v3_to_regions(self, ppstructure_result: List[Dict[str, Any]]) -> List[Region]:
+        """
+        将 PPStructureV3 的布局分析结果转换为 Region 对象列表
+        
+        PPStructureV3 返回的每个 item 包含：
+        - type: 区域类型（table, text, figure, figure_caption, header, footer, reference 等）
+        - bbox: 边界框 [x1, y1, x2, y2]
+        - res: 内容（表格为 HTML 字典，文本为文本行列表）
+        
+        【重要修复说明】：
+        - PPStructure 的 'figure' 类型可能包含文本内容，需要根据 res 内容判断
+        - 如果 'figure' 的 res 是文本列表，应该作为 PARAGRAPH 处理
+        - 只有当 res 为空或不包含文本时，才作为 IMAGE 处理
+        
+        Args:
+            ppstructure_result: _process_ppstructure_v3_result 处理后的结果列表
+            
+        Returns:
+            Region 对象列表
+        """
+        regions = []
+        
+        if not ppstructure_result:
+            logger.warning("Empty PPStructureV3 result")
+            return regions
+        
+        # PPStructureV3 类型到 RegionType 的基础映射
+        # 注意：figure 类型需要根据内容动态判断
+        type_mapping = {
+            'table': RegionType.TABLE,
+            'text': RegionType.PARAGRAPH,
+            'title': RegionType.HEADER,
+            'header': RegionType.HEADER,
+            'footer': RegionType.PARAGRAPH,
+            'figure': RegionType.IMAGE,  # 默认值，会根据内容动态调整
+            'figure_caption': RegionType.PARAGRAPH,
+            'table_caption': RegionType.PARAGRAPH,
+            'reference': RegionType.PARAGRAPH,
+            'equation': RegionType.PARAGRAPH,
+            'chart': RegionType.IMAGE,
+            'seal': RegionType.IMAGE,
+        }
+        
+        for item in ppstructure_result:
+            try:
+                item_type = item.get('type', 'text')
+                bbox = item.get('bbox', [0, 0, 0, 0])
+                res = item.get('res', [])
+                
+                # 计算边界框
+                if len(bbox) == 4:
+                    x1, y1, x2, y2 = bbox
+                    bounding_box = BoundingBox(
+                        x=float(x1),
+                        y=float(y1),
+                        width=float(x2 - x1),
+                        height=float(y2 - y1)
+                    )
+                else:
+                    continue
+                
+                # 提取文本内容和置信度
+                content = ""
+                confidence = None  # 默认无置信度
+                has_text_content = False  # 标记是否有文本内容
+                
+                if item_type == 'table':
+                    # 表格类型：res 是包含 html 的字典
+                    if isinstance(res, dict):
+                        content = res.get('html', '')
+                        # 表格的置信度：SLANet 模型不输出置信度，设为 None
+                        confidence = res.get('confidence', None)
+                else:
+                    # 其他类型：res 是文本行列表
+                    if isinstance(res, list):
+                        text_parts = []
+                        confidences = []
+                        for text_item in res:
+                            if isinstance(text_item, dict):
+                                text = text_item.get('text', '')
+                                conf = text_item.get('confidence')  # 可能为 None
+                                if text:
+                                    text_parts.append(text)
+                                    if conf is not None:
+                                        confidences.append(conf)
+                        content = '\n'.join(text_parts)
+                        # 只有当有真实置信度时才计算平均值
+                        if confidences:
+                            confidence = sum(confidences) / len(confidences)
+                        else:
+                            confidence = None  # 无置信度
+                        has_text_content = len(text_parts) > 0
+                    elif isinstance(res, str):
+                        content = res
+                        has_text_content = bool(res.strip())
+                        confidence = None  # 纯字符串无置信度
+                
+                # 【关键修复】动态判断 figure 类型的实际分类
+                # PPStructure 的 'figure' 类型可能包含文本内容或 HTML 表格
+                if item_type == 'figure' and has_text_content:
+                    # 检查内容是否是 HTML 表格
+                    content_lower = content.lower().strip()
+                    if content_lower.startswith('<html') or content_lower.startswith('<table') or '<table>' in content_lower:
+                        # 内容是 HTML 表格，作为 TABLE 处理
+                        region_type = RegionType.TABLE
+                        logger.debug(f"Figure with HTML table content treated as TABLE")
+                    else:
+                        # 普通文本内容，作为 PARAGRAPH 处理
+                        region_type = RegionType.PARAGRAPH
+                        logger.debug(f"Figure with text content treated as PARAGRAPH: {content[:50]}...")
+                else:
+                    # 使用默认映射
+                    region_type = type_mapping.get(item_type, RegionType.PARAGRAPH)
+                
+                # 跳过空内容的区域（除了表格）
+                if not content and item_type != 'table':
+                    logger.debug(f"Skipping empty {item_type} region")
+                    continue
+                
+                region = Region(
+                    coordinates=bounding_box,
+                    classification=region_type,
+                    confidence=confidence,
+                    content=content
+                )
+                
+                regions.append(region)
+                logger.debug(f"Created region: type={region_type.value}, content_len={len(content)}")
+                
+            except Exception as e:
+                logger.warning(f"Failed to parse PPStructureV3 item: {e}")
+                continue
+        
+        logger.info(f"Parsed {len(regions)} regions from PPStructureV3 result")
+        return regions
+
     def _parse_structure_result(self, structure_result: List) -> List[Region]:
         """
         Parse PaddleOCR structure result into Region objects
@@ -1892,7 +2278,8 @@ table tr:nth-child(even) {
         
         PaddleOCR 3.x API 适配：
         - 使用 PPStructureV3 替代 PPStructure
-        - 参数和返回格式有变化
+        - 使用缓存的单例实例，避免重复加载模型
+        - 优先使用缓存的 PPStructure 结果，避免重复处理
         
         Args:
             image_path: Path to image file
@@ -1901,38 +2288,60 @@ table tr:nth-child(even) {
             List of detected TableStructure objects
         """
         try:
-            # PaddleOCR 3.x 使用 PPStructureV3
-            try:
-                from paddleocr import PPStructureV3
-                table_engine = PPStructureV3()
-                logger.info("Using PPStructureV3 (PaddleOCR 3.x)")
-            except ImportError:
-                # 回退到旧版 PPStructure (PaddleOCR 2.x)
-                from paddleocr import PPStructure
-                table_engine = PPStructure(
-                    use_gpu=self.use_gpu,
-                    show_log=False,
-                    lang=self.lang,
-                    layout=True,
-                    table=True,
-                    ocr=True,
-                    recovery=True,
-                )
-                logger.info("Using PPStructure (PaddleOCR 2.x fallback)")
-            
-            # Perform table detection
-            result = table_engine.predict(image_path)
-            
-            # PPStructureV3 返回格式不同，需要适配
-            if hasattr(result, '__iter__') and not isinstance(result, (str, dict)):
-                result_list = list(result)
+            # 首先检查是否有缓存的 PPStructure 结果
+            # 这样可以避免重复调用 predict()
+            if image_path in self._ppstructure_result_cache:
+                logger.info(f"Using cached PPStructure result for {image_path}")
+                processed_result = self._ppstructure_result_cache[image_path]
             else:
-                result_list = [result] if result else []
-            
-            logger.info(f"PPStructure returned {len(result_list)} items")
-            
-            # 处理 PPStructureV3 的返回格式
-            processed_result = self._process_ppstructure_v3_result(result_list, image_path)
+                # 没有缓存，需要调用 PPStructure
+                # 使用缓存的 PPStructureV3 实例（避免重复加载模型）
+                table_engine = get_ppstructure_v3_instance()
+                
+                if table_engine is not None:
+                    logger.info("Using cached PPStructureV3 instance (PaddleOCR 3.x)")
+                else:
+                    # 回退到旧版 PPStructure (PaddleOCR 2.x)
+                    try:
+                        from paddleocr import PPStructure
+                        table_engine = PPStructure(
+                            use_gpu=self.use_gpu,
+                            show_log=False,
+                            lang=self.lang,
+                            layout=True,
+                            table=True,
+                            ocr=True,
+                            recovery=True,
+                        )
+                        logger.info("Using PPStructure (PaddleOCR 2.x fallback)")
+                    except ImportError:
+                        logger.warning("PPStructure not available, using fallback")
+                        return self._fallback_table_detection(image_path)
+                
+                # Perform table detection
+                # 禁用不必要的功能以加速处理
+                result = table_engine.predict(
+                    image_path,
+                    use_doc_orientation_classify=False,
+                    use_doc_unwarping=False,
+                    use_seal_recognition=False,
+                    use_formula_recognition=False,
+                    use_chart_recognition=False
+                )
+                
+                # PPStructureV3 返回格式不同，需要适配
+                if hasattr(result, '__iter__') and not isinstance(result, (str, dict)):
+                    result_list = list(result)
+                else:
+                    result_list = [result] if result else []
+                
+                logger.info(f"PPStructure returned {len(result_list)} items")
+                
+                # 处理 PPStructureV3 的返回格式
+                processed_result = self._process_ppstructure_v3_result(result_list, image_path)
+                
+                # 缓存结果
+                self._ppstructure_result_cache[image_path] = processed_result
             
             # Save raw PPStructure HTML output
             self._save_ppstructure_html(image_path, processed_result)
@@ -1971,11 +2380,18 @@ table tr:nth-child(even) {
         """
         处理 PPStructureV3 的返回结果，转换为统一格式
         
-        PPStructureV3 返回 LayoutParsingResultV2 对象，包含：
-        - parsing_res_list: LayoutBlock 对象列表，每个对象有 label, bbox, content 属性
+        PPStructureV3 返回 LayoutParsingResultV2 对象（dict-like），包含：
+        - parsing_res_list: LayoutBlock 对象列表，每个对象有 block_label, block_bbox, block_content 属性
         - layout_det_res: 布局检测结果
-        - table_res_list: 表格识别结果
+        - table_res_list: 表格识别结果（包含 OCR 置信度）
         - overall_ocr_res: 整体 OCR 结果
+        
+        【重要】PPStructureV3 结果对象是 dict-like，必须使用 result['key'] 访问，
+        而不是 getattr(result, 'key')
+        
+        置信度获取策略（PaddleOCR 3.x）：
+        - 表格区块：从 table_res_list[x].table_ocr_pred.rec_scores 获取平均置信度
+        - 非表格区块：PPStructureV3 不提供置信度，设为 None
         
         Args:
             result_list: PPStructureV3 返回的结果列表（通常只有一个页面结果）
@@ -1987,24 +2403,92 @@ table tr:nth-child(even) {
         processed = []
         
         for result in result_list:
-            # PPStructureV3 返回 LayoutParsingResultV2 对象
-            # 检查是否有 parsing_res_list 属性（PPStructureV3 的主要输出）
+            # PPStructureV3 返回 LayoutParsingResultV2 对象（dict-like）
+            # 【重要】必须使用 [] 访问，不能用 hasattr/getattr
             parsing_res_list = None
+            table_res_list = None
             
-            if hasattr(result, 'parsing_res_list'):
-                # 直接访问对象属性
-                parsing_res_list = result.parsing_res_list
-            elif isinstance(result, dict) and 'parsing_res_list' in result:
-                # 字典格式
-                parsing_res_list = result['parsing_res_list']
+            # 尝试 dict-like 访问（PPStructureV3 的正确方式）
+            try:
+                if hasattr(result, '__getitem__') and hasattr(result, 'keys'):
+                    # dict-like 对象，使用 [] 访问
+                    parsing_res_list = result.get('parsing_res_list') if hasattr(result, 'get') else result['parsing_res_list']
+                    table_res_list = result.get('table_res_list', []) if hasattr(result, 'get') else result.get('table_res_list', [])
+                    logger.debug(f"PPStructureV3 result keys: {list(result.keys())}")
+                elif isinstance(result, dict):
+                    parsing_res_list = result.get('parsing_res_list')
+                    table_res_list = result.get('table_res_list', [])
+                else:
+                    # 回退到属性访问
+                    parsing_res_list = getattr(result, 'parsing_res_list', None)
+                    table_res_list = getattr(result, 'table_res_list', [])
+            except (KeyError, TypeError) as e:
+                logger.warning(f"Failed to access PPStructureV3 result: {e}")
+                # 回退到属性访问
+                parsing_res_list = getattr(result, 'parsing_res_list', None)
+                table_res_list = getattr(result, 'table_res_list', [])
+            
+            # 构建表格区域到置信度的映射
+            # 从 table_res_list[x].table_ocr_pred.rec_scores 获取
+            table_confidence_map = {}
+            if table_res_list:
+                for table_idx, table_res in enumerate(table_res_list):
+                    try:
+                        # table_res 也是 dict-like 对象
+                        table_ocr_pred = None
+                        if hasattr(table_res, '__getitem__'):
+                            table_ocr_pred = table_res.get('table_ocr_pred') if hasattr(table_res, 'get') else None
+                        if table_ocr_pred is None:
+                            table_ocr_pred = getattr(table_res, 'table_ocr_pred', None)
+                        
+                        if table_ocr_pred:
+                            # table_ocr_pred 也是 dict-like，rec_scores 是 numpy array
+                            rec_scores = None
+                            if hasattr(table_ocr_pred, '__getitem__'):
+                                rec_scores = table_ocr_pred.get('rec_scores') if hasattr(table_ocr_pred, 'get') else None
+                            if rec_scores is None:
+                                rec_scores = getattr(table_ocr_pred, 'rec_scores', None)
+                            
+                            if rec_scores is not None and len(rec_scores) > 0:
+                                # rec_scores 可能是 numpy array，需要转换
+                                if hasattr(rec_scores, 'tolist'):
+                                    rec_scores = rec_scores.tolist()
+                                avg_confidence = sum(rec_scores) / len(rec_scores)
+                                table_confidence_map[table_idx] = avg_confidence
+                                logger.info(f"Table {table_idx} average OCR confidence: {avg_confidence:.4f} (from {len(rec_scores)} cells)")
+                    except Exception as e:
+                        logger.warning(f"Failed to extract confidence for table {table_idx}: {e}")
             
             if parsing_res_list:
+                logger.info(f"Processing {len(parsing_res_list)} layout blocks from parsing_res_list")
                 # 处理 LayoutBlock 对象列表
-                for block in parsing_res_list:
-                    item_dict = self._convert_layout_block_to_dict(block)
+                table_block_idx = 0  # 用于匹配 table_res_list
+                for block_idx, block in enumerate(parsing_res_list):
+                    # 【重要】block 对象使用 block_label, block_content, block_bbox 属性
+                    # 可能是 dict-like 或普通对象
+                    label = None
+                    try:
+                        if hasattr(block, '__getitem__'):
+                            label = block.get('block_label') if hasattr(block, 'get') else block['block_label']
+                        if label is None:
+                            label = getattr(block, 'block_label', None) or getattr(block, 'label', None)
+                    except (KeyError, TypeError):
+                        label = getattr(block, 'block_label', None) or getattr(block, 'label', None)
+                    
+                    # 获取表格的置信度
+                    table_confidence = None
+                    if label == 'table' and table_block_idx in table_confidence_map:
+                        table_confidence = table_confidence_map[table_block_idx]
+                        table_block_idx += 1
+                    elif label == 'table':
+                        table_block_idx += 1
+                    
+                    item_dict = self._convert_layout_block_to_dict(block, table_confidence)
                     if item_dict:
                         processed.append(item_dict)
+                        logger.debug(f"Block {block_idx}: type={item_dict.get('type')}, confidence={table_confidence}")
             else:
+                logger.warning("parsing_res_list is None or empty, trying fallback processing")
                 # 回退：尝试旧格式处理
                 if isinstance(result, dict):
                     if 'type' in result:
@@ -2035,28 +2519,62 @@ table tr:nth-child(even) {
         
         return processed
     
-    def _convert_layout_block_to_dict(self, block) -> Optional[Dict[str, Any]]:
+    def _convert_layout_block_to_dict(self, block, table_confidence: Optional[float] = None) -> Optional[Dict[str, Any]]:
         """
         将 PPStructureV3 的 LayoutBlock 对象转换为统一的字典格式
         
-        LayoutBlock 属性：
-        - label: 区域类型（table, text, figure, figure_title, header, footer 等）
-        - bbox: 边界框 [x1, y1, x2, y2]
-        - content: 内容（表格为 HTML，文本为纯文本）
+        【重要】PPStructureV3 的 LayoutBlock 属性名称：
+        - block_label: 区域类型（table, text, figure, figure_title, header, footer 等）
+        - block_bbox: 边界框 [x1, y1, x2, y2]
+        - block_content: 内容（表格为 HTML，文本为纯文本）
+        - block_id: 区块 ID
+        - block_order: 区块顺序
+        
+        注意：旧版使用 label, bbox, content，新版使用 block_label, block_bbox, block_content
+        
+        置信度说明（PaddleOCR 3.x）：
+        - 表格区块：从 table_res_list 获取平均 OCR 置信度（通过 table_confidence 参数传入）
+        - 非表格区块：PPStructureV3 不提供 OCR 置信度，设为 None
         
         Args:
-            block: LayoutBlock 对象
+            block: LayoutBlock 对象（dict-like 或普通对象）
+            table_confidence: 表格的平均 OCR 置信度（仅对表格区块有效）
             
         Returns:
             统一格式的字典，兼容旧版 PPStructure 格式
         """
         try:
-            # 获取基本属性
-            label = getattr(block, 'label', None)
-            bbox = getattr(block, 'bbox', None)
-            content = getattr(block, 'content', None)
+            # 获取基本属性 - 支持 dict-like 和普通对象两种访问方式
+            # PPStructureV3 使用 block_label, block_bbox, block_content
+            label = None
+            bbox = None
+            content = None
+            
+            # 尝试 dict-like 访问（优先）
+            if hasattr(block, '__getitem__'):
+                try:
+                    label = block.get('block_label') if hasattr(block, 'get') else block['block_label']
+                except (KeyError, TypeError):
+                    pass
+                try:
+                    bbox = block.get('block_bbox') if hasattr(block, 'get') else block['block_bbox']
+                except (KeyError, TypeError):
+                    pass
+                try:
+                    content = block.get('block_content') if hasattr(block, 'get') else block['block_content']
+                except (KeyError, TypeError):
+                    pass
+            
+            # 回退到属性访问（兼容旧版）
+            if label is None:
+                label = getattr(block, 'block_label', None) or getattr(block, 'label', None)
+            if bbox is None:
+                bbox = getattr(block, 'block_bbox', None) or getattr(block, 'bbox', None)
+            if content is None:
+                content = getattr(block, 'block_content', None) or getattr(block, 'content', None)
             
             if not label:
+                logger.warning(f"Block has no label, skipping. Block type: {type(block)}")
                 return None
             
             # 映射 label 到旧版 type
@@ -2073,32 +2591,64 @@ table tr:nth-child(even) {
                 'table_title': 'table_caption',
                 'chart': 'figure',
                 'seal': 'figure',
+                'doc_title': 'doc_title',
+                'paragraph_title': 'title',  # 段落标题映射为标题
             }
             
             item_type = type_mapping.get(label, label)
             
+            # 处理 bbox - 可能是 numpy array
+            if bbox is not None:
+                if hasattr(bbox, 'tolist'):
+                    bbox = bbox.tolist()
+                bbox = list(bbox)
+            else:
+                bbox = [0, 0, 0, 0]
+            
             # 构建结果字典
             item_dict = {
                 'type': item_type,
-                'bbox': list(bbox) if bbox else [0, 0, 0, 0],
+                'bbox': bbox,
             }
             
             # 处理内容
             if item_type == 'table':
                 # 表格内容是 HTML
-                if content and content.strip():
-                    item_dict['res'] = {'html': content}
+                # 使用从 table_res_list 获取的平均置信度
+                if content and str(content).strip():
+                    item_dict['res'] = {
+                        'html': str(content),
+                        'confidence': table_confidence  # 表格平均 OCR 置信度
+                    }
                 else:
-                    item_dict['res'] = {'html': ''}
+                    item_dict['res'] = {
+                        'html': '',
+                        'confidence': table_confidence
+                    }
+                logger.debug(f"Table block: confidence={table_confidence}")
             else:
                 # 其他类型，内容是文本
-                if content and content.strip():
-                    # 转换为旧版格式：res 是文本行列表
-                    item_dict['res'] = [{
-                        'text': content.strip(),
-                        'confidence': 0.95,  # 默认置信度
-                        'text_region': []
-                    }]
+                if content and str(content).strip():
+                    content_str = str(content)
+                    # 【修复】检查内容是否是 HTML 表格
+                    # 如果是 HTML 表格，应该作为 table 类型处理
+                    content_lower = content_str.lower().strip()
+                    if content_lower.startswith('<html') or content_lower.startswith('<table') or '<table>' in content_lower:
+                        # 内容是 HTML 表格，修改类型为 table
+                        item_dict['type'] = 'table'
+                        item_dict['res'] = {
+                            'html': content_str,
+                            'confidence': table_confidence  # 使用表格置信度
+                        }
+                        logger.debug(f"Non-table block with HTML table content converted to table type")
+                    else:
+                        # 转换为旧版格式：res 是文本行列表
+                        # PPStructureV3 不提供非表格区块的 OCR 置信度，设为 None
+                        item_dict['res'] = [{
+                            'text': content_str.strip(),
+                            'confidence': None,  # PPStructureV3 不提供非表格区块的置信度
+                            'text_region': []
+                        }]
                 else:
                     item_dict['res'] = []
             
@@ -2106,6 +2656,8 @@ table tr:nth-child(even) {
             
         except Exception as e:
             logger.warning(f"Failed to convert LayoutBlock to dict: {e}")
+            import traceback
+            logger.warning(traceback.format_exc())
             return None
     
     def _split_large_table(self, table: TableStructure) -> List[TableStructure]:
