@@ -1,5 +1,15 @@
 """
 PaddleOCR PP-Structure integration service with error handling and preprocessing
+
+PaddleOCR 版本兼容性：
+- 支持 PaddleOCR 3.x (推荐 3.3.3)
+- 支持 PaddlePaddle 3.x (推荐 3.2.2，注意 3.3.0 有 oneDNN 兼容性问题)
+- 向后兼容 PaddleOCR 2.x
+
+主要 API 变化（3.x vs 2.x）：
+- PaddleOCR 类：基本兼容，use_structure 参数已废弃
+- PPStructure 类：layout_score_threshold/layout_nms_threshold 参数已移除
+- 结果格式：基本兼容
 """
 import os
 import logging
@@ -43,30 +53,51 @@ class PaddleOCRService(OCRServiceInterface):
         self._initialize_engines()
     
     def _initialize_engines(self):
-        """Initialize PaddleOCR engines with error handling and retry mechanism"""
+        """Initialize PaddleOCR engines with error handling and retry mechanism
+        
+        PaddleOCR 3.x API 适配说明：
+        - 3.x 版本参数有重大变化
+        - use_angle_cls 改为 use_textline_orientation
+        - show_log 参数已移除
+        - use_gpu 参数已移除，使用 PaddlePaddle 的设备配置
+        """
         @retry_handler.retry(RetryConfig(max_retries=2, base_delay=2.0))
         def initialize_with_retry():
             try:
                 from paddleocr import PaddleOCR
+                import paddleocr
                 
-                # Initialize OCR engine for text recognition
-                self._ocr_engine = PaddleOCR(
-                    use_angle_cls=True,
-                    lang=self.lang,
-                    use_gpu=self.use_gpu,
-                    show_log=False
-                )
+                # 检测 PaddleOCR 版本
+                version = getattr(paddleocr, '__version__', '2.0.0')
+                is_v3 = version.startswith('3.')
+                logger.info(f"PaddleOCR version: {version}, is_v3: {is_v3}")
                 
-                # Initialize PP-Structure engine for layout analysis
-                self._structure_engine = PaddleOCR(
-                    use_angle_cls=True,
-                    lang=self.lang,
-                    use_gpu=self.use_gpu,
-                    show_log=False,
-                    use_structure=True  # Enable structure analysis
-                )
+                if is_v3:
+                    # PaddleOCR 3.x 初始化参数
+                    self._ocr_engine = PaddleOCR(
+                        use_textline_orientation=True,
+                        lang=self.lang
+                    )
+                    
+                    # 3.x 版本使用相同的引擎进行结构分析
+                    self._structure_engine = self._ocr_engine
+                else:
+                    # PaddleOCR 2.x 初始化参数（向后兼容）
+                    self._ocr_engine = PaddleOCR(
+                        use_angle_cls=True,
+                        lang=self.lang,
+                        use_gpu=self.use_gpu,
+                        show_log=False
+                    )
+                    
+                    self._structure_engine = PaddleOCR(
+                        use_angle_cls=True,
+                        lang=self.lang,
+                        use_gpu=self.use_gpu,
+                        show_log=False
+                    )
                 
-                logger.info(f"PaddleOCR engines initialized successfully (GPU: {self.use_gpu})")
+                logger.info(f"PaddleOCR engines initialized successfully (version: {version})")
                 
             except ImportError as e:
                 raise OCRProcessingError(f"PaddleOCR not installed: {e}")
@@ -83,6 +114,66 @@ class PaddleOCRService(OCRServiceInterface):
             raise OCRProcessingError(f"Failed to initialize after retries: {e}")
         except Exception as e:
             raise OCRProcessingError(f"Engine initialization failed: {e}")
+    
+    def _convert_v3_result_to_legacy(self, v3_results: List) -> List:
+        """
+        将 PaddleOCR 3.x 的 OCRResult 格式转换为 2.x 的旧格式
+        
+        PaddleOCR 3.x 返回格式:
+        - OCRResult 对象，包含 dt_polys, rec_texts, rec_scores 等属性
+        - dt_polys: numpy array, shape (N, 4, 2) - N个检测框，每个框4个点，每个点2个坐标
+        
+        PaddleOCR 2.x 返回格式:
+        - [[[bbox_points, (text, score)], ...]]
+        - bbox_points: [[x1,y1], [x2,y2], [x3,y3], [x4,y4]]
+        
+        Args:
+            v3_results: PaddleOCR 3.x predict 方法返回的结果列表
+            
+        Returns:
+            转换为 2.x 格式的结果
+        """
+        legacy_results = []
+        
+        for result in v3_results:
+            page_results = []
+            
+            # 获取检测框、文本和置信度
+            if isinstance(result, dict):
+                dt_polys = result.get('dt_polys', [])
+                rec_texts = result.get('rec_texts', [])
+                rec_scores = result.get('rec_scores', [])
+            else:
+                dt_polys = getattr(result, 'dt_polys', [])
+                rec_texts = getattr(result, 'rec_texts', [])
+                rec_scores = getattr(result, 'rec_scores', [])
+            
+            # 转换为旧格式
+            for i, poly in enumerate(dt_polys):
+                text = rec_texts[i] if i < len(rec_texts) else ''
+                score = rec_scores[i] if i < len(rec_scores) else 0.0
+                
+                # 将 numpy 数组转换为列表
+                # poly 的形状是 (4, 2)，即 4 个点，每个点 2 个坐标
+                if hasattr(poly, 'tolist'):
+                    poly_list = poly.tolist()
+                else:
+                    poly_list = list(poly)
+                
+                # 确保是正确的格式: [[x1,y1], [x2,y2], [x3,y3], [x4,y4]]
+                if len(poly_list) == 4 and len(poly_list[0]) == 2:
+                    bbox_points = poly_list
+                else:
+                    # 尝试其他格式转换
+                    logger.warning(f"Unexpected poly format: {poly_list}")
+                    continue
+                
+                # 旧格式: [bbox_points, (text, confidence)]
+                page_results.append([bbox_points, (text, float(score))])
+            
+            legacy_results.append(page_results)
+        
+        return legacy_results
     
     def preprocess_image(self, image_path: str, output_path: Optional[str] = None) -> Tuple[str, Dict[str, Any]]:
         """
@@ -220,6 +311,10 @@ class PaddleOCRService(OCRServiceInterface):
         """
         Perform comprehensive layout analysis on image using PP-Structure with retry mechanism
         
+        PaddleOCR 3.x API 适配：
+        - 使用 predict 方法替代 ocr 方法
+        - 处理新的 OCRResult 返回格式
+        
         Args:
             image_path: Path to image file
             
@@ -237,13 +332,24 @@ class PaddleOCRService(OCRServiceInterface):
             try:
                 import time
                 import json
+                import paddleocr
                 start_time = time.time()
                 
                 # Preprocess image for better results and get scale info
                 preprocessed_path, scale_info = self.preprocess_image(image_path)
                 
-                # Perform structure analysis with retry for network issues
-                structure_result = self._structure_engine.ocr(preprocessed_path, cls=True)
+                # 检测 PaddleOCR 版本并使用相应的 API
+                version = getattr(paddleocr, '__version__', '2.0.0')
+                is_v3 = version.startswith('3.')
+                
+                if is_v3:
+                    # PaddleOCR 3.x: 使用 predict 方法
+                    structure_result = list(self._structure_engine.predict(preprocessed_path))
+                    # 转换为旧格式以兼容现有代码
+                    structure_result = self._convert_v3_result_to_legacy(structure_result)
+                else:
+                    # PaddleOCR 2.x: 使用 ocr 方法
+                    structure_result = self._structure_engine.ocr(preprocessed_path, cls=True)
                 
                 # Save raw OCR output for download
                 self._save_raw_ocr_output(image_path, structure_result, scale_info)
@@ -1017,6 +1123,218 @@ table tr:nth-child(even) {
         
         return '\n'.join(html_parts)
     
+    def generate_markdown_output(self, image_path: str, ppstructure_result: List) -> str:
+        """
+        Generate Markdown output from PPStructure result
+        
+        PaddleOCR 3.x 新功能：支持 Markdown 格式输出
+        
+        Args:
+            image_path: Path to the original image
+            ppstructure_result: Raw result from PPStructure
+            
+        Returns:
+            Markdown formatted string
+        """
+        from pathlib import Path
+        
+        # Extract job_id from image path
+        image_name = Path(image_path).stem
+        if '_page' in image_name:
+            job_id = image_name.split('_page')[0]
+        else:
+            job_id = image_name
+        
+        # Sort results by y-coordinate (top to bottom reading order)
+        sorted_results = sorted(ppstructure_result, key=lambda x: x.get('bbox', [0, 0, 0, 0])[1])
+        
+        markdown_parts = []
+        
+        for item in sorted_results:
+            item_type = item.get('type', 'unknown')
+            res = item.get('res', {})
+            
+            if item_type == 'title':
+                text_content = self._extract_text_from_res(res)
+                if text_content:
+                    # 使用 # 作为标题
+                    markdown_parts.append(f"# {text_content}")
+                    markdown_parts.append("")
+                    
+            elif item_type == 'text':
+                text_content = self._extract_text_from_res(res)
+                if text_content:
+                    markdown_parts.append(text_content)
+                    markdown_parts.append("")
+                    
+            elif item_type == 'header':
+                text_content = self._extract_text_from_res(res)
+                if text_content:
+                    # 页眉使用斜体
+                    markdown_parts.append(f"*{text_content}*")
+                    markdown_parts.append("")
+                    
+            elif item_type == 'footer':
+                text_content = self._extract_text_from_res(res)
+                if text_content:
+                    # 页脚使用斜体
+                    markdown_parts.append(f"*{text_content}*")
+                    markdown_parts.append("")
+                    
+            elif item_type == 'table':
+                table_md = self._convert_table_to_markdown(res)
+                if table_md:
+                    markdown_parts.append(table_md)
+                    markdown_parts.append("")
+                    
+            elif item_type == 'figure':
+                markdown_parts.append("![图像]()")
+                markdown_parts.append("")
+                
+            elif item_type == 'figure_caption':
+                text_content = self._extract_text_from_res(res)
+                if text_content:
+                    markdown_parts.append(f"*图: {text_content}*")
+                    markdown_parts.append("")
+                    
+            elif item_type == 'table_caption':
+                text_content = self._extract_text_from_res(res)
+                if text_content:
+                    markdown_parts.append(f"*表: {text_content}*")
+                    markdown_parts.append("")
+                    
+            elif item_type == 'reference':
+                text_content = self._extract_text_from_res(res)
+                if text_content:
+                    markdown_parts.append(f"> {text_content}")
+                    markdown_parts.append("")
+                    
+            elif item_type == 'equation':
+                text_content = self._extract_text_from_res(res)
+                if text_content:
+                    # 公式使用 LaTeX 格式
+                    markdown_parts.append(f"$${text_content}$$")
+                    markdown_parts.append("")
+                    
+            else:
+                text_content = self._extract_text_from_res(res)
+                if text_content:
+                    markdown_parts.append(text_content)
+                    markdown_parts.append("")
+        
+        markdown_content = '\n'.join(markdown_parts)
+        
+        # 保存 Markdown 文件
+        output_folder = Path(image_path).parent
+        md_path = output_folder / f"{job_id}_raw_ocr.md"
+        with open(md_path, 'w', encoding='utf-8') as f:
+            f.write(markdown_content)
+        logger.info(f"Saved Markdown to: {md_path}")
+        
+        return markdown_content
+    
+    def _convert_table_to_markdown(self, table_res) -> str:
+        """
+        Convert table result to Markdown table format
+        
+        Args:
+            table_res: Table result from PPStructure (dict with 'html' or list)
+            
+        Returns:
+            Markdown table string
+        """
+        try:
+            # 如果有 HTML，从 HTML 解析
+            if isinstance(table_res, dict) and 'html' in table_res:
+                return self._html_table_to_markdown(table_res['html'])
+            
+            # 如果是列表格式
+            if isinstance(table_res, list):
+                return self._list_to_markdown_table(table_res)
+            
+            return ""
+            
+        except Exception as e:
+            logger.warning(f"Failed to convert table to Markdown: {e}")
+            return ""
+    
+    def _html_table_to_markdown(self, html_content: str) -> str:
+        """
+        Convert HTML table to Markdown format
+        
+        Args:
+            html_content: HTML table string
+            
+        Returns:
+            Markdown table string
+        """
+        try:
+            from bs4 import BeautifulSoup
+            
+            soup = BeautifulSoup(html_content, 'html.parser')
+            table = soup.find('table')
+            
+            if not table:
+                return ""
+            
+            rows = table.find_all('tr')
+            if not rows:
+                return ""
+            
+            markdown_rows = []
+            max_cols = 0
+            
+            for row_idx, row in enumerate(rows):
+                cells = row.find_all(['td', 'th'])
+                cell_texts = [cell.get_text(strip=True) for cell in cells]
+                max_cols = max(max_cols, len(cell_texts))
+                
+                # 转义 Markdown 特殊字符
+                cell_texts = [text.replace('|', '\\|') for text in cell_texts]
+                
+                markdown_rows.append('| ' + ' | '.join(cell_texts) + ' |')
+                
+                # 在第一行后添加分隔符
+                if row_idx == 0:
+                    separator = '| ' + ' | '.join(['---'] * len(cell_texts)) + ' |'
+                    markdown_rows.append(separator)
+            
+            return '\n'.join(markdown_rows)
+            
+        except ImportError:
+            logger.warning("BeautifulSoup not available for HTML table parsing")
+            return ""
+        except Exception as e:
+            logger.warning(f"HTML table to Markdown conversion failed: {e}")
+            return ""
+    
+    def _list_to_markdown_table(self, table_data: List) -> str:
+        """
+        Convert list-based table data to Markdown format
+        
+        Args:
+            table_data: List of rows, each row is a list of cells
+            
+        Returns:
+            Markdown table string
+        """
+        if not table_data:
+            return ""
+        
+        markdown_rows = []
+        
+        for row_idx, row in enumerate(table_data):
+            if isinstance(row, list):
+                cell_texts = [str(cell).replace('|', '\\|') for cell in row]
+                markdown_rows.append('| ' + ' | '.join(cell_texts) + ' |')
+                
+                # 在第一行后添加分隔符
+                if row_idx == 0:
+                    separator = '| ' + ' | '.join(['---'] * len(cell_texts)) + ' |'
+                    markdown_rows.append(separator)
+        
+        return '\n'.join(markdown_rows)
+    
     def _scale_regions_to_original(self, regions: List[Region], scale_info: Dict[str, Any]) -> List[Region]:
         """
         Scale region coordinates from preprocessed image back to original image dimensions
@@ -1378,6 +1696,10 @@ table tr:nth-child(even) {
         """
         Extract text from specified regions using OCR with retry mechanism
         
+        PaddleOCR 3.x API 适配：
+        - 使用 predict 方法替代 ocr 方法
+        - 处理新的返回格式
+        
         Args:
             image_path: Path to image file
             regions: List of regions to extract text from
@@ -1391,9 +1713,17 @@ table tr:nth-child(even) {
         @retry_handler.retry(RetryConfig(max_retries=3, base_delay=1.0))
         def perform_text_extraction():
             try:
+                import paddleocr
+                version = getattr(paddleocr, '__version__', '2.0.0')
+                is_v3 = version.startswith('3.')
+                
                 # If no specific regions provided, use full image OCR
                 if not regions:
-                    result = self._ocr_engine.ocr(image_path, cls=True)
+                    if is_v3:
+                        result = list(self._ocr_engine.predict(image_path))
+                        result = self._convert_v3_result_to_legacy(result)
+                    else:
+                        result = self._ocr_engine.ocr(image_path, cls=True)
                     return self._parse_ocr_result(result)
                 
                 # Extract text from specific regions
@@ -1415,7 +1745,11 @@ table tr:nth-child(even) {
                         cv2.imwrite(temp_path, cropped)
                         
                         # Perform OCR on cropped region with retry
-                        ocr_result = self._ocr_engine.ocr(temp_path, cls=True)
+                        if is_v3:
+                            ocr_result = list(self._ocr_engine.predict(temp_path))
+                            ocr_result = self._convert_v3_result_to_legacy(ocr_result)
+                        else:
+                            ocr_result = self._ocr_engine.ocr(temp_path, cls=True)
                         
                         # Update region with OCR result
                         if ocr_result and ocr_result[0]:
@@ -1556,6 +1890,10 @@ table tr:nth-child(even) {
         """
         Detect tables in the full image using PP-Structure
         
+        PaddleOCR 3.x API 适配：
+        - 使用 PPStructureV3 替代 PPStructure
+        - 参数和返回格式有变化
+        
         Args:
             image_path: Path to image file
             
@@ -1563,42 +1901,51 @@ table tr:nth-child(even) {
             List of detected TableStructure objects
         """
         try:
-            # Use PaddleOCR's table recognition capability
-            from paddleocr import PPStructure
-            
-            # Initialize table structure engine with optimized settings
-            # recovery=True enables HTML output for tables
-            table_engine = PPStructure(
-                use_gpu=self.use_gpu,
-                show_log=False,
-                lang=self.lang,
-                layout=True,
-                table=True,
-                ocr=True,
-                recovery=True,  # Enable recovery mode for HTML table output
-                layout_score_threshold=0.3,  # Lower threshold to detect more regions
-                layout_nms_threshold=0.3     # Lower NMS threshold to keep more separate boxes
-            )
+            # PaddleOCR 3.x 使用 PPStructureV3
+            try:
+                from paddleocr import PPStructureV3
+                table_engine = PPStructureV3()
+                logger.info("Using PPStructureV3 (PaddleOCR 3.x)")
+            except ImportError:
+                # 回退到旧版 PPStructure (PaddleOCR 2.x)
+                from paddleocr import PPStructure
+                table_engine = PPStructure(
+                    use_gpu=self.use_gpu,
+                    show_log=False,
+                    lang=self.lang,
+                    layout=True,
+                    table=True,
+                    ocr=True,
+                    recovery=True,
+                )
+                logger.info("Using PPStructure (PaddleOCR 2.x fallback)")
             
             # Perform table detection
-            result = table_engine(image_path)
+            result = table_engine.predict(image_path)
             
-            logger.info(f"PPStructure returned {len(result)} items")
+            # PPStructureV3 返回格式不同，需要适配
+            if hasattr(result, '__iter__') and not isinstance(result, (str, dict)):
+                result_list = list(result)
+            else:
+                result_list = [result] if result else []
             
-            # Save raw PPStructure HTML output (includes tables with HTML structure)
-            self._save_ppstructure_html(image_path, result)
+            logger.info(f"PPStructure returned {len(result_list)} items")
+            
+            # 处理 PPStructureV3 的返回格式
+            processed_result = self._process_ppstructure_v3_result(result_list, image_path)
+            
+            # Save raw PPStructure HTML output
+            self._save_ppstructure_html(image_path, processed_result)
             
             tables = []
-            for idx, item in enumerate(result):
+            for idx, item in enumerate(processed_result):
                 item_type = item.get('type', 'unknown')
                 logger.info(f"Item {idx}: type={item_type}, keys={list(item.keys())}")
                 
                 if item_type == 'table':
                     table_structure = self._parse_table_result(item)
                     if table_structure:
-                        # Check if this is a large table that might need splitting
                         if table_structure.rows > 20:
-                            # Try to split large tables by empty rows
                             split_tables = self._split_large_table(table_structure)
                             tables.extend(split_tables)
                             logger.info(f"Split large table into {len(split_tables)} tables")
@@ -1611,14 +1958,155 @@ table tr:nth-child(even) {
             logger.info(f"Total tables extracted: {len(tables)}")
             return tables
             
-        except ImportError:
-            logger.warning("PPStructure not available, using fallback table detection")
+        except ImportError as e:
+            logger.warning(f"PPStructure not available: {e}, using fallback table detection")
             return self._fallback_table_detection(image_path)
         except Exception as e:
             logger.warning(f"Table detection failed: {e}")
             import traceback
             logger.warning(traceback.format_exc())
             return []
+    
+    def _process_ppstructure_v3_result(self, result_list: List, image_path: str) -> List[Dict[str, Any]]:
+        """
+        处理 PPStructureV3 的返回结果，转换为统一格式
+        
+        PPStructureV3 返回 LayoutParsingResultV2 对象，包含：
+        - parsing_res_list: LayoutBlock 对象列表，每个对象有 label, bbox, content 属性
+        - layout_det_res: 布局检测结果
+        - table_res_list: 表格识别结果
+        - overall_ocr_res: 整体 OCR 结果
+        
+        Args:
+            result_list: PPStructureV3 返回的结果列表（通常只有一个页面结果）
+            image_path: 图像路径
+            
+        Returns:
+            统一格式的结果列表，兼容旧版 PPStructure 格式
+        """
+        processed = []
+        
+        for result in result_list:
+            # PPStructureV3 返回 LayoutParsingResultV2 对象
+            # 检查是否有 parsing_res_list 属性（PPStructureV3 的主要输出）
+            parsing_res_list = None
+            
+            if hasattr(result, 'parsing_res_list'):
+                # 直接访问对象属性
+                parsing_res_list = result.parsing_res_list
+            elif isinstance(result, dict) and 'parsing_res_list' in result:
+                # 字典格式
+                parsing_res_list = result['parsing_res_list']
+            
+            if parsing_res_list:
+                # 处理 LayoutBlock 对象列表
+                for block in parsing_res_list:
+                    item_dict = self._convert_layout_block_to_dict(block)
+                    if item_dict:
+                        processed.append(item_dict)
+            else:
+                # 回退：尝试旧格式处理
+                if isinstance(result, dict):
+                    if 'type' in result:
+                        processed.append(result)
+                    else:
+                        for key, value in result.items():
+                            if isinstance(value, list):
+                                for item in value:
+                                    if isinstance(item, dict) and 'type' in item:
+                                        processed.append(item)
+                elif hasattr(result, '__dict__'):
+                    item_dict = {}
+                    if hasattr(result, 'type'):
+                        item_dict['type'] = result.type
+                    if hasattr(result, 'bbox'):
+                        item_dict['bbox'] = result.bbox
+                    if hasattr(result, 'res'):
+                        item_dict['res'] = result.res
+                    if hasattr(result, 'html'):
+                        item_dict['res'] = {'html': result.html}
+                    if item_dict:
+                        processed.append(item_dict)
+        
+        if not processed and result_list:
+            logger.warning(f"Could not process PPStructureV3 result, result_list has {len(result_list)} items")
+        else:
+            logger.info(f"Processed {len(processed)} items from PPStructureV3 result")
+        
+        return processed
+    
+    def _convert_layout_block_to_dict(self, block) -> Optional[Dict[str, Any]]:
+        """
+        将 PPStructureV3 的 LayoutBlock 对象转换为统一的字典格式
+        
+        LayoutBlock 属性：
+        - label: 区域类型（table, text, figure, figure_title, header, footer 等）
+        - bbox: 边界框 [x1, y1, x2, y2]
+        - content: 内容（表格为 HTML，文本为纯文本）
+        
+        Args:
+            block: LayoutBlock 对象
+            
+        Returns:
+            统一格式的字典，兼容旧版 PPStructure 格式
+        """
+        try:
+            # 获取基本属性
+            label = getattr(block, 'label', None)
+            bbox = getattr(block, 'bbox', None)
+            content = getattr(block, 'content', None)
+            
+            if not label:
+                return None
+            
+            # 映射 label 到旧版 type
+            type_mapping = {
+                'table': 'table',
+                'figure': 'figure',
+                'figure_title': 'figure_caption',
+                'text': 'text',
+                'title': 'title',
+                'header': 'header',
+                'footer': 'footer',
+                'reference': 'reference',
+                'equation': 'equation',
+                'table_title': 'table_caption',
+                'chart': 'figure',
+                'seal': 'figure',
+            }
+            
+            item_type = type_mapping.get(label, label)
+            
+            # 构建结果字典
+            item_dict = {
+                'type': item_type,
+                'bbox': list(bbox) if bbox else [0, 0, 0, 0],
+            }
+            
+            # 处理内容
+            if item_type == 'table':
+                # 表格内容是 HTML
+                if content and content.strip():
+                    item_dict['res'] = {'html': content}
+                else:
+                    item_dict['res'] = {'html': ''}
+            else:
+                # 其他类型，内容是文本
+                if content and content.strip():
+                    # 转换为旧版格式：res 是文本行列表
+                    item_dict['res'] = [{
+                        'text': content.strip(),
+                        'confidence': 0.95,  # 默认置信度
+                        'text_region': []
+                    }]
+                else:
+                    item_dict['res'] = []
+            
+            return item_dict
+            
+        except Exception as e:
+            logger.warning(f"Failed to convert LayoutBlock to dict: {e}")
+            return None
     
     def _split_large_table(self, table: TableStructure) -> List[TableStructure]:
         """

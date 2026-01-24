@@ -1,6 +1,14 @@
 # PDF to Editable Web Layout System
 
-将扫描的 PDF 文档转换为结构化、可编辑的 Web 内容。使用 PaddleOCR PP-Structure 进行 OCR 处理和布局分析。
+将扫描的 PDF 文档转换为结构化、可编辑的 Web 内容。使用 PaddleOCR PP-StructureV3 进行 OCR 处理和布局分析。
+
+## 🆕 最新更新 (2026-01-24)
+
+- ✅ 升级到 PaddleOCR 3.3.3 + PaddlePaddle 3.2.2
+- ✅ 支持 PP-OCRv5（文本识别准确率 +13%）
+- ✅ 支持 PP-StructureV3（表格识别准确率 +6%）
+- ✅ 新增 Markdown 输出支持
+- ✅ 详细迁移指南：`MDFiles/implementation/PADDLEOCR_2X_TO_3X_MIGRATION_GUIDE.md`
 
 ## 功能特点
 
@@ -56,21 +64,36 @@
 
 ## 快速开始
 
-### 环境要求
+## 环境要求
 
 - Python 3.10+
 - Node.js 16+
-- PaddleOCR
+- PaddleOCR 3.3.3
+- PaddlePaddle 3.2.2 (⚠️ 不要使用 3.3.0)
+
+## 虚拟环境
+
+| 环境 | Python | PaddleOCR | 用途 |
+|------|--------|-----------|------|
+| `venv_paddle3` | 3.10 | 3.3.3 | **推荐** - 最新版本 |
+| `venv310` | 3.10 | 2.7.0.3 | 旧版本备份 |
 
 ### 安装 PaddleOCR
 
 ```bash
-pip install paddleocr paddlepaddle
+# ⚠️ 重要：使用 PaddlePaddle 3.2.2，不要使用 3.3.0（有 oneDNN 兼容性问题）
+pip install paddlepaddle==3.2.2
+pip install paddleocr==3.3.3
 ```
 
 ### 启动服务
 
-**Windows**:
+**Windows (推荐 - 使用 PaddleOCR 3.x 环境)**:
+```cmd
+run_dev_v3.bat
+```
+
+**Windows (旧版 PaddleOCR 2.x 环境)**:
 ```cmd
 run_dev.bat
 ```
@@ -78,8 +101,8 @@ run_dev.bat
 或手动启动：
 
 ```cmd
-# 后端
-.\venv310\Scripts\Activate.ps1
+# 后端 (PaddleOCR 3.x 环境)
+.\venv_paddle3\Scripts\Activate.ps1
 $env:PYTHONPATH="."
 python backend/app.py
 

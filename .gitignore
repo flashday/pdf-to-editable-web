@@ -24,6 +24,7 @@ MANIFEST
 # Virtual environments
 venv/
 venv310/
+venv_paddle3/
 env/
 ENV/
 

@@ -828,3 +828,234 @@ class DataNormalizer(DataNormalizerInterface):
         """
         validation_result = self.validate_editor_schema(editor_data)
         return self.schema_validator.generate_validation_report(validation_result)
+    
+    def normalize_markdown_to_blocks(self, markdown_content: str) -> EditorJSData:
+        """
+        Convert Markdown content to Editor.js blocks
+        
+        PaddleOCR 3.x 新功能：支持从 Markdown 格式转换为 Editor.js blocks
+        
+        Args:
+            markdown_content: Markdown formatted string
+            
+        Returns:
+            EditorJSData object compatible with Editor.js
+        """
+        try:
+            logger.info("Converting Markdown to Editor.js blocks")
+            
+            blocks = []
+            lines = markdown_content.split('\n')
+            
+            i = 0
+            while i < len(lines):
+                line = lines[i].strip()
+                
+                if not line:
+                    i += 1
+                    continue
+                
+                block = None
+                
+                # 检测标题 (# ## ### 等)
+                if line.startswith('#'):
+                    block = self._parse_markdown_header(line)
+                
+                # 检测表格 (| ... |)
+                elif line.startswith('|'):
+                    table_lines = [line]
+                    i += 1
+                    while i < len(lines) and lines[i].strip().startswith('|'):
+                        table_lines.append(lines[i].strip())
+                        i += 1
+                    block = self._parse_markdown_table(table_lines)
+                    i -= 1  # 回退一行，因为外层循环会 +1
+                
+                # 检测引用 (> ...)
+                elif line.startswith('>'):
+                    block = self._parse_markdown_quote(line)
+                
+                # 检测列表 (- 或 * 或 数字.)
+                elif line.startswith('-') or line.startswith('*') or (line[0].isdigit() and '.' in line[:3]):
+                    list_lines = [line]
+                    i += 1
+                    while i < len(lines):
+                        next_line = lines[i].strip()
+                        if next_line.startswith('-') or next_line.startswith('*') or (next_line and next_line[0].isdigit() and '.' in next_line[:3]):
+                            list_lines.append(next_line)
+                            i += 1
+                        else:
+                            break
+                    block = self._parse_markdown_list(list_lines)
+                    i -= 1
+                
+                # 检测公式 ($$...$$)
+                elif line.startswith('$$'):
+                    formula_content = line[2:]
+                    if line.endswith('$$') and len(line) > 4:
+                        formula_content = line[2:-2]
+                    block = self._create_formula_block(formula_content)
+                
+                # 检测图片 (![alt](url))
+                elif line.startswith('!['):
+                    block = self._parse_markdown_image(line)
+                
+                # 检测斜体文本 (*text*)
+                elif line.startswith('*') and line.endswith('*') and not line.startswith('**'):
+                    text = line[1:-1]
+                    block = self._create_paragraph_block_from_text(text, italic=True)
+                
+                # 普通段落
+                else:
+                    block = self._create_paragraph_block_from_text(line)
+                
+                if block:
+                    blocks.append(block)
+                
+                i += 1
+            
+            # Create Editor.js data structure
+            editor_data = EditorJSData(
+                time=int(time.time() * 1000),
+                blocks=blocks,
+                version=self.editor_version
+            )
+            
+            logger.info(f"Successfully converted Markdown to {len(blocks)} Editor.js blocks")
+            return editor_data
+            
+        except Exception as e:
+            logger.error(f"Markdown to Editor.js conversion failed: {e}")
+            raise ValueError(f"Failed to convert Markdown: {e}")
+    
+    def _parse_markdown_header(self, line: str) -> EditorJSBlock:
+        """Parse Markdown header line to Editor.js header block"""
+        level = 0
+        for char in line:
+            if char == '#':
+                level += 1
+            else:
+                break
+        
+        text = line[level:].strip()
+        level = min(level, 6)  # Max header level is 6
+        
+        return EditorJSBlock(
+            id=str(uuid.uuid4()),
+            type="header",
+            data={"text": text, "level": level},
+            metadata={"source": "markdown"}
+        )
+    
+    def _parse_markdown_table(self, table_lines: List[str]) -> EditorJSBlock:
+        """Parse Markdown table lines to Editor.js table block"""
+        content = []
+        has_headers = False
+        
+        for idx, line in enumerate(table_lines):
+            # 跳过分隔符行 (| --- | --- |)
+            if '---' in line:
+                has_headers = True
+                continue
+            
+            # 解析单元格
+            cells = [cell.strip() for cell in line.split('|')]
+            # 移除首尾空元素
+            cells = [c for c in cells if c]
+            
+            if cells:
+                content.append(cells)
+        
+        return EditorJSBlock(
+            id=str(uuid.uuid4()),
+            type="table",
+            data={
+                "withHeadings": has_headers,
+                "content": content,
+                "tableHtml": self._generate_table_html(content, has_headers)
+            },
+            metadata={"source": "markdown"}
+        )
+    
+    def _parse_markdown_quote(self, line: str) -> EditorJSBlock:
+        """Parse Markdown quote to Editor.js paragraph block"""
+        text = line[1:].strip()  # Remove '>'
+        
+        return EditorJSBlock(
+            id=str(uuid.uuid4()),
+            type="paragraph",
+            data={"text": f"<blockquote>{text}</blockquote>"},
+            metadata={"source": "markdown", "type": "quote"}
+        )
+    
+    def _parse_markdown_list(self, list_lines: List[str]) -> EditorJSBlock:
+        """Parse Markdown list to Editor.js list block"""
+        items = []
+        style = "unordered"
+        
+        for line in list_lines:
+            line = line.strip()
+            
+            # 检测有序列表
+            if line[0].isdigit() and '.' in line[:3]:
+                style = "ordered"
+                dot_idx = line.find('.')
+                item_text = line[dot_idx + 1:].strip()
+            else:
+                # 无序列表
+                item_text = line[1:].strip()  # Remove - or *
+            
+            if item_text:
+                items.append(item_text)
+        
+        return EditorJSBlock(
+            id=str(uuid.uuid4()),
+            type="list",
+            data={"style": style, "items": items},
+            metadata={"source": "markdown"}
+        )
+    
+    def _create_formula_block(self, formula: str) -> EditorJSBlock:
+        """Create Editor.js block for formula"""
+        return EditorJSBlock(
+            id=str(uuid.uuid4()),
+            type="paragraph",
+            data={"text": f"<em>公式: {formula}</em>"},
+            metadata={"source": "markdown", "type": "formula"}
+        )
+    
+    def _parse_markdown_image(self, line: str) -> EditorJSBlock:
+        """Parse Markdown image to Editor.js image block"""
+        # Format: ![alt](url)
+        alt_start = line.find('[') + 1
+        alt_end = line.find(']')
+        url_start = line.find('(') + 1
+        url_end = line.find(')')
+        
+        alt_text = line[alt_start:alt_end] if alt_start > 0 and alt_end > alt_start else ""
+        url = line[url_start:url_end] if url_start > 0 and url_end > url_start else ""
+        
+        return EditorJSBlock(
+            id=str(uuid.uuid4()),
+            type="image",
+            data={
+                "file": {"url": url},
+                "caption": alt_text,
+                "withBorder": False,
+                "withBackground": False,
+                "stretched": False
+            },
+            metadata={"source": "markdown"}
+        )
+    
+    def _create_paragraph_block_from_text(self, text: str, italic: bool = False) -> EditorJSBlock:
+        """Create paragraph block from text"""
+        if italic:
+            text = f"<em>{text}</em>"
+        
+        return EditorJSBlock(
+            id=str(uuid.uuid4()),
+            type="paragraph",
+            data={"text": text},
+            metadata={"source": "markdown"}
+        )
