@@ -4,11 +4,17 @@
 
 ## 🆕 最新更新 (2026-01-24)
 
+**后端升级：**
 - ✅ 升级到 PaddleOCR 3.3.3 + PaddlePaddle 3.2.2
 - ✅ 支持 PP-OCRv5（文本识别准确率 +13%）
 - ✅ 支持 PP-StructureV3（表格识别准确率 +6%）
-- ✅ 新增 Markdown 输出支持
+- ✅ 新增 Markdown 输出 API (`/api/convert/{job_id}/markdown`)
 - ✅ 详细迁移指南：`MDFiles/implementation/PADDLEOCR_2X_TO_3X_MIGRATION_GUIDE.md`
+
+**前端升级：**
+- ✅ 新增 Markdown 下载按钮（📥 Markdown）
+- ✅ 新增编辑模式切换（📦 Block / 📝 Markdown）
+- ✅ Markdown 编辑器支持双向同步
 
 ## 功能特点
 
@@ -20,7 +26,8 @@
 - **表格编辑**：表格类型 Block 支持直接编辑单元格
 - **文本编辑**：文本类型 Block 弹出文本编辑框
 - **实时高亮**：选中时左右两侧同步高亮
-- **下载功能**：下载文本行 JSON、布局 JSON、编辑后 Block 数据
+- **下载功能**：下载文本行 JSON、布局 JSON、Markdown、编辑后 Block 数据
+- **编辑模式**：Block 模式和 Markdown 模式可切换
 - 实时处理状态更新
 - 置信度报告
 
@@ -38,7 +45,8 @@
 │    - 双击弹出编辑框          │      - 双击弹出编辑框                  │
 │                             │                                       │
 ├─────────────────────────────┴──────────────────────────────────────┤
-│              下载按钮：文本行JSON | 布局JSON | 编辑后Block           │
+│  编辑模式：📦 Block | 📝 Markdown                                    │
+│  下载按钮：文本行JSON | 布局JSON | Markdown | 编辑后Block            │
 └────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -133,6 +141,7 @@ npm run dev
 - `GET /api/convert/{job_id}/result` - 获取结果
 - `GET /api/convert/{job_id}/image` - 获取文档图像
 - `GET /api/convert/{job_id}/raw-output` - 获取原始 OCR 输出
+- `GET /api/convert/{job_id}/markdown` - 获取 Markdown 格式输出
 
 ## 系统要求
 
