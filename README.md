@@ -269,13 +269,20 @@ npm run dev
 
 ## API 接口
 
+### 系统接口
+
+| 接口 | 说明 |
+|------|------|
+| `GET /api/health` | 健康检查，返回服务状态和 OCR 模型就绪状态 |
+
 ### 文档处理接口
 
 | 接口 | 说明 |
 |------|------|
 | `POST /api/convert` | 上传文件并开始处理 |
-| `GET /api/convert/{job_id}/status` | 查询处理状态 |
+| `GET /api/convert/{job_id}/status` | 查询处理状态（含进度百分比、预计剩余时间） |
 | `GET /api/convert/{job_id}/result` | 获取 OCR 结果（Editor.js 格式） |
+| `GET /api/convert/{job_id}/history` | 获取状态更新历史（用于调试） |
 | `GET /api/convert/{job_id}/image` | 获取文档图像 |
 | `GET /api/convert/{job_id}/original-file` | 下载原始上传文件 |
 | `GET /api/convert/{job_id}/raw-output` | 获取原始 OCR 输出（JSON + HTML + PPStructure） |
@@ -286,7 +293,8 @@ npm run dev
 
 | 接口 | 说明 |
 |------|------|
-| `GET /api/jobs/history` | 获取历史任务列表 |
+| `GET /api/jobs/history` | 获取历史任务列表（支持 limit 参数） |
+| `GET /api/jobs/latest` | 获取最新任务（用于页面加载时自动恢复） |
 | `GET /api/jobs/{job_id}/cached-result` | 获取缓存的识别结果（含 Markdown） |
 | `DELETE /api/jobs/{job_id}` | 删除缓存任务 |
 
