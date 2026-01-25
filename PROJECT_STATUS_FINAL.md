@@ -10,6 +10,32 @@ PDF to Editable Web Layout System - 一个完整的系统，使用 OCR 和 Edito
 
 ## 🆕 最新更新 (2026-01-25)
 
+### Job缓存系统 + 流程进度条 ✅
+
+**痛点**：每次测试前端页面都需要等待模型启动(~60s)和OCR处理(~50s)
+
+**解决方案**：
+1. **后端Job缓存服务** - 文件级缓存，无需数据库
+   - `backend/services/job_cache.py` - JobCacheService类
+   - `temp/job_cache.json` - 缓存元数据
+   - 复用已有的temp文件（`_page1.png`, `_ppstructure.json`等）
+
+2. **新增API端点**：
+   - `GET /api/jobs/history` - 获取历史任务列表
+   - `GET /api/jobs/latest` - 获取最近任务
+   - `GET /api/jobs/<job_id>/cached-result` - 获取缓存结果
+   - `DELETE /api/jobs/<job_id>` - 删除缓存任务
+
+3. **前端流程进度条**：
+   - 顶部显示：1.模型启动 → 2.上传文件 → 3.识别处理 → 4.结果显示
+   - 每个步骤有状态指示（等待/进行中/完成/错误）
+   - 显示各步骤耗时
+
+4. **历史缓存面板**：
+   - 右侧显示历史任务列表
+   - 点击直接加载缓存结果，跳过步骤1-3
+   - 大幅节省前端测试时间
+
 ### 前端置信度完整精度显示修复 ✅
 
 **问题**：前端显示置信度被截断为两位小数（`0.99` 而非 `0.9902119826729585`）

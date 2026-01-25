@@ -16,6 +16,7 @@ from backend.services.performance_monitor import performance_monitor
 from backend.services.document_processor import (
     get_document_processor, init_document_processor, ProcessingResult
 )
+from backend.services.job_cache import get_job_cache, init_job_cache
 
 @api_bp.route('/health', methods=['GET'])
 def health_check():
@@ -936,3 +937,177 @@ def get_confidence_log(job_id):
             }
         )
         return jsonify(response_data), status_code
+
+
+# ============================================================
+# Job Cache API - 任务缓存相关端点
+# ============================================================
+
+@api_bp.route('/jobs/history', methods=['GET'])
+def get_job_history():
+    """
+    获取历史任务列表
+    
+    用于前端页面加载时显示可恢复的历史任务
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    try:
+        cache = get_job_cache()
+        if cache is None:
+            # 尝试初始化
+            temp_folder = current_app.config['TEMP_FOLDER']
+            cache = init_job_cache(temp_folder)
+        
+        limit = request.args.get('limit', type=int, default=20)
+        jobs = cache.get_all_jobs(limit=limit)
+        
+        return jsonify({
+            'success': True,
+            'jobs': [
+                {
+                    'job_id': job.job_id,
+                    'filename': job.filename,
+                    'created_at': job.created_at,
+                    'created_at_str': _format_timestamp(job.created_at),
+                    'processing_time': round(job.processing_time, 2),
+                    'status': job.status,
+                    'confidence_score': job.confidence_score,
+                    'block_count': job.block_count,
+                    'has_tables': job.has_tables
+                }
+                for job in jobs
+            ],
+            'count': len(jobs)
+        })
+    except Exception as e:
+        logger.error(f"Failed to get job history: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'jobs': []
+        }), 500
+
+
+@api_bp.route('/jobs/latest', methods=['GET'])
+def get_latest_job():
+    """
+    获取最新的任务
+    
+    用于前端页面加载时自动恢复上次的识别结果
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    try:
+        cache = get_job_cache()
+        if cache is None:
+            temp_folder = current_app.config['TEMP_FOLDER']
+            cache = init_job_cache(temp_folder)
+        
+        job = cache.get_latest_job()
+        
+        if job is None:
+            return jsonify({
+                'success': True,
+                'has_job': False,
+                'job': None
+            })
+        
+        return jsonify({
+            'success': True,
+            'has_job': True,
+            'job': {
+                'job_id': job.job_id,
+                'filename': job.filename,
+                'created_at': job.created_at,
+                'created_at_str': _format_timestamp(job.created_at),
+                'processing_time': round(job.processing_time, 2),
+                'status': job.status,
+                'confidence_score': job.confidence_score,
+                'block_count': job.block_count,
+                'has_tables': job.has_tables
+            }
+        })
+    except Exception as e:
+        logger.error(f"Failed to get latest job: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'has_job': False
+        }), 500
+
+
+@api_bp.route('/jobs/<job_id>/cached-result', methods=['GET'])
+def get_cached_result(job_id):
+    """
+    获取缓存的识别结果
+    
+    返回与 /api/convert/{job_id}/result 相同格式的数据
+    用于前端直接加载历史结果，无需重新处理
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    try:
+        cache = get_job_cache()
+        if cache is None:
+            temp_folder = current_app.config['TEMP_FOLDER']
+            cache = init_job_cache(temp_folder)
+        
+        result = cache.load_cached_result(job_id)
+        
+        if result is None:
+            return jsonify({
+                'success': False,
+                'error': '缓存结果不存在或文件已删除',
+                'job_id': job_id
+            }), 404
+        
+        return jsonify(result)
+    except Exception as e:
+        logger.error(f"Failed to get cached result for {job_id}: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'job_id': job_id
+        }), 500
+
+
+@api_bp.route('/jobs/<job_id>', methods=['DELETE'])
+def delete_cached_job(job_id):
+    """
+    删除缓存的任务
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    try:
+        cache = get_job_cache()
+        if cache is None:
+            return jsonify({
+                'success': False,
+                'error': '缓存服务未初始化'
+            }), 500
+        
+        deleted = cache.delete_job(job_id)
+        
+        return jsonify({
+            'success': deleted,
+            'job_id': job_id,
+            'message': '任务已删除' if deleted else '任务不存在'
+        })
+    except Exception as e:
+        logger.error(f"Failed to delete job {job_id}: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+def _format_timestamp(ts: float) -> str:
+    """格式化时间戳为可读字符串"""
+    from datetime import datetime
+    dt = datetime.fromtimestamp(ts)
+    return dt.strftime('%Y-%m-%d %H:%M:%S')

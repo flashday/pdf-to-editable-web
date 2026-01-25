@@ -20,6 +20,7 @@ from backend.services.pdf_processor import PDFProcessor, PDFProcessingError
 from backend.services.status_tracker import status_tracker, ProcessingStage
 from backend.services.performance_monitor import performance_monitor
 from backend.services.error_handler import error_handler
+from backend.services.job_cache import get_job_cache
 
 logger = logging.getLogger(__name__)
 
@@ -219,6 +220,31 @@ class DocumentProcessor(DocumentProcessorInterface):
                 'processing_time': processing_time
             })
             
+            # 保存到任务缓存
+            try:
+                cache = get_job_cache()
+                if cache:
+                    # 提取置信度分数
+                    conf_score = None
+                    if confidence_report and 'confidence_breakdown' in confidence_report:
+                        overall = confidence_report['confidence_breakdown'].get('overall', {})
+                        conf_score = overall.get('score')
+                    
+                    # 检查是否有表格
+                    has_tables = any(b.type == 'table' for b in editor_data.blocks)
+                    
+                    cache.save_job(
+                        job_id=document.id,
+                        filename=document.original_filename,
+                        processing_time=processing_time,
+                        confidence_score=conf_score,
+                        block_count=len(editor_data.blocks),
+                        has_tables=has_tables,
+                        status='completed'
+                    )
+            except Exception as cache_error:
+                logger.warning(f"Failed to save job to cache: {cache_error}")
+            
             # Clean up temporary files
             self._cleanup_temp_files(document.id)
             
@@ -370,10 +396,20 @@ class DocumentProcessor(DocumentProcessorInterface):
             raise OCRProcessingError(f"OCR analysis failed: {e}")
     
     def _cleanup_temp_files(self, document_id: str) -> None:
-        """Clean up temporary files for a document"""
+        """Clean up temporary files for a document
+        
+        注意：为了支持缓存功能，保留以下文件：
+        - {document_id}_page1.png - 页面图片（用于显示）
+        - {document_id}_ppstructure.json - 布局结果
+        - {document_id}_raw_ocr.json - OCR原始结果
+        - {document_id}_raw_ocr.html - HTML格式
+        - {document_id}_confidence_log.md - 置信度日志
+        
+        只清理预处理图片等临时文件
+        """
         try:
-            # Clean up extracted page images
-            for pattern in [f"{document_id}_page*.png", f"{document_id}_preprocessed*"]:
+            # 只清理预处理图片，保留其他文件用于缓存
+            for pattern in [f"{document_id}_preprocessed*", f"{document_id}_page[2-9]*.png"]:
                 for temp_file in self.temp_folder.glob(pattern):
                     try:
                         temp_file.unlink()

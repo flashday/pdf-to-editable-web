@@ -14,6 +14,7 @@ from flask_cors import CORS
 from backend.api import api_bp
 from backend.config import Config
 from backend.services.ocr_service import preload_models, is_models_loaded, is_models_loading
+from backend.services.job_cache import init_job_cache
 import os
 import threading
 import time
@@ -39,6 +40,9 @@ def create_app(config_class=Config):
     # Ensure required directories exist
     config_class.UPLOAD_FOLDER.mkdir(exist_ok=True)
     config_class.TEMP_FOLDER.mkdir(exist_ok=True)
+    
+    # 初始化任务缓存服务
+    init_job_cache(config_class.TEMP_FOLDER)
     
     # Register API blueprint
     app.register_blueprint(api_bp, url_prefix='/api')
