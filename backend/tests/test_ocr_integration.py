@@ -4,6 +4,7 @@ Integration tests for OCR service with the document processing pipeline
 import pytest
 import tempfile
 import os
+import time
 from unittest.mock import Mock, patch
 from PIL import Image
 
@@ -21,8 +22,18 @@ class TestOCRIntegration:
             # Create a simple test image
             img = Image.new('RGB', (800, 600), color='white')
             img.save(tmp.name)
-            yield tmp.name
-            os.unlink(tmp.name)
+            tmp_path = tmp.name
+        
+        yield tmp_path
+        
+        # Windows 文件清理：等待文件释放后再删除
+        for _ in range(5):
+            try:
+                if os.path.exists(tmp_path):
+                    os.unlink(tmp_path)
+                break
+            except PermissionError:
+                time.sleep(0.1)
     
     def test_ocr_service_creation(self):
         """Test that OCR service can be created without PaddleOCR installed"""
@@ -43,12 +54,19 @@ class TestOCRIntegration:
         service._ocr_engine = None
         service._structure_engine = None
         
-        # Test preprocessing
-        preprocessed_path = service.preprocess_image(sample_image)
+        # Test preprocessing - now returns tuple (path, scale_info)
+        preprocessed_path, scale_info = service.preprocess_image(sample_image)
         
         # Verify preprocessed image exists and is different
         assert os.path.exists(preprocessed_path)
         assert preprocessed_path != sample_image
+        
+        # Verify scale_info structure
+        assert isinstance(scale_info, dict)
+        assert 'original_width' in scale_info
+        assert 'original_height' in scale_info
+        assert 'scale_x' in scale_info
+        assert 'scale_y' in scale_info
         
         # Verify it's a valid image
         with Image.open(preprocessed_path) as img:
