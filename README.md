@@ -108,6 +108,7 @@
 ```
 ├── backend/                 # Python 后端
 │   ├── api/                # REST API
+│   │   └── routes.py           # API 路由定义
 │   ├── services/           # 业务逻辑
 │   │   ├── ocr_service.py      # PaddleOCR 集成（主服务）
 │   │   ├── ocr/                # OCR 模块化组件
@@ -118,12 +119,25 @@
 │   │   │   ├── output_generator.py     # HTML/Markdown 生成
 │   │   │   ├── ppstructure_parser.py   # PPStructureV3 结果解析
 │   │   │   └── confidence_logger.py    # 置信度日志生成
-│   │   ├── data_normalizer.py  # 数据转换（含类型映射）
-│   │   ├── document_processor.py # 处理流程
-│   │   └── job_cache.py        # 历史任务缓存
+│   │   ├── data_normalizer.py      # 数据转换（含类型映射）
+│   │   ├── document_processor.py   # 处理流程
+│   │   ├── job_cache.py            # 历史任务缓存
+│   │   ├── pdf_processor.py        # PDF 转图像处理
+│   │   ├── status_tracker.py       # 任务状态跟踪
+│   │   ├── validation.py           # 输入验证
+│   │   ├── error_handler.py        # 错误处理
+│   │   ├── encoding_handler.py     # 编码处理（中文支持）
+│   │   ├── confidence_monitor.py   # 置信度监控
+│   │   ├── content_integrity.py    # 内容完整性检查
+│   │   ├── json_validator.py       # JSON 验证
+│   │   ├── schema_validator.py     # Schema 验证
+│   │   ├── retry_handler.py        # 重试处理
+│   │   ├── performance_monitor.py  # 性能监控
+│   │   └── interfaces.py           # 接口定义
 │   ├── models/             # 数据模型
 │   ├── tests/              # 单元测试
 │   ├── app.py              # 应用入口
+│   ├── config.py           # 配置文件
 │   └── requirements.txt    # Python 依赖
 ├── frontend/               # JavaScript 前端
 │   ├── src/
@@ -132,8 +146,12 @@
 │   │   └── index.js        # 应用入口
 │   └── package.json        # Node.js 依赖
 ├── temp/                   # 临时文件目录（调试用）
+├── uploads/                # 上传文件目录
+├── logs/                   # 日志目录
 ├── MDFiles/                # 文档目录
 │   └── implementation/     # 实现文档
+├── run_dev_v3.bat          # Windows 启动脚本
+├── start_backend.py        # 后端启动脚本
 └── README.md
 ```
 
