@@ -356,11 +356,11 @@ class PaddleOCRService(OCRServiceInterface):
     
     def _convert_v3_result_to_legacy(self, v3_results: List) -> List:
         """
-        将 PaddleOCR 3.x 的 OCRResult 格式转换为 2.x 的旧格式
+        将 PaddleOCR 3.x 的结果格式转换为 2.x 的旧格式
         
-        PaddleOCR 3.x 返回格式:
-        - OCRResult 对象，包含 dt_polys, rec_texts, rec_scores 等属性
-        - dt_polys: numpy array, shape (N, 4, 2) - N个检测框，每个框4个点，每个点2个坐标
+        支持两种输入格式：
+        1. 普通 OCR 结果 (OCRResult): 包含 dt_polys, rec_texts, rec_scores
+        2. PPStructure 结果 (LayoutParsingResultV2): 包含 overall_ocr_res 字段
         
         PaddleOCR 2.x 返回格式:
         - [[[bbox_points, (text, score)], ...]]
@@ -378,14 +378,70 @@ class PaddleOCRService(OCRServiceInterface):
             page_results = []
             
             # 获取检测框、文本和置信度
+            dt_polys = None
+            rec_texts = None
+            rec_scores = None
+            
+            # 首先尝试从 overall_ocr_res 获取（PPStructure 结果）
+            overall_ocr_res = None
             if isinstance(result, dict):
-                dt_polys = result.get('dt_polys', [])
-                rec_texts = result.get('rec_texts', [])
-                rec_scores = result.get('rec_scores', [])
+                overall_ocr_res = result.get('overall_ocr_res')
+            elif hasattr(result, '__getitem__'):
+                try:
+                    overall_ocr_res = result.get('overall_ocr_res') if hasattr(result, 'get') else result['overall_ocr_res']
+                except (KeyError, TypeError):
+                    pass
+            if overall_ocr_res is None:
+                overall_ocr_res = getattr(result, 'overall_ocr_res', None)
+            
+            # 如果有 overall_ocr_res，从中提取 OCR 数据
+            if overall_ocr_res is not None:
+                logger.debug("Extracting OCR data from overall_ocr_res (PPStructure result)")
+                if isinstance(overall_ocr_res, dict):
+                    dt_polys = overall_ocr_res.get('dt_polys', [])
+                    rec_texts = overall_ocr_res.get('rec_texts', [])
+                    rec_scores = overall_ocr_res.get('rec_scores', [])
+                elif hasattr(overall_ocr_res, '__getitem__'):
+                    try:
+                        dt_polys = overall_ocr_res.get('dt_polys', []) if hasattr(overall_ocr_res, 'get') else overall_ocr_res['dt_polys']
+                        rec_texts = overall_ocr_res.get('rec_texts', []) if hasattr(overall_ocr_res, 'get') else overall_ocr_res['rec_texts']
+                        rec_scores = overall_ocr_res.get('rec_scores', []) if hasattr(overall_ocr_res, 'get') else overall_ocr_res['rec_scores']
+                    except (KeyError, TypeError):
+                        pass
+                if dt_polys is None:
+                    dt_polys = getattr(overall_ocr_res, 'dt_polys', [])
+                if rec_texts is None:
+                    rec_texts = getattr(overall_ocr_res, 'rec_texts', [])
+                if rec_scores is None:
+                    rec_scores = getattr(overall_ocr_res, 'rec_scores', [])
             else:
-                dt_polys = getattr(result, 'dt_polys', [])
-                rec_texts = getattr(result, 'rec_texts', [])
-                rec_scores = getattr(result, 'rec_scores', [])
+                # 直接从结果中获取（普通 OCR 结果）
+                if isinstance(result, dict):
+                    dt_polys = result.get('dt_polys', [])
+                    rec_texts = result.get('rec_texts', [])
+                    rec_scores = result.get('rec_scores', [])
+                else:
+                    dt_polys = getattr(result, 'dt_polys', [])
+                    rec_texts = getattr(result, 'rec_texts', [])
+                    rec_scores = getattr(result, 'rec_scores', [])
+            
+            # 确保数据不为 None
+            if dt_polys is None:
+                dt_polys = []
+            if rec_texts is None:
+                rec_texts = []
+            if rec_scores is None:
+                rec_scores = []
+            
+            # 转换 numpy array 为列表
+            if hasattr(dt_polys, 'tolist'):
+                dt_polys = dt_polys.tolist()
+            if hasattr(rec_texts, 'tolist'):
+                rec_texts = rec_texts.tolist()
+            if hasattr(rec_scores, 'tolist'):
+                rec_scores = rec_scores.tolist()
+            
+            logger.debug(f"Converting {len(dt_polys)} OCR items to legacy format")
             
             # 转换为旧格式
             for i, poly in enumerate(dt_polys):
@@ -412,6 +468,7 @@ class PaddleOCRService(OCRServiceInterface):
             
             legacy_results.append(page_results)
         
+        logger.info(f"Converted to legacy format: {sum(len(p) for p in legacy_results)} total OCR items")
         return legacy_results
     
     def preprocess_image(self, image_path: str, output_path: Optional[str] = None) -> Tuple[str, Dict[str, Any]]:

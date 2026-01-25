@@ -6,9 +6,17 @@ export default defineConfig({
     outDir: '../dist',
     emptyOutDir: true
   },
+  // 禁用依赖预构建缓存
+  optimizeDeps: {
+    force: true
+  },
   server: {
     port: 3000,
     host: '127.0.0.1',  // Force IPv4
+    // 禁用浏览器缓存
+    headers: {
+      'Cache-Control': 'no-store'
+    },
     proxy: {
       '/api': {
         target: 'http://127.0.0.1:5000',  // Use IPv4 explicitly
