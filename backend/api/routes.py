@@ -22,6 +22,54 @@ def health_check():
     """Health check endpoint"""
     return jsonify({'status': 'healthy', 'service': 'pdf-to-editable-web'})
 
+
+@api_bp.route('/test-confidence-log', methods=['GET'])
+def test_confidence_log():
+    """测试置信度日志端点 - 验证前后端通讯"""
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info("=== TEST CONFIDENCE LOG ENDPOINT CALLED ===")
+    # 返回一个完整精度的测试值
+    test_value = 0.9881692556724135
+    return jsonify({
+        'success': True,
+        'message': '前后端通讯正常！',
+        'timestamp': time.time(),
+        'test_confidence': test_value,
+        'test_confidence_str': str(test_value)
+    })
+
+
+@api_bp.route('/debug-confidence/<job_id>', methods=['GET'])
+def debug_confidence(job_id):
+    """调试端点 - 返回完整的confidence_report数据"""
+    import logging
+    import json
+    logger = logging.getLogger(__name__)
+    
+    processor = get_document_processor()
+    if processor is None:
+        return jsonify({'error': 'Processor not initialized'}), 500
+    
+    result = processor.get_processing_result(job_id)
+    if result is None:
+        return jsonify({'error': 'Result not found'}), 404
+    
+    # 直接返回confidence_report，不做任何处理
+    cr = result.confidence_report
+    logger.info(f"=== DEBUG CONFIDENCE ===")
+    logger.info(f"confidence_report type: {type(cr)}")
+    if cr and 'confidence_breakdown' in cr:
+        overall = cr['confidence_breakdown'].get('overall', {})
+        logger.info(f"overall.score: {overall.get('score')}")
+        logger.info(f"overall.score type: {type(overall.get('score'))}")
+    
+    return jsonify({
+        'job_id': job_id,
+        'confidence_report': cr,
+        'confidence_report_json': json.dumps(cr)
+    })
+
 @api_bp.route('/convert', methods=['POST'])
 def convert_document():
     """Document conversion endpoint with file upload and validation"""
@@ -346,6 +394,12 @@ def get_conversion_result(job_id):
         # Add confidence report if available
         if result.confidence_report:
             response_data['confidence_report'] = result.confidence_report
+            # 调试日志：打印完整的置信度值
+            import logging
+            logger = logging.getLogger(__name__)
+            if 'confidence_breakdown' in result.confidence_report:
+                overall = result.confidence_report['confidence_breakdown'].get('overall', {})
+                logger.info(f"=== API返回置信度: {overall.get('score')} ===")
         else:
             # Generate basic confidence report
             response_data['confidence_report'] = {
@@ -826,3 +880,59 @@ def _html_table_to_markdown(html_content):
             markdown_rows.append(separator)
     
     return '\n'.join(markdown_rows)
+
+
+@api_bp.route('/convert/<job_id>/confidence-log', methods=['GET'])
+def get_confidence_log(job_id):
+    """
+    获取置信度计算详细日志（Markdown 格式）
+    
+    返回详细的置信度计算过程，包括：
+    - 每个区域的置信度
+    - 文本置信度计算过程
+    - 布局置信度计算过程
+    - 总体置信度计算过程
+    """
+    from pathlib import Path
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    try:
+        temp_folder = current_app.config['TEMP_FOLDER']
+        root_temp = Path('temp')
+        
+        temp_folders = [temp_folder, root_temp]
+        
+        log_content = None
+        
+        for tf in temp_folders:
+            log_path = tf / f"{job_id}_confidence_log.md"
+            if log_path.exists():
+                with open(log_path, 'r', encoding='utf-8') as f:
+                    log_content = f.read()
+                logger.info(f"Found confidence log at: {log_path}")
+                break
+        
+        if not log_content:
+            return jsonify({
+                'job_id': job_id,
+                'error': '置信度日志未找到',
+                'message': '该任务的置信度日志文件不存在，可能任务尚未完成处理'
+            }), 404
+        
+        return jsonify({
+            'job_id': job_id,
+            'confidence_log': log_content,
+            'format': 'markdown'
+        })
+        
+    except Exception as e:
+        response_data, status_code = error_handler.handle_error(
+            e,
+            context={
+                'operation': 'get_confidence_log',
+                'job_id': job_id,
+                'endpoint': f'/convert/{job_id}/confidence-log'
+            }
+        )
+        return jsonify(response_data), status_code

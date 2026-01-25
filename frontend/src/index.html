@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PDF to Editable Web Layout</title>
+    <title>PDF全文结构识别还原演示</title>
     <style>
         * {
             box-sizing: border-box;
@@ -231,6 +231,15 @@
             border-left: 4px solid #3498db;
             border-radius: 4px;
             font-size: 0.9em;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        #confidenceReport .confidence-info {
+            flex: 1;
+            min-width: 200px;
         }
         #confidenceReport h4 {
             margin: 0 0 8px 0;
@@ -244,6 +253,20 @@
             margin: 5px 0 0 20px;
             padding: 0;
             color: #666;
+        }
+        .confidence-log-btn {
+            background: #17a2b8;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.8em;
+            white-space: nowrap;
+            transition: background 0.2s;
+        }
+        .confidence-log-btn:hover {
+            background: #138496;
         }
         
         /* 进度条 */
@@ -695,9 +718,54 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>PDF to Editable Web Layout</h1>
-            <p>Convert your scanned PDFs into editable web content</p>
+            <h1>PDF全文结构识别还原演示</h1>
+            <p>将扫描的 PDF 文档识别和表格识别整合转换为可编辑的网页内容</p>
         </div>
+        
+        <!-- 全局下载函数定义 -->
+        <script>
+            // 全局下载函数 - 置信度LOG
+            window.downloadConfidenceLog = async function() {
+                var jobId = window.app ? window.app.currentJobId : null;
+                if (!jobId) { alert('无任务ID'); return; }
+                try {
+                    var res = await fetch('/api/convert/' + jobId + '/confidence-log');
+                    var data = await res.json();
+                    if (data.confidence_log) {
+                        var blob = new Blob([data.confidence_log], {type: 'text/markdown'});
+                        var a = document.createElement('a');
+                        a.href = URL.createObjectURL(blob);
+                        a.download = 'confidence-log-' + jobId + '.md';
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                    } else {
+                        alert('错误: ' + (data.error || '日志不可用'));
+                    }
+                } catch(e) {
+                    alert('下载失败: ' + e.message);
+                }
+            };
+            
+            // 全局下载函数 - 布局JSON
+            window.downloadPPStructure = async function() {
+                var jobId = window.app ? window.app.currentJobId : null;
+                if (!jobId) { alert('无任务ID'); return; }
+                try {
+                    var res = await fetch('/api/convert/' + jobId + '/raw-output');
+                    var data = await res.json();
+                    if (data.ppstructure_json) {
+                        var blob = new Blob([JSON.stringify(data.ppstructure_json, null, 2)], {type: 'application/json'});
+                        var a = document.createElement('a');
+                        a.href = URL.createObjectURL(blob);
+                        a.download = 'ppstructure-' + jobId + '.json';
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                    }
+                } catch(e) { alert('下载失败: ' + e.message); }
+            };
+        </script>
         
         <div class="upload-section">
             <div class="upload-area" id="uploadArea">
@@ -714,7 +782,7 @@
         <div class="main-content" id="mainContent">
             <!-- 左侧：原始图像 -->
             <div class="image-panel">
-                <div class="image-panel-header">📷 Original Document</div>
+                <div class="image-panel-header">📷 原始文档</div>
                 <div class="image-container" id="imageContainer">
                     <div class="image-wrapper" id="imageWrapper">
                         <img id="documentImage" src="" alt="Document preview">
@@ -737,9 +805,8 @@
                         <button id="markdownModeBtn" class="mode-btn" title="Markdown 编辑模式">📝 Markdown</button>
                     </div>
                     <div class="download-buttons" id="downloadButtons" style="display: none;">
-                        <button id="downloadPPStructureBtn" class="download-btn" title="PPStructure 布局与文本块分析结果">📥 布局与文本块JSON</button>
-                        <button id="downloadMarkdownBtn" class="download-btn" title="Markdown 格式输出">📥 Markdown</button>
-                        <button id="downloadOcrBtn" class="download-btn" title="编辑后的 Block 数据">📥 编辑后Block</button>
+                        <button id="downloadPPStructureBtn" class="download-btn" title="PPStructure 布局与文本块分析结果" onclick="window.downloadPPStructure()">布局JSON</button>
+                        <button id="downloadConfidenceLogBtn" class="download-btn" title="置信度计算详细日志" style="background: #17a2b8;" onclick="window.downloadConfidenceLog()">置信度LOG</button>
                     </div>
                 </div>
                 <div id="confidenceReport"></div>

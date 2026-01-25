@@ -268,31 +268,31 @@ class ConfidenceMonitor:
         """
         warnings = self.check_confidence_thresholds(metrics)
         
-        # Create confidence breakdown
+        # Create confidence breakdown - 保留完整精度
         confidence_breakdown = {
             'overall': {
-                'score': round(metrics.overall_confidence, 3),
+                'score': metrics.overall_confidence,
                 'level': self.classify_confidence_level(metrics.overall_confidence).value,
                 'description': self._get_confidence_description(metrics.overall_confidence)
             },
             'text_recognition': {
-                'score': round(metrics.text_confidence, 3),
+                'score': metrics.text_confidence,
                 'level': self.classify_confidence_level(metrics.text_confidence).value,
                 'description': self._get_confidence_description(metrics.text_confidence)
             },
             'layout_detection': {
-                'score': round(metrics.layout_confidence, 3),
+                'score': metrics.layout_confidence,
                 'level': self.classify_confidence_level(metrics.layout_confidence).value,
                 'description': self._get_confidence_description(metrics.layout_confidence)
             },
             'table_recognition': {
-                'score': round(metrics.table_confidence, 3),
+                'score': metrics.table_confidence,
                 'level': self.classify_confidence_level(metrics.table_confidence).value,
                 'description': self._get_confidence_description(metrics.table_confidence)
             }
         }
         
-        # Format warnings for API response
+        # Format warnings for API response - 保留完整精度
         formatted_warnings = []
         for warning in warnings:
             formatted_warnings.append({
@@ -301,7 +301,7 @@ class ConfidenceMonitor:
                 'message': warning.message,
                 'recommendation': warning.recommendation,
                 'affected_areas': warning.affected_areas,
-                'confidence_score': round(warning.confidence_score, 3)
+                'confidence_score': warning.confidence_score
             })
         
         return {

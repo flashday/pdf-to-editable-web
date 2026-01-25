@@ -14,10 +14,30 @@ PaddleOCR 版本兼容性：
 模型缓存策略：
 - PPStructureV3 实例在模块级别缓存，避免重复加载
 - 支持启动时预加载模型
+
+CPU 性能优化：
+- 线程数配置：根据 Intel CPU 特性优化
+- 参考：MDFiles/implementation/PADDLEOCR_CPU_PERFORMANCE_OPTIMIZATION.md
 """
 import os
 import logging
 import threading
+
+# ============================================================================
+# CPU 性能优化 - 线程配置（必须在导入 paddle 之前设置）
+# 针对 Intel Core Ultra 7 / i7 优化
+# 注意：某些 Intel CPU 上单线程可能更快，建议进行基准测试
+# ============================================================================
+# CPU 线程设置：默认 8 线程（适合 Intel i7/Ultra 7）
+# 如需调整，可设置环境变量 PADDLEOCR_CPU_THREADS
+_CPU_THREADS = os.environ.get('PADDLEOCR_CPU_THREADS', '8')
+os.environ.setdefault('OMP_NUM_THREADS', _CPU_THREADS)
+os.environ.setdefault('MKL_NUM_THREADS', _CPU_THREADS)
+# OpenBLAS 线程设置
+os.environ.setdefault('OPENBLAS_NUM_THREADS', _CPU_THREADS)
+# 禁用 oneDNN 详细日志
+os.environ.setdefault('DNNL_VERBOSE', '0')
+os.environ.setdefault('MKLDNN_VERBOSE', '0')
 from typing import List, Optional, Dict, Any, Tuple
 from pathlib import Path
 import numpy as np
@@ -223,9 +243,21 @@ def get_paddleocr_instance(lang: str = 'ch'):
             start_time = time.time()
             
             if is_v3:
-                _paddleocr_instance = PaddleOCR(use_textline_orientation=True, lang=lang)
+                # 关闭方向分类器（不需要处理旋转文档），显式设置 det_limit_side_len=960
+                _paddleocr_instance = PaddleOCR(
+                    use_textline_orientation=False,  # 关闭方向分类，提速 10-20%
+                    lang=lang,
+                    det_limit_side_len=960  # 显式设置检测图像最大边长
+                )
             else:
-                _paddleocr_instance = PaddleOCR(use_angle_cls=True, lang=lang, use_gpu=False, show_log=False)
+                # 关闭方向分类器，显式设置 det_limit_side_len=960
+                _paddleocr_instance = PaddleOCR(
+                    use_angle_cls=False,  # 关闭方向分类，提速 10-20%
+                    lang=lang,
+                    use_gpu=False,
+                    show_log=False,
+                    det_limit_side_len=960  # 显式设置检测图像最大边长
+                )
             
             elapsed = time.time() - start_time
             logger.info(f"PaddleOCR 基础引擎加载完成，耗时 {elapsed:.1f} 秒")
@@ -300,9 +332,21 @@ class PaddleOCRService(OCRServiceInterface):
             from paddleocr import PaddleOCR
             
             if is_v3:
-                self._ocr_engine = PaddleOCR(use_textline_orientation=True, lang=self.lang)
+                # 关闭方向分类器（不需要处理旋转文档），显式设置 det_limit_side_len=960
+                self._ocr_engine = PaddleOCR(
+                    use_textline_orientation=False,  # 关闭方向分类，提速 10-20%
+                    lang=self.lang,
+                    det_limit_side_len=960  # 显式设置检测图像最大边长
+                )
             else:
-                self._ocr_engine = PaddleOCR(use_angle_cls=True, lang=self.lang, use_gpu=self.use_gpu, show_log=False)
+                # 关闭方向分类器，显式设置 det_limit_side_len=960
+                self._ocr_engine = PaddleOCR(
+                    use_angle_cls=False,  # 关闭方向分类，提速 10-20%
+                    lang=self.lang,
+                    use_gpu=self.use_gpu,
+                    show_log=False,
+                    det_limit_side_len=960  # 显式设置检测图像最大边长
+                )
             
             self._structure_engine = self._ocr_engine
             logger.info(f"PaddleOCR engines initialized (version: {version})")
@@ -434,7 +478,7 @@ class PaddleOCRService(OCRServiceInterface):
         
         return image
     
-    def _normalize_image_size_with_scale(self, image: Image.Image, max_dimension: int = 2048) -> Tuple[Image.Image, Dict[str, Any]]:
+    def _normalize_image_size_with_scale(self, image: Image.Image, max_dimension: int = 1280) -> Tuple[Image.Image, Dict[str, Any]]:
         """
         Normalize image size to optimal dimensions for OCR and return scale info
         
@@ -475,7 +519,7 @@ class PaddleOCRService(OCRServiceInterface):
         
         return image, scale_info
     
-    def _normalize_image_size(self, image: Image.Image, max_dimension: int = 2048) -> Image.Image:
+    def _normalize_image_size(self, image: Image.Image, max_dimension: int = 1280) -> Image.Image:
         """
         Normalize image size to optimal dimensions for OCR (legacy method)
         
@@ -561,8 +605,8 @@ class PaddleOCRService(OCRServiceInterface):
                     # 同时缓存原始图像路径的结果
                     self._ppstructure_result_cache[image_path] = processed_ppstructure_result
                     
-                    # 保存 PPStructure HTML 输出
-                    self._save_ppstructure_html(image_path, processed_ppstructure_result)
+                    # 保存 PPStructure HTML 输出（传入开始时间）
+                    self._save_ppstructure_html(image_path, processed_ppstructure_result, start_time)
                     
                     # 【修复】使用 PPStructureV3 的布局分析结果创建 regions
                     # 而不是使用 OCR 文本行结果
@@ -596,7 +640,22 @@ class PaddleOCRService(OCRServiceInterface):
                 # Calculate confidence metrics
                 confidence_metrics = self._calculate_confidence_metrics(regions)
                 
-                processing_time = time.time() - start_time
+                # 计算处理时间
+                end_time = time.time()
+                processing_time = end_time - start_time
+                
+                # 生成置信度计算日志（包含时间信息）
+                try:
+                    output_folder = str(Path(image_path).parent)
+                    # 从 image_path 提取 job_id
+                    image_name = Path(image_path).stem
+                    if '_page' in image_name:
+                        job_id = image_name.split('_page')[0]
+                    else:
+                        job_id = image_name
+                    self.generate_confidence_log(regions, job_id, output_folder, start_time, end_time, processing_time)
+                except Exception as e:
+                    logger.warning(f"生成置信度日志失败: {e}")
                 
                 # Clean up preprocessed image
                 if preprocessed_path != image_path:
@@ -711,7 +770,7 @@ class PaddleOCRService(OCRServiceInterface):
         except Exception as e:
             logger.warning(f"Failed to save raw OCR output: {e}")
     
-    def _save_ppstructure_html(self, image_path: str, ppstructure_result: List) -> None:
+    def _save_ppstructure_html(self, image_path: str, ppstructure_result: List, start_time: float = None) -> None:
         """
         Save PPStructure raw HTML output for download - 包含所有内容（文本+表格）
         同时读取普通 OCR 结果，将未被 PPStructure 识别的文本也添加到 HTML 中
@@ -719,9 +778,12 @@ class PaddleOCRService(OCRServiceInterface):
         Args:
             image_path: Path to the original image
             ppstructure_result: Raw result from PPStructure
+            start_time: OCR 处理开始时间戳
         """
         from pathlib import Path
         import json
+        import time
+        from datetime import datetime
         
         try:
             # Extract job_id from image path
@@ -733,11 +795,22 @@ class PaddleOCRService(OCRServiceInterface):
             
             output_folder = Path(image_path).parent
             
+            # 计算时间信息
+            current_time = time.time()
+            start_datetime = datetime.fromtimestamp(start_time).strftime('%Y-%m-%d %H:%M:%S') if start_time else None
+            current_datetime = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            elapsed_time = f"{current_time - start_time:.2f}s" if start_time else None
+            
             # 保存 PPStructure 原始结果到 JSON 文件
             ppstructure_json_path = output_folder / f"{job_id}_ppstructure.json"
             ppstructure_json_data = {
                 'job_id': job_id,
                 'image_path': str(image_path),
+                'processing_info': {
+                    'start_time': start_datetime,
+                    'save_time': current_datetime,
+                    'elapsed_at_save': elapsed_time
+                },
                 'total_items': len(ppstructure_result),
                 'items': []
             }
@@ -1747,6 +1820,11 @@ table tr:nth-child(even) {
         """
         Calculate detailed confidence metrics for layout analysis
         
+        【改进】添加更详细的置信度统计信息，包括：
+        - 有置信度的区域数量
+        - 无置信度的区域数量
+        - 置信度覆盖率
+        
         Args:
             regions: List of analyzed regions
             
@@ -1758,25 +1836,47 @@ table tr:nth-child(even) {
                 'overall': 0.0,
                 'text_confidence': 0.0,
                 'layout_confidence': 0.0,
-                'region_count': 0
+                'region_count': 0,
+                'regions_with_confidence': 0,
+                'regions_without_confidence': 0,
+                'confidence_coverage': 0.0
             }
         
+        # 分别统计有置信度和无置信度的区域
+        regions_with_conf = [r for r in regions if r.confidence is not None and r.confidence > 0]
+        regions_without_conf = [r for r in regions if r.confidence is None or r.confidence <= 0]
+        
         # Calculate text confidence (average of all text confidences)
-        # 【修复】过滤掉 None 值，因为某些区域（如表格）没有置信度
-        text_confidences = [r.confidence for r in regions if r.confidence is not None and r.confidence > 0]
+        text_confidences = [r.confidence for r in regions_with_conf]
         text_confidence = sum(text_confidences) / len(text_confidences) if text_confidences else 0.0
         
         # Calculate layout confidence based on region distribution and classification
         layout_confidence = self._calculate_layout_confidence(regions)
         
-        # Overall confidence is weighted average
-        overall_confidence = (text_confidence * 0.7 + layout_confidence * 0.3)
+        # 计算置信度覆盖率
+        confidence_coverage = len(regions_with_conf) / len(regions) if regions else 0.0
         
+        # Overall confidence is weighted average
+        # 【改进】考虑置信度覆盖率对整体置信度的影响
+        # 如果覆盖率低，整体置信度也应该降低
+        base_confidence = (text_confidence * 0.7 + layout_confidence * 0.3)
+        # 覆盖率惩罚：覆盖率低于 50% 时开始惩罚
+        coverage_penalty = min(1.0, confidence_coverage / 0.5) if confidence_coverage < 0.5 else 1.0
+        overall_confidence = base_confidence * (0.5 + 0.5 * coverage_penalty)
+        
+        # 记录日志
+        logger.info(f"Confidence metrics: {len(regions_with_conf)}/{len(regions)} regions have confidence "
+                   f"(coverage: {confidence_coverage:.1%}), avg: {text_confidence:.4f}")
+        
+        # 保留完整精度，不做round处理
         return {
-            'overall': round(overall_confidence, 3),
-            'text_confidence': round(text_confidence, 3),
-            'layout_confidence': round(layout_confidence, 3),
-            'region_count': len(regions)
+            'overall': overall_confidence,
+            'text_confidence': text_confidence,
+            'layout_confidence': layout_confidence,
+            'region_count': len(regions),
+            'regions_with_confidence': len(regions_with_conf),
+            'regions_without_confidence': len(regions_without_conf),
+            'confidence_coverage': confidence_coverage
         }
     
     def _calculate_layout_confidence(self, regions: List[Region]) -> float:
@@ -1833,6 +1933,259 @@ table tr:nth-child(even) {
         )
         
         return layout_confidence
+    
+    def generate_confidence_log(self, regions: List[Region], job_id: str, output_folder: str, 
+                                start_time: float = None, end_time: float = None, processing_time: float = None) -> str:
+        """
+        生成详细的置信度计算日志（Markdown 格式）
+        
+        此方法生成一个详细的 MD 文件，展示置信度计算的完整过程，包括：
+        1. 处理时间信息
+        2. 每个区域的置信度详情
+        3. 文本置信度计算过程
+        4. 布局置信度计算过程
+        5. 总体置信度计算过程
+        
+        Args:
+            regions: 识别的区域列表
+            job_id: 任务 ID
+            output_folder: 输出文件夹路径
+            start_time: OCR 处理开始时间戳
+            end_time: OCR 处理结束时间戳
+            processing_time: 处理耗时（秒）
+            
+        Returns:
+            生成的日志文件路径
+        """
+        from datetime import datetime
+        
+        lines = []
+        lines.append("# 置信度计算详细日志")
+        lines.append("")
+        lines.append(f"**任务 ID**: `{job_id}`")
+        lines.append(f"**生成时间**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        lines.append("")
+        
+        # ========== 处理时间信息 ==========
+        lines.append("---")
+        lines.append("## 处理时间信息")
+        lines.append("")
+        if start_time:
+            lines.append(f"- **开始时间**: {datetime.fromtimestamp(start_time).strftime('%Y-%m-%d %H:%M:%S')}")
+        if end_time:
+            lines.append(f"- **结束时间**: {datetime.fromtimestamp(end_time).strftime('%Y-%m-%d %H:%M:%S')}")
+        if processing_time is not None:
+            lines.append(f"- **处理耗时**: {processing_time:.2f}s")
+        lines.append("")
+        
+        # ========== 1. 区域概览 ==========
+        lines.append("---")
+        lines.append("## 1. 区域概览")
+        lines.append("")
+        lines.append(f"- **总区域数**: {len(regions)}")
+        
+        # 分类统计
+        regions_with_conf = [r for r in regions if r.confidence is not None and r.confidence > 0]
+        regions_without_conf = [r for r in regions if r.confidence is None or r.confidence <= 0]
+        
+        lines.append(f"- **有置信度的区域**: {len(regions_with_conf)}")
+        lines.append(f"- **无置信度的区域**: {len(regions_without_conf)}")
+        lines.append(f"- **置信度覆盖率**: {len(regions_with_conf) / len(regions) * 100:.1f}%" if regions else "- **置信度覆盖率**: 0%")
+        lines.append("")
+        
+        # ========== 2. 每个区域的详细信息 ==========
+        lines.append("---")
+        lines.append("## 2. 各区域置信度详情")
+        lines.append("")
+        
+        if not regions:
+            lines.append("*无识别区域*")
+        else:
+            lines.append("| 序号 | 类型 | 位置 (x,y) | 尺寸 (w×h) | 置信度 | 内容预览 |")
+            lines.append("|------|------|------------|------------|--------|----------|")
+            
+            for i, region in enumerate(regions):
+                conf_str = f"{region.confidence}" if region.confidence is not None else "无"
+                content_preview = (region.content[:30] + "...") if region.content and len(region.content) > 30 else (region.content or "")
+                content_preview = content_preview.replace("|", "\\|").replace("\n", " ")
+                
+                lines.append(f"| {i+1} | {region.classification.value} | ({region.coordinates.x:.0f}, {region.coordinates.y:.0f}) | {region.coordinates.width:.0f}×{region.coordinates.height:.0f} | {conf_str} | {content_preview} |")
+        
+        lines.append("")
+        
+        # ========== 3. 文本置信度计算 ==========
+        lines.append("---")
+        lines.append("## 3. 文本置信度计算")
+        lines.append("")
+        
+        text_confidences = [r.confidence for r in regions_with_conf]
+        
+        if text_confidences:
+            lines.append("### 3.1 有效置信度值列表")
+            lines.append("")
+            lines.append("```")
+            for i, conf in enumerate(text_confidences):
+                lines.append(f"  区域 {i+1}: {conf}")
+            lines.append("```")
+            lines.append("")
+            
+            text_confidence = sum(text_confidences) / len(text_confidences)
+            lines.append("### 3.2 计算过程")
+            lines.append("")
+            lines.append("```")
+            lines.append(f"文本置信度 = 所有有效置信度的平均值")
+            lines.append(f"           = ({' + '.join([f'{c}' for c in text_confidences])}) / {len(text_confidences)}")
+            lines.append(f"           = {sum(text_confidences)} / {len(text_confidences)}")
+            lines.append(f"           = {text_confidence}")
+            lines.append("```")
+        else:
+            text_confidence = 0.0
+            lines.append("*无有效置信度数据，文本置信度 = 0.0*")
+        
+        lines.append("")
+        
+        # ========== 4. 布局置信度计算 ==========
+        lines.append("---")
+        lines.append("## 4. 布局置信度计算")
+        lines.append("")
+        
+        if not regions:
+            layout_confidence = 0.0
+            lines.append("*无区域数据，布局置信度 = 0.0*")
+        else:
+            # Factor 1: 类型多样性
+            region_types = set(r.classification for r in regions)
+            num_types = len(region_types)
+            if num_types >= 3:
+                type_diversity = 1.0
+            elif num_types == 2:
+                type_diversity = 0.9
+            else:
+                type_diversity = 0.7
+            
+            lines.append("### 4.1 类型多样性因子")
+            lines.append("")
+            lines.append(f"- 检测到的区域类型: {', '.join([t.value for t in region_types])}")
+            lines.append(f"- 类型数量: {num_types}")
+            lines.append(f"- 多样性评分规则: ≥3种类型=1.0, 2种类型=0.9, 1种类型=0.7")
+            lines.append(f"- **类型多样性因子**: {type_diversity:.2f}")
+            lines.append("")
+            
+            # Factor 2: 尺寸合理性
+            reasonable_sizes = 0
+            size_details = []
+            for region in regions:
+                area = region.coordinates.width * region.coordinates.height
+                is_reasonable = 50 < area < 10000000
+                if is_reasonable:
+                    reasonable_sizes += 1
+                size_details.append((area, is_reasonable))
+            size_factor = reasonable_sizes / len(regions)
+            
+            lines.append("### 4.2 尺寸合理性因子")
+            lines.append("")
+            lines.append(f"- 合理尺寸范围: 50 < 面积 < 10,000,000 像素")
+            lines.append(f"- 合理尺寸区域数: {reasonable_sizes} / {len(regions)}")
+            lines.append(f"- **尺寸合理性因子**: {size_factor}")
+            lines.append("")
+            
+            # Factor 3: 内容质量
+            meaningful_content = 0
+            for region in regions:
+                if region.content and len(region.content.strip()) > 3:
+                    meaningful_content += 1
+            content_factor = meaningful_content / len(regions)
+            
+            lines.append("### 4.3 内容质量因子")
+            lines.append("")
+            lines.append(f"- 有效内容标准: 内容长度 > 3 字符")
+            lines.append(f"- 有效内容区域数: {meaningful_content} / {len(regions)}")
+            lines.append(f"- **内容质量因子**: {content_factor}")
+            lines.append("")
+            
+            # 计算布局置信度
+            layout_confidence = content_factor * 0.5 + size_factor * 0.3 + type_diversity * 0.2
+            
+            lines.append("### 4.4 布局置信度计算")
+            lines.append("")
+            lines.append("```")
+            lines.append("布局置信度 = 内容质量因子 × 0.5 + 尺寸合理性因子 × 0.3 + 类型多样性因子 × 0.2")
+            lines.append(f"           = {content_factor} × 0.5 + {size_factor} × 0.3 + {type_diversity} × 0.2")
+            lines.append(f"           = {content_factor * 0.5} + {size_factor * 0.3} + {type_diversity * 0.2}")
+            lines.append(f"           = {layout_confidence}")
+            lines.append("```")
+        
+        lines.append("")
+        
+        # ========== 5. 总体置信度计算 ==========
+        lines.append("---")
+        lines.append("## 5. 总体置信度计算")
+        lines.append("")
+        
+        if not regions:
+            overall_confidence = 0.0
+            lines.append("*无区域数据，总体置信度 = 0.0*")
+        else:
+            confidence_coverage = len(regions_with_conf) / len(regions)
+            base_confidence = text_confidence * 0.7 + layout_confidence * 0.3
+            coverage_penalty = min(1.0, confidence_coverage / 0.5) if confidence_coverage < 0.5 else 1.0
+            overall_confidence = base_confidence * (0.5 + 0.5 * coverage_penalty)
+            
+            lines.append("### 5.1 基础置信度")
+            lines.append("")
+            lines.append("```")
+            lines.append("基础置信度 = 文本置信度 × 0.7 + 布局置信度 × 0.3")
+            lines.append(f"           = {text_confidence} × 0.7 + {layout_confidence} × 0.3")
+            lines.append(f"           = {text_confidence * 0.7} + {layout_confidence * 0.3}")
+            lines.append(f"           = {base_confidence}")
+            lines.append("```")
+            lines.append("")
+            
+            lines.append("### 5.2 覆盖率惩罚")
+            lines.append("")
+            lines.append(f"- 置信度覆盖率: {confidence_coverage} ({confidence_coverage * 100:.1f}%)")
+            lines.append(f"- 惩罚规则: 覆盖率 < 50% 时开始惩罚")
+            if confidence_coverage < 0.5:
+                lines.append(f"- 惩罚因子 = min(1.0, {confidence_coverage} / 0.5) = {coverage_penalty}")
+            else:
+                lines.append(f"- 覆盖率 ≥ 50%，无惩罚，惩罚因子 = 1.0")
+            lines.append("")
+            
+            lines.append("### 5.3 最终计算")
+            lines.append("")
+            lines.append("```")
+            lines.append("总体置信度 = 基础置信度 × (0.5 + 0.5 × 惩罚因子)")
+            lines.append(f"           = {base_confidence} × (0.5 + 0.5 × {coverage_penalty})")
+            lines.append(f"           = {base_confidence} × {0.5 + 0.5 * coverage_penalty}")
+            lines.append(f"           = {overall_confidence}")
+            lines.append("```")
+        
+        lines.append("")
+        
+        # ========== 6. 结果汇总 ==========
+        lines.append("---")
+        lines.append("## 6. 结果汇总")
+        lines.append("")
+        lines.append("| 指标 | 值 |")
+        lines.append("|------|-----|")
+        lines.append(f"| 总区域数 | {len(regions)} |")
+        lines.append(f"| 有置信度区域 | {len(regions_with_conf)} |")
+        lines.append(f"| 无置信度区域 | {len(regions_without_conf)} |")
+        lines.append(f"| 置信度覆盖率 | {len(regions_with_conf) / len(regions) * 100:.1f}% |" if regions else "| 置信度覆盖率 | 0% |")
+        lines.append(f"| 文本置信度 | {text_confidence} |")
+        lines.append(f"| 布局置信度 | {layout_confidence} |")
+        lines.append(f"| **总体置信度** | **{overall_confidence}** |")
+        lines.append("")
+        
+        # 写入文件
+        log_content = "\n".join(lines)
+        log_path = os.path.join(output_folder, f"{job_id}_confidence_log.md")
+        
+        with open(log_path, 'w', encoding='utf-8') as f:
+            f.write(log_content)
+        
+        logger.info(f"置信度计算日志已保存: {log_path}")
+        return log_path
     
     def _parse_ppstructure_v3_to_regions(self, ppstructure_result: List[Dict[str, Any]]) -> List[Region]:
         """
@@ -2394,14 +2747,14 @@ table tr:nth-child(even) {
         - parsing_res_list: LayoutBlock 对象列表，每个对象有 block_label, block_bbox, block_content 属性
         - layout_det_res: 布局检测结果
         - table_res_list: 表格识别结果（包含 OCR 置信度）
-        - overall_ocr_res: 整体 OCR 结果
+        - overall_ocr_res: 整体 OCR 结果（包含所有文本行的置信度）
         
         【重要】PPStructureV3 结果对象是 dict-like，必须使用 result['key'] 访问，
         而不是 getattr(result, 'key')
         
-        置信度获取策略（PaddleOCR 3.x）：
+        置信度获取策略（PaddleOCR 3.x 改进版）：
         - 表格区块：从 table_res_list[x].table_ocr_pred.rec_scores 获取平均置信度
-        - 非表格区块：PPStructureV3 不提供置信度，设为 None
+        - 非表格区块：从 overall_ocr_res 获取文本行置信度，通过位置匹配关联到区块
         
         Args:
             result_list: PPStructureV3 返回的结果列表（通常只有一个页面结果）
@@ -2417,6 +2770,7 @@ table tr:nth-child(even) {
             # 【重要】必须使用 [] 访问，不能用 hasattr/getattr
             parsing_res_list = None
             table_res_list = None
+            overall_ocr_res = None
             
             # 尝试 dict-like 访问（PPStructureV3 的正确方式）
             try:
@@ -2424,19 +2778,29 @@ table tr:nth-child(even) {
                     # dict-like 对象，使用 [] 访问
                     parsing_res_list = result.get('parsing_res_list') if hasattr(result, 'get') else result['parsing_res_list']
                     table_res_list = result.get('table_res_list', []) if hasattr(result, 'get') else result.get('table_res_list', [])
+                    overall_ocr_res = result.get('overall_ocr_res') if hasattr(result, 'get') else result.get('overall_ocr_res')
                     logger.debug(f"PPStructureV3 result keys: {list(result.keys())}")
                 elif isinstance(result, dict):
                     parsing_res_list = result.get('parsing_res_list')
                     table_res_list = result.get('table_res_list', [])
+                    overall_ocr_res = result.get('overall_ocr_res')
                 else:
                     # 回退到属性访问
                     parsing_res_list = getattr(result, 'parsing_res_list', None)
                     table_res_list = getattr(result, 'table_res_list', [])
+                    overall_ocr_res = getattr(result, 'overall_ocr_res', None)
             except (KeyError, TypeError) as e:
                 logger.warning(f"Failed to access PPStructureV3 result: {e}")
                 # 回退到属性访问
                 parsing_res_list = getattr(result, 'parsing_res_list', None)
                 table_res_list = getattr(result, 'table_res_list', [])
+                overall_ocr_res = getattr(result, 'overall_ocr_res', None)
+            
+            # 【新增】从 overall_ocr_res 提取文本行置信度和位置信息
+            # overall_ocr_res 包含 dt_polys (检测框), rec_texts (识别文本), rec_scores (识别置信度)
+            ocr_text_lines = self._extract_ocr_text_lines_with_confidence(overall_ocr_res)
+            if ocr_text_lines:
+                logger.info(f"Extracted {len(ocr_text_lines)} text lines with confidence from overall_ocr_res")
             
             # 构建表格区域到置信度的映射
             # 从 table_res_list[x].table_ocr_pred.rec_scores 获取
@@ -2477,26 +2841,35 @@ table tr:nth-child(even) {
                     # 【重要】block 对象使用 block_label, block_content, block_bbox 属性
                     # 可能是 dict-like 或普通对象
                     label = None
+                    block_bbox = None
                     try:
                         if hasattr(block, '__getitem__'):
                             label = block.get('block_label') if hasattr(block, 'get') else block['block_label']
+                            block_bbox = block.get('block_bbox') if hasattr(block, 'get') else block.get('block_bbox')
                         if label is None:
                             label = getattr(block, 'block_label', None) or getattr(block, 'label', None)
+                        if block_bbox is None:
+                            block_bbox = getattr(block, 'block_bbox', None) or getattr(block, 'bbox', None)
                     except (KeyError, TypeError):
                         label = getattr(block, 'block_label', None) or getattr(block, 'label', None)
+                        block_bbox = getattr(block, 'block_bbox', None) or getattr(block, 'bbox', None)
                     
-                    # 获取表格的置信度
-                    table_confidence = None
+                    # 获取置信度
+                    block_confidence = None
                     if label == 'table' and table_block_idx in table_confidence_map:
-                        table_confidence = table_confidence_map[table_block_idx]
+                        block_confidence = table_confidence_map[table_block_idx]
                         table_block_idx += 1
                     elif label == 'table':
                         table_block_idx += 1
+                    else:
+                        # 【新增】非表格区块：从 overall_ocr_res 匹配置信度
+                        if ocr_text_lines and block_bbox is not None:
+                            block_confidence = self._match_block_confidence_from_ocr(block_bbox, ocr_text_lines)
                     
-                    item_dict = self._convert_layout_block_to_dict(block, table_confidence)
+                    item_dict = self._convert_layout_block_to_dict(block, block_confidence)
                     if item_dict:
                         processed.append(item_dict)
-                        logger.debug(f"Block {block_idx}: type={item_dict.get('type')}, confidence={table_confidence}")
+                        logger.debug(f"Block {block_idx}: type={item_dict.get('type')}, confidence={block_confidence}")
             else:
                 logger.warning("parsing_res_list is None or empty, trying fallback processing")
                 # 回退：尝试旧格式处理
@@ -2529,7 +2902,174 @@ table tr:nth-child(even) {
         
         return processed
     
-    def _convert_layout_block_to_dict(self, block, table_confidence: Optional[float] = None) -> Optional[Dict[str, Any]]:
+    def _extract_ocr_text_lines_with_confidence(self, overall_ocr_res) -> List[Dict[str, Any]]:
+        """
+        从 overall_ocr_res 提取所有文本行的置信度和位置信息
+        
+        overall_ocr_res 是 PPStructureV3 的整体 OCR 结果，包含：
+        - dt_polys: 检测框坐标 (N, 4, 2) - N个检测框，每个框4个点
+        - rec_texts: 识别的文本列表
+        - rec_scores: 识别置信度列表
+        
+        Args:
+            overall_ocr_res: PPStructureV3 的 overall_ocr_res 字段
+            
+        Returns:
+            文本行列表，每个元素包含 bbox, text, confidence
+        """
+        text_lines = []
+        
+        if overall_ocr_res is None:
+            return text_lines
+        
+        try:
+            # 获取检测框、文本和置信度
+            dt_polys = None
+            rec_texts = None
+            rec_scores = None
+            
+            # 尝试 dict-like 访问
+            if hasattr(overall_ocr_res, '__getitem__'):
+                try:
+                    dt_polys = overall_ocr_res.get('dt_polys') if hasattr(overall_ocr_res, 'get') else overall_ocr_res['dt_polys']
+                    rec_texts = overall_ocr_res.get('rec_texts') if hasattr(overall_ocr_res, 'get') else overall_ocr_res['rec_texts']
+                    rec_scores = overall_ocr_res.get('rec_scores') if hasattr(overall_ocr_res, 'get') else overall_ocr_res['rec_scores']
+                except (KeyError, TypeError):
+                    pass
+            
+            # 回退到属性访问
+            if dt_polys is None:
+                dt_polys = getattr(overall_ocr_res, 'dt_polys', None)
+            if rec_texts is None:
+                rec_texts = getattr(overall_ocr_res, 'rec_texts', None)
+            if rec_scores is None:
+                rec_scores = getattr(overall_ocr_res, 'rec_scores', None)
+            
+            if dt_polys is None or rec_scores is None:
+                logger.debug("overall_ocr_res missing dt_polys or rec_scores")
+                return text_lines
+            
+            # 转换 numpy array 为列表
+            if hasattr(dt_polys, 'tolist'):
+                dt_polys = dt_polys.tolist()
+            if hasattr(rec_scores, 'tolist'):
+                rec_scores = rec_scores.tolist()
+            if rec_texts is not None and hasattr(rec_texts, 'tolist'):
+                rec_texts = rec_texts.tolist()
+            
+            # 构建文本行列表
+            for i, poly in enumerate(dt_polys):
+                if i >= len(rec_scores):
+                    break
+                
+                # 计算边界框 [x1, y1, x2, y2]
+                if len(poly) >= 4:
+                    x_coords = [p[0] for p in poly]
+                    y_coords = [p[1] for p in poly]
+                    bbox = [min(x_coords), min(y_coords), max(x_coords), max(y_coords)]
+                else:
+                    continue
+                
+                text = rec_texts[i] if rec_texts and i < len(rec_texts) else ''
+                confidence = float(rec_scores[i])
+                
+                text_lines.append({
+                    'bbox': bbox,
+                    'text': text,
+                    'confidence': confidence,
+                    'poly': poly
+                })
+            
+            logger.debug(f"Extracted {len(text_lines)} text lines from overall_ocr_res")
+            
+        except Exception as e:
+            logger.warning(f"Failed to extract text lines from overall_ocr_res: {e}")
+            import traceback
+            logger.debug(traceback.format_exc())
+        
+        return text_lines
+    
+    def _match_block_confidence_from_ocr(self, block_bbox, ocr_text_lines: List[Dict[str, Any]]) -> Optional[float]:
+        """
+        根据布局区块的位置，从 OCR 文本行中匹配并计算平均置信度
+        
+        匹配策略：
+        1. 计算每个 OCR 文本行与布局区块的 IoU (Intersection over Union)
+        2. 如果 IoU > 0.3 或文本行中心点在区块内，则认为该文本行属于该区块
+        3. 计算所有匹配文本行的平均置信度
+        
+        Args:
+            block_bbox: 布局区块的边界框 [x1, y1, x2, y2] 或 numpy array
+            ocr_text_lines: OCR 文本行列表
+            
+        Returns:
+            平均置信度，如果没有匹配的文本行则返回 None
+        """
+        if not ocr_text_lines or block_bbox is None:
+            return None
+        
+        try:
+            # 转换 block_bbox 为列表
+            if hasattr(block_bbox, 'tolist'):
+                block_bbox = block_bbox.tolist()
+            block_bbox = list(block_bbox)
+            
+            if len(block_bbox) != 4:
+                return None
+            
+            bx1, by1, bx2, by2 = block_bbox
+            block_area = (bx2 - bx1) * (by2 - by1)
+            
+            if block_area <= 0:
+                return None
+            
+            matched_confidences = []
+            
+            for text_line in ocr_text_lines:
+                line_bbox = text_line.get('bbox', [])
+                if len(line_bbox) != 4:
+                    continue
+                
+                lx1, ly1, lx2, ly2 = line_bbox
+                
+                # 计算文本行中心点
+                center_x = (lx1 + lx2) / 2
+                center_y = (ly1 + ly2) / 2
+                
+                # 检查中心点是否在区块内
+                center_in_block = (bx1 <= center_x <= bx2) and (by1 <= center_y <= by2)
+                
+                # 计算 IoU
+                inter_x1 = max(bx1, lx1)
+                inter_y1 = max(by1, ly1)
+                inter_x2 = min(bx2, lx2)
+                inter_y2 = min(by2, ly2)
+                
+                if inter_x2 > inter_x1 and inter_y2 > inter_y1:
+                    inter_area = (inter_x2 - inter_x1) * (inter_y2 - inter_y1)
+                    line_area = (lx2 - lx1) * (ly2 - ly1)
+                    union_area = block_area + line_area - inter_area
+                    iou = inter_area / union_area if union_area > 0 else 0
+                else:
+                    iou = 0
+                
+                # 如果 IoU > 0.3 或中心点在区块内，则匹配
+                if iou > 0.3 or center_in_block:
+                    confidence = text_line.get('confidence')
+                    if confidence is not None:
+                        matched_confidences.append(confidence)
+            
+            if matched_confidences:
+                avg_confidence = sum(matched_confidences) / len(matched_confidences)
+                logger.debug(f"Block matched {len(matched_confidences)} text lines, avg confidence: {avg_confidence:.4f}")
+                return avg_confidence
+            
+        except Exception as e:
+            logger.warning(f"Failed to match block confidence: {e}")
+        
+        return None
+    
+    def _convert_layout_block_to_dict(self, block, block_confidence: Optional[float] = None) -> Optional[Dict[str, Any]]:
         """
         将 PPStructureV3 的 LayoutBlock 对象转换为统一的字典格式
         
@@ -2542,13 +3082,13 @@ table tr:nth-child(even) {
         
         注意：旧版使用 label, bbox, content，新版使用 block_label, block_bbox, block_content
         
-        置信度说明（PaddleOCR 3.x）：
-        - 表格区块：从 table_res_list 获取平均 OCR 置信度（通过 table_confidence 参数传入）
-        - 非表格区块：PPStructureV3 不提供 OCR 置信度，设为 None
+        置信度说明（PaddleOCR 3.x 改进版）：
+        - 表格区块：从 table_res_list 获取平均 OCR 置信度
+        - 非表格区块：从 overall_ocr_res 匹配获取平均 OCR 置信度
         
         Args:
             block: LayoutBlock 对象（dict-like 或普通对象）
-            table_confidence: 表格的平均 OCR 置信度（仅对表格区块有效）
+            block_confidence: 区块的平均 OCR 置信度（表格或文本区块）
             
         Returns:
             统一格式的字典，兼容旧版 PPStructure 格式
@@ -2632,14 +3172,14 @@ table tr:nth-child(even) {
                 if content and str(content).strip():
                     item_dict['res'] = {
                         'html': str(content),
-                        'confidence': table_confidence  # 表格平均 OCR 置信度
+                        'confidence': block_confidence  # 表格平均 OCR 置信度
                     }
                 else:
                     item_dict['res'] = {
                         'html': '',
-                        'confidence': table_confidence
+                        'confidence': block_confidence
                     }
-                logger.debug(f"Table block: confidence={table_confidence}")
+                logger.debug(f"Table block: confidence={block_confidence}")
             else:
                 # 其他类型，内容是文本
                 if content and str(content).strip():
@@ -2652,15 +3192,15 @@ table tr:nth-child(even) {
                         item_dict['type'] = 'table'
                         item_dict['res'] = {
                             'html': content_str,
-                            'confidence': table_confidence  # 使用表格置信度
+                            'confidence': block_confidence  # 使用区块置信度
                         }
                         logger.debug(f"Non-table block with HTML table content converted to table type")
                     else:
                         # 转换为旧版格式：res 是文本行列表
-                        # PPStructureV3 不提供非表格区块的 OCR 置信度，设为 None
+                        # 【改进】使用从 overall_ocr_res 匹配的置信度
                         item_dict['res'] = [{
                             'text': content_str.strip(),
-                            'confidence': None,  # PPStructureV3 不提供非表格区块的置信度
+                            'confidence': block_confidence,  # 使用从 overall_ocr_res 匹配的置信度
                             'text_region': []
                         }]
                 else:

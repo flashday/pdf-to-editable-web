@@ -102,12 +102,9 @@ class DataNormalizer(DataNormalizerInterface):
                 'normalization_process'
             )
             
-            # Add confidence information to editor data metadata
-            if hasattr(editor_data, 'metadata'):
-                editor_data.metadata = confidence_report
-            else:
-                # Store confidence report for later use
-                setattr(editor_data, 'confidence_report', confidence_report)
+            # 【修复】始终将 confidence_report 存储在 confidence_report 属性中
+            # 这样 document_processor.py 可以正确获取它
+            setattr(editor_data, 'confidence_report', confidence_report)
             
             logger.info(f"Successfully normalized to {len(blocks)} Editor.js blocks with confidence: {confidence_metrics.overall_confidence:.3f}")
             return editor_data
@@ -127,6 +124,9 @@ class DataNormalizer(DataNormalizerInterface):
         Returns:
             ConfidenceMetrics object
         """
+        # 【修复】直接使用 ocr_service 计算的置信度，保留完整精度
+        # layout_result.confidence_score 已经是 ocr_service._calculate_confidence_metrics 计算的 overall 值
+        
         # Calculate text confidence from regions
         # 【修复】过滤掉 None 值，因为某些区域（如表格）没有置信度
         text_confidences = [region.confidence for region in layout_result.regions 
@@ -134,7 +134,7 @@ class DataNormalizer(DataNormalizerInterface):
                           and region.confidence is not None]
         text_confidence = sum(text_confidences) / len(text_confidences) if text_confidences else 0.5
         
-        # Calculate layout confidence from overall structure
+        # 使用 ocr_service 计算的布局置信度
         layout_confidence = layout_result.confidence_score if hasattr(layout_result, 'confidence_score') else 0.7
         
         # Calculate table confidence from table structures
@@ -147,25 +147,9 @@ class DataNormalizer(DataNormalizerInterface):
                     table_confidences.append(conf)
         table_confidence = sum(table_confidences) / len(table_confidences) if table_confidences else 0.6
         
-        # Calculate overall confidence as weighted average
-        weights = {
-            'text': 0.4,
-            'layout': 0.3,
-            'table': 0.2,
-            'conversion': 0.1
-        }
-        
-        # Conversion confidence based on successful block creation
-        expected_blocks = len(layout_result.regions) + len(layout_result.tables)
-        actual_blocks = len(blocks)
-        conversion_confidence = min(actual_blocks / expected_blocks, 1.0) if expected_blocks > 0 else 1.0
-        
-        overall_confidence = (
-            text_confidence * weights['text'] +
-            layout_confidence * weights['layout'] +
-            table_confidence * weights['table'] +
-            conversion_confidence * weights['conversion']
-        )
+        # 【修复】使用 ocr_service 计算的 overall 置信度，而不是重新计算
+        # 这样可以保持与置信度日志中的值一致
+        overall_confidence = layout_result.confidence_score if hasattr(layout_result, 'confidence_score') else 0.7
         
         return ConfidenceMetrics(
             overall_confidence=overall_confidence,

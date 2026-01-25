@@ -96,9 +96,9 @@ class PDFProcessor:
             target_width = int(page_width_inches * dpi)
             target_height = int(page_height_inches * dpi)
             
-            # 限制最大图像尺寸为 4000 像素（与 PPStructureV3 的 max_side_limit 一致）
-            # 这样可以避免处理超大图像导致的性能问题
-            max_dimension = 4000
+            # 限制最大图像尺寸为 2048 像素（性能优化）
+            # 降低此值可以显著减少 OCR 处理时间，同时保持足够的识别精度
+            max_dimension = 2048
             if max(target_width, target_height) > max_dimension:
                 # 计算缩放比例
                 scale = max_dimension / max(target_width, target_height)
