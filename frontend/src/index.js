@@ -214,7 +214,7 @@ class App {
             var metaText = 'Pos:(' + Math.round(co.x) + ',' + Math.round(co.y) + ') Size:' + Math.round(co.width) + 'x' + Math.round(co.height);
             // ���Ŷ���ʾ����ֵ��ʾ��ֵ��null/undefined ��ʾ"��"
             if (region.confidence !== null && region.confidence !== undefined) {
-                metaText += ' Conf:' + region.confidence.toFixed(2);
+                metaText += ' Conf:' + region.confidence;
             } else {
                 metaText += ' Conf:-';
             }
@@ -354,7 +354,7 @@ class App {
         var div = document.getElementById('confidenceReport');
         if (!div) return;
         var o = cr.confidence_breakdown.overall;
-        div.innerHTML = '<h4>Confidence: ' + o.score.toFixed(2) + ' (' + o.level + ')</h4><p>' + o.description + '</p>';
+        div.innerHTML = '<h4>Confidence: ' + o.score + ' (' + o.level + ')</h4><p>' + o.description + '</p>';
     }
 
     showDownloadButton() {
@@ -409,4 +409,6 @@ document.addEventListener('DOMContentLoaded', function() {
     console.log('DOMContentLoaded - creating App');
     window.app = new App(); 
 });
+
+
 

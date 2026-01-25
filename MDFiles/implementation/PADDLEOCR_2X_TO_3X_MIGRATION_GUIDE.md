@@ -3460,3 +3460,66 @@ structTypeBadge.textContent = region.originalStructType || region.type;
 - `frontend/src/index.js` - 提取并显示类型信息
 - `frontend/src/index.html` - CSS 样式
 
+
+
+---
+
+## 二十五、前端置信度完整精度显示修复（2026-01-25）
+
+### 25.1 问题现象
+
+前端显示置信度被截断为两位小数：
+- 显示：`0.99`
+- 期望：`0.9902119826729585`
+
+### 25.2 根因分析
+
+后端 API 返回完整精度值，但前端 JavaScript 代码使用 `.toFixed(2)` 截断了显示。
+
+**问题代码位置**（`frontend/src/index.js`）：
+
+```javascript
+// Line 217 - 区块列表显示
+'Confidence: ' + (region.confidence !== null ? region.confidence.toFixed(2) : '-')
+
+// Line 357 - 整体置信度显示  
+o.score.toFixed(2)
+```
+
+### 25.3 修复命令
+
+```powershell
+# 修复 1: 区块列表置信度
+(Get-Content "frontend/src/index.js" -Raw -Encoding UTF8) -replace "region\.confidence\.toFixed\(2\)", "region.confidence" | Set-Content "frontend/src/index.js" -Encoding UTF8
+
+# 修复 2: 整体置信度
+(Get-Content "frontend/src/index.js" -Raw -Encoding UTF8) -replace "o\.score\.toFixed\(2\)", "o.score" | Set-Content "frontend/src/index.js" -Encoding UTF8
+```
+
+### 25.4 修复后代码
+
+```javascript
+// Line 217 - 区块列表显示（修复后）
+'Confidence: ' + (region.confidence !== null ? region.confidence : '-')
+
+// Line 357 - 整体置信度显示（修复后）
+o.score
+```
+
+### 25.5 验证方法
+
+1. 重启前端：`npm run dev`
+2. 浏览器强制刷新：`Ctrl+Shift+R`
+3. 上传 PDF 并检查置信度显示
+
+### 25.6 相关文件
+
+| 文件 | 修改内容 |
+|------|----------|
+| `frontend/src/index.js` | 移除两处 `.toFixed(2)` 调用 |
+
+### 25.7 注意事项
+
+- 后端（Python）保持完整精度，无需修改
+- 前端显示格式化应由 CSS 或用户偏好控制，而非硬编码截断
+- 如需格式化显示，建议使用 CSS `text-overflow` 或提供用户选项

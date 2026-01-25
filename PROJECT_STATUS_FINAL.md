@@ -1,14 +1,28 @@
 # PDF to Editable Web - 最终工程状态报告
 
 ## 📅 报告日期
-2026-01-24（最后更新）
+2026-01-25（最后更新）
 
 ## 🎯 项目概述
 PDF to Editable Web Layout System - 一个完整的系统，使用 OCR 和 Editor.js 将扫描的 PDF 文档转换为结构化、可编辑的网页内容。
 
 ---
 
-## 🆕 最新更新 (2026-01-24)
+## 🆕 最新更新 (2026-01-25)
+
+### 前端置信度完整精度显示修复 ✅
+
+**问题**：前端显示置信度被截断为两位小数（`0.99` 而非 `0.9902119826729585`）
+
+**根因**：`frontend/src/index.js` 中两处使用 `.toFixed(2)` 截断了精度
+
+**修复**：移除 `.toFixed(2)` 调用，直接显示完整精度值
+
+详见：`MDFiles/implementation/PADDLEOCR_2X_TO_3X_MIGRATION_GUIDE.md` 第25章
+
+---
+
+## 🔄 历史更新 (2026-01-24)
 
 ### PaddleOCR 3.x 升级已完成 ✅
 

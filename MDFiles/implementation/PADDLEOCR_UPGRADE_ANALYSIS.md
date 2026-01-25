@@ -1753,3 +1753,69 @@ Pos:(116,742) Size:1263x562 Confidence:无
    - 表格区块显示"无"
    - 前端显示真实置信度或"无"
 
+
+
+---
+
+## 十五、前端置信度精度显示修复（2026-01-25）
+
+### 15.1 问题描述
+
+用户反馈前端显示的置信度值只有两位小数（如 `0.99`），而不是完整精度（如 `0.9902119826729585`）。
+
+### 15.2 问题排查
+
+#### 后端验证
+
+通过 API 测试确认后端返回的是完整精度：
+
+```bash
+curl http://localhost:5000/api/ocr/xxx | jq '.blocks[0].confidence'
+# 返回: 0.9902119826729585
+```
+
+MD 日志文件也显示完整精度，说明后端没有问题。
+
+#### 前端代码搜索
+
+使用 grep 搜索 `toFixed`：
+
+```bash
+grep -n "toFixed" frontend/src/index.js
+```
+
+发现两处截断代码：
+- **Line 217**: `region.confidence.toFixed(2)` - 区块列表显示
+- **Line 357**: `o.score.toFixed(2)` - 整体置信度显示
+
+### 15.3 修复方案
+
+移除 `.toFixed(2)` 调用，直接显示原始值：
+
+```powershell
+# 修复区块列表置信度显示
+(Get-Content "frontend/src/index.js" -Raw -Encoding UTF8) -replace "region\.confidence\.toFixed\(2\)", "region.confidence" | Set-Content "frontend/src/index.js" -Encoding UTF8
+
+# 修复整体置信度显示
+(Get-Content "frontend/src/index.js" -Raw -Encoding UTF8) -replace "o\.score\.toFixed\(2\)", "o.score" | Set-Content "frontend/src/index.js" -Encoding UTF8
+```
+
+### 15.4 修复前后对比
+
+| 位置 | 修复前 | 修复后 |
+|------|--------|--------|
+| 区块列表 | `Confidence: 0.99` | `Confidence: 0.9902119826729585` |
+| 整体置信度 | `0.99` | `0.9902119826729585` |
+
+### 15.5 验证步骤
+
+1. 重启前端开发服务器
+2. 浏览器强制刷新（Ctrl+Shift+R）
+3. 上传 PDF 测试
+4. 确认置信度显示完整精度
+
+### 15.6 经验总结
+
+1. **问题定位**：当后端数据正确但前端显示不对时，检查前端格式化代码
+2. **搜索技巧**：使用 `grep` 搜索 `toFixed`、`toPrecision`、`Math.round` 等格式化函数
+3. **PowerShell 替换**：当 IDE 工具无法正确匹配字符串时，PowerShell 的正则替换是可靠的备选方案
