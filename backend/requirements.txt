@@ -3,22 +3,21 @@ Flask==3.0.0
 Flask-CORS==4.0.0
 
 # Network and HTTP
-requests==2.31.0
+requests>=2.31.0
 
 # System monitoring
-psutil==5.9.6
+psutil>=5.9.6
 
 # File processing
 PyPDF2==3.0.1
-Pillow==10.1.0
-# python-magic==0.4.27  # Windows compatibility issue, using alternative
+Pillow>=10.1.0
 PyMuPDF==1.20.2
 
-# OCR dependencies
+# OCR dependencies (PaddleOCR 3.x)
 # 注意：PaddlePaddle 3.3.0 有 oneDNN 兼容性问题，使用 3.2.2
 paddlepaddle==3.2.2
 paddleocr==3.3.3
-opencv-python>=4.8.0
+opencv-contrib-python>=4.8.0
 numpy>=2.0.0
 beautifulsoup4==4.12.2
 
@@ -26,7 +25,7 @@ beautifulsoup4==4.12.2
 chardet==5.2.0
 
 # Data validation and serialization
-pydantic==2.5.0
+pydantic>=2.5.0
 jsonschema==4.20.0
 
 # Testing
