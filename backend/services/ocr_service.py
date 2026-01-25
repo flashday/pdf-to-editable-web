@@ -605,8 +605,8 @@ class PaddleOCRService(OCRServiceInterface):
                     # 同时缓存原始图像路径的结果
                     self._ppstructure_result_cache[image_path] = processed_ppstructure_result
                     
-                    # 保存 PPStructure HTML 输出（传入开始时间）
-                    self._save_ppstructure_html(image_path, processed_ppstructure_result, start_time)
+                    # 保存 PPStructure HTML 输出（传入开始时间和 scale_info）
+                    self._save_ppstructure_html(image_path, processed_ppstructure_result, start_time, scale_info)
                     
                     # 【修复】使用 PPStructureV3 的布局分析结果创建 regions
                     # 而不是使用 OCR 文本行结果
@@ -657,12 +657,10 @@ class PaddleOCRService(OCRServiceInterface):
                 except Exception as e:
                     logger.warning(f"生成置信度日志失败: {e}")
                 
-                # Clean up preprocessed image
+                # 保留预处理后的图像用于调试（不再删除）
+                # 文件名格式: {job_id}_page1_preprocessed.png
                 if preprocessed_path != image_path:
-                    try:
-                        os.remove(preprocessed_path)
-                    except OSError:
-                        pass
+                    logger.info(f"保留预处理图像用于调试: {preprocessed_path}")
                 
                 return LayoutResult(
                     regions=regions,
@@ -770,7 +768,7 @@ class PaddleOCRService(OCRServiceInterface):
         except Exception as e:
             logger.warning(f"Failed to save raw OCR output: {e}")
     
-    def _save_ppstructure_html(self, image_path: str, ppstructure_result: List, start_time: float = None) -> None:
+    def _save_ppstructure_html(self, image_path: str, ppstructure_result: List, start_time: float = None, scale_info: Dict[str, Any] = None) -> None:
         """
         Save PPStructure raw HTML output for download - 包含所有内容（文本+表格）
         同时读取普通 OCR 结果，将未被 PPStructure 识别的文本也添加到 HTML 中
@@ -779,6 +777,7 @@ class PaddleOCRService(OCRServiceInterface):
             image_path: Path to the original image
             ppstructure_result: Raw result from PPStructure
             start_time: OCR 处理开始时间戳
+            scale_info: 图像缩放信息
         """
         from pathlib import Path
         import json
@@ -803,6 +802,10 @@ class PaddleOCRService(OCRServiceInterface):
             
             # 保存 PPStructure 原始结果到 JSON 文件
             ppstructure_json_path = output_folder / f"{job_id}_ppstructure.json"
+            
+            # 使用传入的 scale_info
+            scale_info_for_save = scale_info if scale_info else {}
+            
             ppstructure_json_data = {
                 'job_id': job_id,
                 'image_path': str(image_path),
@@ -811,6 +814,7 @@ class PaddleOCRService(OCRServiceInterface):
                     'save_time': current_datetime,
                     'elapsed_at_save': elapsed_time
                 },
+                'scale_info': scale_info_for_save,  # 添加缩放信息用于调试
                 'total_items': len(ppstructure_result),
                 'items': []
             }

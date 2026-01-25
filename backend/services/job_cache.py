@@ -180,6 +180,14 @@ class JobCacheService:
                 with open(confidence_log_path, 'r', encoding='utf-8') as f:
                     confidence_log = f.read()
             
+            # 加载 Markdown 内容（如果有）
+            markdown_path = self.temp_folder / f"{job_id}_raw_ocr.md"
+            markdown_content = None
+            if markdown_path.exists():
+                with open(markdown_path, 'r', encoding='utf-8') as f:
+                    markdown_content = f.read()
+                logger.info(f"Loaded cached markdown for {job_id}")
+            
             return {
                 'job_id': job_id,
                 'status': 'completed',
@@ -201,6 +209,7 @@ class JobCacheService:
                     'has_warnings': False,
                     'warning_count': 0
                 },
+                'markdown': markdown_content,
                 'cached': True,
                 'cached_at': job.created_at
             }
@@ -212,6 +221,11 @@ class JobCacheService:
         """从 ppstructure 数据重建 Editor.js blocks"""
         blocks = []
         items = ppstructure_data.get('items', [])
+        scale_info = ppstructure_data.get('scale_info', {})
+        
+        # 获取缩放比例（从预处理图像坐标转换回原始图像坐标）
+        scale_x = scale_info.get('scale_x', 1.0)
+        scale_y = scale_info.get('scale_y', 1.0)
         
         # 按 y 坐标排序
         sorted_items = sorted(items, key=lambda x: x.get('bbox', [0, 0, 0, 0])[1] if x.get('bbox') else 0)
@@ -222,16 +236,22 @@ class JobCacheService:
             bbox = item.get('bbox', [0, 0, 100, 30])
             confidence = item.get('confidence', 0.85)
             
+            # 将坐标从预处理图像尺寸转换回原始图像尺寸
+            x = bbox[0] * scale_x if len(bbox) > 0 else 0
+            y = bbox[1] * scale_y if len(bbox) > 1 else 0
+            width = (bbox[2] - bbox[0]) * scale_x if len(bbox) > 2 else 100
+            height = (bbox[3] - bbox[1]) * scale_y if len(bbox) > 3 else 30
+            
             block = {
                 'id': f"block_{idx}",
                 'type': 'table' if item_type == 'table' else 'paragraph',
                 'data': {},
                 'metadata': {
                     'originalCoordinates': {
-                        'x': bbox[0] if len(bbox) > 0 else 0,
-                        'y': bbox[1] if len(bbox) > 1 else 0,
-                        'width': (bbox[2] - bbox[0]) if len(bbox) > 2 else 100,
-                        'height': (bbox[3] - bbox[1]) if len(bbox) > 3 else 30
+                        'x': x,
+                        'y': y,
+                        'width': width,
+                        'height': height
                     },
                     'confidence': confidence,
                     'originalStructType': item_type,

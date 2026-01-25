@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PDF全文结构识别还原演示</title>
+    <!-- Marked.js - 专业的Markdown解析库 -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
         * {
             box-sizing: border-box;
@@ -113,6 +115,7 @@
             background: rgba(52, 152, 219, 0.1);
             cursor: pointer;
             transition: all 0.2s;
+            overflow: visible;
         }
         .ocr-region:hover {
             border-color: rgba(231, 76, 60, 0.8);
@@ -121,6 +124,25 @@
         .ocr-region.active {
             border-color: rgba(46, 204, 113, 0.8);
             background: rgba(46, 204, 113, 0.3);
+        }
+        .ocr-region-index {
+            position: absolute;
+            top: 0px;
+            left: 0px;
+            background: #e74c3c;
+            color: white;
+            font-size: 10px;
+            font-weight: bold;
+            padding: 2px 5px;
+            border-radius: 10px;
+            min-width: 18px;
+            text-align: center;
+            z-index: 101;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+            transform: translate(-50%, -50%);
+        }
+        .ocr-region.active .ocr-region-index {
+            background: #27ae60;
         }
         .ocr-region-tooltip {
             position: absolute;
@@ -332,46 +354,22 @@
         /* 下载按钮 */
         .download-buttons {
             display: flex;
-            gap: 4px;
+            gap: 3px;
             flex-wrap: wrap;
         }
         .download-btn {
             background: #3498db;
             color: white;
             border: none;
-            padding: 3px 8px;
+            padding: 2px 6px;
             border-radius: 3px;
             cursor: pointer;
-            font-size: 0.75em;
+            font-size: 0.7em;
             transition: background 0.2s;
             white-space: nowrap;
         }
         .download-btn:hover {
-            background: #2980b9;
-        }
-        .download-btn:nth-child(2) {
-            background: #27ae60;
-        }
-        .download-btn:nth-child(2):hover {
-            background: #219a52;
-        }
-        .download-btn:nth-child(3) {
-            background: #9b59b6;
-        }
-        .download-btn:nth-child(3):hover {
-            background: #8e44ad;
-        }
-        .download-btn:nth-child(4) {
-            background: #e67e22;
-        }
-        .download-btn:nth-child(4):hover {
-            background: #d35400;
-        }
-        .download-btn:nth-child(5) {
-            background: #1abc9c;
-        }
-        .download-btn:nth-child(5):hover {
-            background: #16a085;
+            opacity: 0.85;
         }
         
         /* 编辑模式切换按钮 */
@@ -402,7 +400,93 @@
             box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         }
         
-        /* Markdown 编辑器 */
+        /* Markdown 视图 */
+        .markdown-view {
+            height: 100%;
+            overflow: auto;
+        }
+        .markdown-content {
+            padding: 20px;
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-size: 14px;
+            line-height: 1.8;
+            color: #333;
+        }
+        .markdown-content h1 {
+            font-size: 1.8em;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 8px;
+            margin: 20px 0 15px 0;
+        }
+        .markdown-content h2 {
+            font-size: 1.5em;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 6px;
+            margin: 18px 0 12px 0;
+        }
+        .markdown-content h3 {
+            font-size: 1.2em;
+            margin: 15px 0 10px 0;
+        }
+        .markdown-content p {
+            margin: 10px 0;
+        }
+        .markdown-content em {
+            color: #666;
+            font-style: italic;
+        }
+        .markdown-content table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 15px 0;
+            font-size: 13px;
+        }
+        .markdown-content th,
+        .markdown-content td {
+            border: 1px solid #ddd;
+            padding: 8px 12px;
+            text-align: left;
+        }
+        .markdown-content th {
+            background: #f5f5f5;
+            font-weight: 600;
+        }
+        .markdown-content tr:nth-child(even) {
+            background: #fafafa;
+        }
+        .markdown-content tr:hover {
+            background: #f0f8ff;
+        }
+        .markdown-content code {
+            background: #f4f4f4;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9em;
+        }
+        .markdown-content pre {
+            background: #f4f4f4;
+            padding: 12px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+        .markdown-content blockquote {
+            border-left: 4px solid #ddd;
+            margin: 10px 0;
+            padding: 10px 15px;
+            background: #f9f9f9;
+            color: #666;
+        }
+        .markdown-loading {
+            text-align: center;
+            padding: 40px;
+            color: #888;
+        }
+        
+        /* Markdown 编辑器（保留兼容） */
         .markdown-editor {
             height: 100%;
             display: flex;
@@ -883,6 +967,30 @@
             background: #d4edda;
             color: #155724;
         }
+        .history-panel-item .item-seq {
+            font-size: 10px;
+            font-weight: 600;
+            color: #6c757d;
+            min-width: 18px;
+        }
+        .history-panel-item .item-delete {
+            font-size: 12px;
+            padding: 2px 5px;
+            border: none;
+            background: transparent;
+            color: #dc3545;
+            cursor: pointer;
+            opacity: 0;
+            transition: opacity 0.2s;
+            border-radius: 3px;
+        }
+        .history-panel-item:hover .item-delete {
+            opacity: 1;
+        }
+        .history-panel-item .item-delete:hover {
+            background: #dc3545;
+            color: white;
+        }
         .history-panel-empty {
             text-align: center;
             color: #888;
@@ -1006,6 +1114,7 @@
                 <div class="history-panel-header">
                     <h4>📂 历史缓存</h4>
                     <button class="refresh-btn" onclick="window.loadHistoryPanel()" title="刷新">🔄</button>
+                    <button class="refresh-btn" onclick="window.debugOCRRegions()" title="调试OCR" style="background:#e74c3c;color:white;">🔍</button>
                 </div>
                 <div class="history-panel-list" id="historyPanelList">
                     <div class="history-panel-empty">加载中...</div>
@@ -1029,14 +1138,21 @@
                     console.log('History data:', data);
                     
                     if (data.success && data.jobs && data.jobs.length > 0) {
-                        list.innerHTML = data.jobs.map(function(job) {
-                            return '<div class="history-panel-item" onclick="window.loadCachedJob(\'' + job.job_id + '\')">' +
-                                '<span class="item-icon">📄</span>' +
-                                '<div class="item-info">' +
+                        // 按时间排序：最早的在前（序号1=最早）
+                        var sortedJobs = data.jobs.slice().sort(function(a, b) {
+                            return a.created_at - b.created_at;
+                        });
+                        list.innerHTML = sortedJobs.map(function(job, idx) {
+                            var seq = idx + 1; // 1 = 最早
+                            return '<div class="history-panel-item" data-job-id="' + job.job_id + '">' +
+                                '<span class="item-seq">' + seq + '</span>' +
+                                '<span class="item-icon" onclick="window.loadCachedJob(\'' + job.job_id + '\')">📄</span>' +
+                                '<div class="item-info" onclick="window.loadCachedJob(\'' + job.job_id + '\')">' +
                                     '<div class="item-name" title="' + job.filename + '">' + job.filename + '</div>' +
                                     '<div class="item-meta">' + Math.round(job.processing_time) + 's</div>' +
                                 '</div>' +
                                 '<span class="item-badge">' + (job.confidence_score ? Math.round(job.confidence_score * 100) + '%' : '-') + '</span>' +
+                                '<button class="item-delete" onclick="event.stopPropagation();window.deleteHistoryJob(\'' + job.job_id + '\')" title="删除">🗑</button>' +
                             '</div>';
                         }).join('');
                     } else {
@@ -1048,12 +1164,155 @@
                 }
             };
             
+            // 删除单个历史缓存
+            window.deleteHistoryJob = async function(jobId) {
+                if (!confirm('确定删除此缓存记录？')) return;
+                try {
+                    var res = await fetch('/api/jobs/' + jobId, { method: 'DELETE' });
+                    var data = await res.json();
+                    if (data.success) {
+                        console.log('Deleted job:', jobId);
+                        window.loadHistoryPanel(); // 刷新列表
+                    } else {
+                        alert('删除失败: ' + (data.error || '未知错误'));
+                    }
+                } catch(e) {
+                    console.error('Delete error:', e);
+                    alert('删除失败: ' + e.message);
+                }
+            };
+            
             // 页面加载完成后自动加载历史
             document.addEventListener('DOMContentLoaded', function() {
                 setTimeout(function() {
                     window.loadHistoryPanel();
                 }, 200);
             });
+            
+            // 当前视图模式
+            window.currentViewMode = 'block';
+            window.markdownCache = null;
+            
+            // 切换视图模式
+            window.switchViewMode = async function(mode) {
+                console.log('Switching view mode to:', mode);
+                window.currentViewMode = mode;
+                
+                var blockBtn = document.getElementById('blockModeBtn');
+                var mdBtn = document.getElementById('markdownModeBtn');
+                var blockList = document.getElementById('blockList');
+                var mdView = document.getElementById('markdownView');
+                var ocrRegions = document.querySelectorAll('.ocr-region');
+                
+                if (mode === 'block') {
+                    blockBtn.classList.add('active');
+                    mdBtn.classList.remove('active');
+                    blockList.style.display = 'flex';
+                    mdView.style.display = 'none';
+                    // 显示OCR区域框
+                    ocrRegions.forEach(function(r) { r.style.display = 'block'; });
+                } else {
+                    blockBtn.classList.remove('active');
+                    mdBtn.classList.add('active');
+                    blockList.style.display = 'none';
+                    mdView.style.display = 'block';
+                    // 隐藏OCR区域框（Markdown模式下不支持定位）
+                    ocrRegions.forEach(function(r) { r.style.display = 'none'; });
+                    
+                    // 加载Markdown内容
+                    await window.loadMarkdownView();
+                }
+            };
+            
+            // 加载Markdown视图
+            window.loadMarkdownView = async function() {
+                var jobId = window.app ? window.app.currentJobId : null;
+                var mdContent = document.getElementById('markdownContent');
+                
+                if (!jobId) {
+                    mdContent.innerHTML = '<div class="markdown-loading">请先上传文件或选择历史任务</div>';
+                    return;
+                }
+                
+                // 如果有缓存且是同一个job，直接使用
+                if (window.markdownCache && window.markdownCache.jobId === jobId) {
+                    mdContent.innerHTML = window.markdownCache.html;
+                    return;
+                }
+                
+                mdContent.innerHTML = '<div class="markdown-loading">⏳ 加载Markdown中...</div>';
+                
+                try {
+                    var res = await fetch('/api/convert/' + jobId + '/markdown');
+                    var data = await res.json();
+                    
+                    if (data.markdown) {
+                        // 简单的Markdown渲染
+                        var html = window.renderMarkdown(data.markdown);
+                        mdContent.innerHTML = html;
+                        
+                        // 缓存
+                        window.markdownCache = { jobId: jobId, html: html, raw: data.markdown };
+                    } else {
+                        mdContent.innerHTML = '<div class="markdown-loading">❌ Markdown不可用</div>';
+                    }
+                } catch(e) {
+                    console.error('Load markdown error:', e);
+                    mdContent.innerHTML = '<div class="markdown-loading">❌ 加载失败: ' + e.message + '</div>';
+                }
+            };
+            
+            // 使用 marked.js 渲染Markdown
+            window.renderMarkdown = function(md) {
+                if (typeof marked !== 'undefined') {
+                    // 配置 marked 选项
+                    marked.setOptions({
+                        gfm: true,        // GitHub风格Markdown
+                        breaks: true,     // 换行转<br>
+                        tables: true      // 支持表格
+                    });
+                    return marked.parse(md);
+                } else {
+                    // 回退到简单渲染
+                    return '<pre>' + md.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</pre>';
+                }
+            };
+            
+            // 下载Markdown文件
+            window.downloadMarkdown = async function() {
+                var jobId = window.app ? window.app.currentJobId : null;
+                if (!jobId) { alert('无任务ID'); return; }
+                
+                try {
+                    // 如果有缓存，直接使用
+                    if (window.markdownCache && window.markdownCache.jobId === jobId && window.markdownCache.raw) {
+                        var blob = new Blob([window.markdownCache.raw], {type: 'text/markdown'});
+                        var a = document.createElement('a');
+                        a.href = URL.createObjectURL(blob);
+                        a.download = 'ocr-result-' + jobId + '.md';
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        return;
+                    }
+                    
+                    var res = await fetch('/api/convert/' + jobId + '/markdown');
+                    var data = await res.json();
+                    if (data.markdown) {
+                        var blob = new Blob([data.markdown], {type: 'text/markdown'});
+                        var a = document.createElement('a');
+                        a.href = URL.createObjectURL(blob);
+                        a.download = 'ocr-result-' + jobId + '.md';
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                    } else {
+                        alert('Markdown不可用');
+                    }
+                } catch(e) {
+                    alert('下载失败: ' + e.message);
+                }
+            };
             
             // 全局下载函数 - 置信度LOG
             window.downloadConfidenceLog = async function() {
@@ -1093,6 +1352,84 @@
                         document.body.appendChild(a);
                         a.click();
                         document.body.removeChild(a);
+                    } else {
+                        alert('错误: 布局JSON不可用');
+                    }
+                } catch(e) { alert('下载失败: ' + e.message); }
+            };
+            
+            // 全局下载函数 - 原始文件
+            window.downloadOriginalFile = async function() {
+                var jobId = window.app ? window.app.currentJobId : null;
+                if (!jobId) { alert('无任务ID'); return; }
+                try {
+                    var res = await fetch('/api/convert/' + jobId + '/original-file');
+                    if (!res.ok) {
+                        var errData = await res.json();
+                        alert('错误: ' + (errData.error || '下载失败'));
+                        return;
+                    }
+                    // 从 Content-Disposition 获取文件名
+                    var contentDisposition = res.headers.get('Content-Disposition');
+                    var filename = 'original-' + jobId;
+                    if (contentDisposition) {
+                        var match = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+                        if (match && match[1]) {
+                            filename = match[1].replace(/['"]/g, '');
+                        }
+                    }
+                    var blob = await res.blob();
+                    var a = document.createElement('a');
+                    a.href = URL.createObjectURL(blob);
+                    a.download = filename;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(a.href);
+                } catch(e) {
+                    console.error('Download original file error:', e);
+                    alert('下载失败: ' + e.message);
+                }
+            };
+            
+            // 全局下载函数 - OCR结果JSON
+            window.downloadRawOcrJson = async function() {
+                var jobId = window.app ? window.app.currentJobId : null;
+                if (!jobId) { alert('无任务ID'); return; }
+                try {
+                    var res = await fetch('/api/convert/' + jobId + '/raw-output');
+                    var data = await res.json();
+                    if (data.raw_json) {
+                        var blob = new Blob([JSON.stringify(data.raw_json, null, 2)], {type: 'application/json'});
+                        var a = document.createElement('a');
+                        a.href = URL.createObjectURL(blob);
+                        a.download = 'raw-ocr-' + jobId + '.json';
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                    } else {
+                        alert('错误: OCR结果JSON不可用');
+                    }
+                } catch(e) { alert('下载失败: ' + e.message); }
+            };
+            
+            // 全局下载函数 - HTML结果
+            window.downloadRawHtml = async function() {
+                var jobId = window.app ? window.app.currentJobId : null;
+                if (!jobId) { alert('无任务ID'); return; }
+                try {
+                    var res = await fetch('/api/convert/' + jobId + '/raw-output');
+                    var data = await res.json();
+                    if (data.raw_html) {
+                        var blob = new Blob([data.raw_html], {type: 'text/html'});
+                        var a = document.createElement('a');
+                        a.href = URL.createObjectURL(blob);
+                        a.download = 'raw-ocr-' + jobId + '.html';
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                    } else {
+                        alert('错误: HTML结果不可用');
                     }
                 } catch(e) { alert('下载失败: ' + e.message); }
             };
@@ -1131,6 +1468,71 @@
                 }
             };
             
+            // 调试OCR区域绘制
+            window.debugOCRRegions = function() {
+                var img = document.getElementById('documentImage');
+                var wrapper = document.getElementById('imageWrapper');
+                
+                console.log('=== OCR区域调试 ===');
+                console.log('img.naturalWidth:', img ? img.naturalWidth : 'N/A');
+                console.log('img.naturalHeight:', img ? img.naturalHeight : 'N/A');
+                console.log('img.clientWidth:', img ? img.clientWidth : 'N/A');
+                console.log('img.clientHeight:', img ? img.clientHeight : 'N/A');
+                console.log('wrapper.clientWidth:', wrapper ? wrapper.clientWidth : 'N/A');
+                console.log('wrapper.clientHeight:', wrapper ? wrapper.clientHeight : 'N/A');
+                
+                if (img) {
+                    var scaleX = img.clientWidth / img.naturalWidth;
+                    var scaleY = img.clientHeight / img.naturalHeight;
+                    console.log('scaleX:', scaleX);
+                    console.log('scaleY:', scaleY);
+                }
+                
+                var info = '=== OCR区域调试 ===\n';
+                if (img) {
+                    info += 'naturalSize: ' + img.naturalWidth + 'x' + img.naturalHeight + '\n';
+                    info += 'clientSize: ' + img.clientWidth + 'x' + img.clientHeight + '\n';
+                    var scaleX = img.clientWidth / img.naturalWidth;
+                    var scaleY = img.clientHeight / img.naturalHeight;
+                    info += 'scaleX: ' + scaleX.toFixed(4) + '\n';
+                    info += 'scaleY: ' + scaleY.toFixed(4) + '\n';
+                    
+                    // 检查图片在 wrapper 中的偏移
+                    var imgRect = img.getBoundingClientRect();
+                    var wrapperRect = wrapper.getBoundingClientRect();
+                    info += '\nimg offset in wrapper:\n';
+                    info += '  left: ' + (imgRect.left - wrapperRect.left) + 'px\n';
+                    info += '  top: ' + (imgRect.top - wrapperRect.top) + 'px\n';
+                }
+                if (wrapper) {
+                    info += 'wrapperSize: ' + wrapper.clientWidth + 'x' + wrapper.clientHeight + '\n';
+                }
+                
+                var regions = document.querySelectorAll('.ocr-region');
+                info += 'regions: ' + regions.length + '\n';
+                info += 'indexLabels: ' + document.querySelectorAll('.ocr-region-index').length + '\n';
+                
+                if (window.app && window.app.ocrRegions && window.app.ocrRegions.length > 0) {
+                    var r0 = window.app.ocrRegions[0];
+                    info += '\n原始坐标#1: x=' + r0.coordinates.x + ', y=' + r0.coordinates.y + '\n';
+                    info += '原始尺寸#1: w=' + r0.coordinates.width + ', h=' + r0.coordinates.height + '\n';
+                }
+                
+                if (regions.length > 0) {
+                    info += '\nDOM#1: left=' + regions[0].style.left + ', top=' + regions[0].style.top + '\n';
+                    info += 'DOM#1: w=' + regions[0].style.width + ', h=' + regions[0].style.height + '\n';
+                    
+                    // 检查实际渲染位置
+                    var r0Rect = regions[0].getBoundingClientRect();
+                    var wrapperRect = wrapper.getBoundingClientRect();
+                    info += '\n实际渲染位置#1:\n';
+                    info += '  相对wrapper left: ' + (r0Rect.left - wrapperRect.left).toFixed(1) + 'px\n';
+                    info += '  相对wrapper top: ' + (r0Rect.top - wrapperRect.top).toFixed(1) + 'px\n';
+                }
+                
+                alert(info);
+            };
+            
             // 加载缓存任务
             window.loadCachedJob = async function(jobId) {
                 console.log('Loading cached job:', jobId);
@@ -1145,6 +1547,7 @@
                             var processedData = {
                                 blocks: data.result.blocks,
                                 confidence_report: data.confidence_report,
+                                markdown: data.markdown,
                                 cached: true
                             };
                             await window.app.handleProcessingComplete(processedData, jobId);
@@ -1193,13 +1596,17 @@
             <div class="editor-panel">
                 <div class="editor-panel-header">
                     <span>📋 识别结果</span>
-                    <div class="edit-mode-toggle" id="editModeToggle" style="display: none;">
-                        <button id="blockModeBtn" class="mode-btn active" title="Block 编辑模式">📦 Block</button>
-                        <button id="markdownModeBtn" class="mode-btn" title="Markdown 编辑模式">📝 Markdown</button>
+                    <div class="edit-mode-toggle" id="editModeToggle">
+                        <button id="blockModeBtn" class="mode-btn active" onclick="window.switchViewMode('block')" title="Block 视图">📦 Block</button>
+                        <button id="markdownModeBtn" class="mode-btn" onclick="window.switchViewMode('markdown')" title="Markdown 视图">📝 Markdown</button>
                     </div>
                     <div class="download-buttons" id="downloadButtons" style="display: none;">
-                        <button id="downloadPPStructureBtn" class="download-btn" title="PPStructure 布局与文本块分析结果" onclick="window.downloadPPStructure()">布局JSON</button>
-                        <button id="downloadConfidenceLogBtn" class="download-btn" title="置信度计算详细日志" style="background: #17a2b8;" onclick="window.downloadConfidenceLog()">置信度LOG</button>
+                        <button class="download-btn" style="background: #e74c3c;" onclick="window.downloadOriginalFile()" title="下载原始上传文件">📄 原始文件</button>
+                        <button class="download-btn" style="background: #17a2b8;" onclick="window.downloadConfidenceLog()" title="置信度计算详细日志">📊 置信度LOG</button>
+                        <button class="download-btn" style="background: #27ae60;" onclick="window.downloadPPStructure()" title="PPStructure 布局分析结果">📐 布局JSON</button>
+                        <button class="download-btn" style="background: #3498db;" onclick="window.downloadRawOcrJson()" title="文本OCR识别结果JSON">📝 OCR结果</button>
+                        <button class="download-btn" style="background: #9b59b6;" onclick="window.downloadRawHtml()" title="HTML格式输出">🌐 HTML</button>
+                        <button class="download-btn" style="background: #6c5ce7;" onclick="window.downloadMarkdown()" title="Markdown格式输出">📝 MD</button>
                     </div>
                 </div>
                 <div id="confidenceReport"></div>
@@ -1207,8 +1614,10 @@
                     <div id="blockList" class="block-list">
                         <!-- Block 列表将动态添加到这里 -->
                     </div>
-                    <div id="markdownEditor" class="markdown-editor" style="display: none;">
-                        <textarea id="markdownTextarea" class="markdown-textarea" placeholder="Markdown 内容..."></textarea>
+                    <div id="markdownView" class="markdown-view" style="display: none;">
+                        <div id="markdownContent" class="markdown-content">
+                            <!-- Markdown 渲染内容 -->
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1247,5 +1656,59 @@
     </div>
     
     <script type="module" src="index.js"></script>
+    
+    <!-- 修复：覆盖 drawOCRRegions 添加序号标签 -->
+    <script>
+        // 等待 App 初始化后覆盖 drawOCRRegions
+        setTimeout(function() {
+            if (window.app) {
+                console.log('Patching drawOCRRegions to add index labels...');
+                var originalDraw = window.app.drawOCRRegions.bind(window.app);
+                window.app.drawOCRRegions = function() {
+                    var wrapper = document.getElementById('imageWrapper');
+                    var img = document.getElementById('documentImage');
+                    if (!wrapper || !img || !img.naturalWidth) {
+                        console.log('drawOCRRegions: image not ready');
+                        return;
+                    }
+                    wrapper.querySelectorAll('.ocr-region').forEach(function(el) { el.remove(); });
+                    var scaleX = img.clientWidth / img.naturalWidth;
+                    var scaleY = img.clientHeight / img.naturalHeight;
+                    console.log('drawOCRRegions (patched): scale', scaleX, scaleY);
+                    var self = window.app;
+                    self.ocrRegions.forEach(function(region, idx) {
+                        if (!region.hasCoordinates) return;
+                        var c = region.coordinates;
+                        var div = document.createElement('div');
+                        div.className = 'ocr-region';
+                        div.setAttribute('data-region-index', idx);
+                        div.setAttribute('data-region-type', region.type);
+                        div.style.left = (c.x * scaleX) + 'px';
+                        div.style.top = (c.y * scaleY) + 'px';
+                        div.style.width = (c.width * scaleX) + 'px';
+                        div.style.height = (c.height * scaleY) + 'px';
+                        // 添加序号标签
+                        var indexLabel = document.createElement('span');
+                        indexLabel.className = 'ocr-region-index';
+                        indexLabel.textContent = '#' + (idx + 1);
+                        div.appendChild(indexLabel);
+                        // tooltip
+                        var tip = document.createElement('div');
+                        tip.className = 'ocr-region-tooltip';
+                        var mod = self.modifications.get(idx);
+                        var txt = mod ? mod.text : region.text;
+                        tip.textContent = txt.length > 30 ? txt.substring(0,30) + '...' : txt;
+                        div.appendChild(tip);
+                        div.addEventListener('click', function(e) { e.stopPropagation(); self.selectRegion(idx); });
+                        div.addEventListener('dblclick', function(e) { e.stopPropagation(); self.startEditRegion(idx); });
+                        if (self.modifications.has(idx)) div.classList.add('modified');
+                        wrapper.appendChild(div);
+                    });
+                    console.log('drawOCRRegions (patched): created', self.ocrRegions.length, 'regions with index labels');
+                };
+                console.log('drawOCRRegions patched successfully!');
+            }
+        }, 500);
+    </script>
 </body>
 </html>

@@ -176,27 +176,31 @@ def convert_document():
                 # Generate notification for multi-page PDFs
                 notification = PDFProcessor.get_processing_notification(pdf_analysis['page_count'])
                 
-                # If multi-page, extract first page as image for processing
-                if pdf_analysis['is_multi_page']:
-                    temp_folder = current_app.config['TEMP_FOLDER']
-                    temp_folder.mkdir(exist_ok=True)
-                    
-                    image_path = temp_folder / f"{document.id}_page1.png"
-                    success, extract_error = PDFProcessor.extract_first_page_as_image(file_path, image_path)
-                    
-                    if not success:
-                        # Clean up uploaded file
-                        file_path.unlink(missing_ok=True)
-                        error = PDFProcessingError(f"Could not extract first page: {extract_error}")
-                        response_data, status_code = error_handler.handle_error(
-                            error,
-                            context={
-                                'operation': 'pdf_page_extraction',
-                                'document_id': document.id,
-                                'filename': file_info['original_filename']
-                            }
-                        )
-                        return jsonify(response_data), status_code
+                # 复制原始 PDF 到 temp 目录（方便调试，无论单页还是多页）
+                temp_folder = current_app.config['TEMP_FOLDER']
+                temp_folder.mkdir(exist_ok=True)
+                import shutil
+                pdf_cache_path = temp_folder / f"{document.id}_original.pdf"
+                shutil.copy2(file_path, pdf_cache_path)
+                logger.info(f"Cached original PDF to: {pdf_cache_path}")
+                
+                # 提取第一页为图像（无论单页还是多页都需要）
+                image_path = temp_folder / f"{document.id}_page1.png"
+                success, extract_error = PDFProcessor.extract_first_page_as_image(file_path, image_path)
+                
+                if not success:
+                    # Clean up uploaded file
+                    file_path.unlink(missing_ok=True)
+                    error = PDFProcessingError(f"Could not extract first page: {extract_error}")
+                    response_data, status_code = error_handler.handle_error(
+                        error,
+                        context={
+                            'operation': 'pdf_page_extraction',
+                            'document_id': document.id,
+                            'filename': file_info['original_filename']
+                        }
+                    )
+                    return jsonify(response_data), status_code
                 
             except PDFProcessingError as e:
                 # Clean up uploaded file
@@ -768,7 +772,8 @@ def _convert_ppstructure_to_markdown(ppstructure_json):
         item_type = item.get('type', 'unknown')
         res = item.get('res', {})
         
-        if item_type == 'title':
+        # 标题类型（包括 title 和 doc_title）
+        if item_type in ('title', 'doc_title'):
             text = _extract_text_from_res(res)
             if text:
                 markdown_parts.append(f"# {text}")
@@ -780,7 +785,7 @@ def _convert_ppstructure_to_markdown(ppstructure_json):
                 markdown_parts.append(text)
                 markdown_parts.append("")
                 
-        elif item_type == 'header':
+        elif item_type in ('header', 'footer'):
             text = _extract_text_from_res(res)
             if text:
                 markdown_parts.append(f"*{text}*")
@@ -796,13 +801,31 @@ def _convert_ppstructure_to_markdown(ppstructure_json):
         elif item_type == 'figure_caption':
             text = _extract_text_from_res(res)
             if text:
-                markdown_parts.append(f"*图: {text}*")
+                markdown_parts.append(f"**{text}**")
+                markdown_parts.append("")
+                
+        elif item_type == 'reference':
+            text = _extract_text_from_res(res)
+            if text:
+                markdown_parts.append(f"*{text}*")
                 markdown_parts.append("")
                 
         elif item_type == 'equation':
             text = _extract_text_from_res(res)
             if text:
                 markdown_parts.append(f"${text}$")
+                markdown_parts.append("")
+                
+        elif item_type == 'figure':
+            # 图片区域，可以添加占位符
+            markdown_parts.append("*[图片]*")
+            markdown_parts.append("")
+            
+        else:
+            # 其他未知类型，尝试提取文本
+            text = _extract_text_from_res(res)
+            if text:
+                markdown_parts.append(text)
                 markdown_parts.append("")
     
     return '\n'.join(markdown_parts)
@@ -934,6 +957,71 @@ def get_confidence_log(job_id):
                 'operation': 'get_confidence_log',
                 'job_id': job_id,
                 'endpoint': f'/convert/{job_id}/confidence-log'
+            }
+        )
+        return jsonify(response_data), status_code
+
+
+@api_bp.route('/convert/<job_id>/original-file', methods=['GET'])
+def get_original_file(job_id):
+    """
+    下载原始上传的文件（PDF或图片）
+    """
+    from flask import send_file
+    from pathlib import Path
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    try:
+        temp_folder = current_app.config['TEMP_FOLDER']
+        upload_folder = current_app.config['UPLOAD_FOLDER']
+        root_temp = Path('temp')
+        root_uploads = Path('uploads')
+        
+        # 首先检查 temp 目录中的原始 PDF 缓存
+        for tf in [temp_folder, root_temp]:
+            pdf_path = tf / f"{job_id}_original.pdf"
+            if pdf_path.exists():
+                logger.info(f"Serving original PDF from temp: {pdf_path}")
+                return send_file(
+                    str(pdf_path.resolve()),
+                    mimetype='application/pdf',
+                    as_attachment=True,
+                    download_name=f"{job_id}_original.pdf"
+                )
+        
+        # 检查 uploads 目录
+        for uf in [upload_folder, root_uploads]:
+            for ext in ['pdf', 'png', 'jpg', 'jpeg']:
+                file_path = uf / f"{job_id}.{ext}"
+                if file_path.exists():
+                    mimetype = {
+                        'pdf': 'application/pdf',
+                        'png': 'image/png',
+                        'jpg': 'image/jpeg',
+                        'jpeg': 'image/jpeg'
+                    }.get(ext, 'application/octet-stream')
+                    logger.info(f"Serving original file from uploads: {file_path}")
+                    return send_file(
+                        str(file_path.resolve()),
+                        mimetype=mimetype,
+                        as_attachment=True,
+                        download_name=f"{job_id}_original.{ext}"
+                    )
+        
+        return jsonify({
+            'job_id': job_id,
+            'error': '原始文件未找到',
+            'message': '该任务的原始文件不存在'
+        }), 404
+        
+    except Exception as e:
+        response_data, status_code = error_handler.handle_error(
+            e,
+            context={
+                'operation': 'get_original_file',
+                'job_id': job_id,
+                'endpoint': f'/convert/{job_id}/original-file'
             }
         )
         return jsonify(response_data), status_code

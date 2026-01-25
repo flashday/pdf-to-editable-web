@@ -84,9 +84,12 @@
 
 | 按钮 | 说明 |
 |------|------|
-| 📥 布局与文本块JSON | PPStructure 布局分析和文本块识别的原始 JSON 结果 |
-| 📥 Markdown | OCR 结果的 Markdown 格式输出 |
-| 📥 编辑后Block | 包含用户编辑修改的 Block 数据（JSON 格式） |
+| � 原始文件 | 下载原始上传的 PDF 或图片文件 |
+| 📊 置信度LOG | 置信度计算详细日志（Markdown 格式） |
+| 📐 布局JSON | PPStructure 布局分析结果（JSON 格式） |
+| 📝 OCR结果 | 文本 OCR 识别原始结果（JSON 格式） |
+| 🌐 HTML | OCR 结果的 HTML 格式输出 |
+| � MD | OCR 结果的 Markdown 格式输出 |
 
 ## 项目结构
 
@@ -105,10 +108,30 @@
 │   │   ├── index.html      # 主页面（含样式）
 │   │   └── index.js        # 应用入口
 │   └── package.json        # Node.js 依赖
+├── temp/                   # 临时文件目录（调试用）
 ├── MDFiles/                # 文档目录
 │   └── implementation/     # 实现文档
 └── README.md
 ```
+
+## 调试文件说明
+
+每次处理 PDF 后，`temp/` 目录会保存以下调试文件（以 `{job_id}` 为前缀）：
+
+| 文件名 | 说明 |
+|--------|------|
+| `{job_id}_original.pdf` | 原始上传的 PDF 文件 |
+| `{job_id}_page1.png` | PyMuPDF 转换的图像（300 DPI，限制最大 2048px） |
+| `{job_id}_page1_preprocessed.png` | OCR 预处理后的图像（最大 1280px，增强对比度/锐度） |
+| `{job_id}_ppstructure.json` | PPStructure 识别结果（包含 bbox、类型、scale_info） |
+| `{job_id}_raw_ocr.json` | OCR 原始结果（包含文本行、置信度、scale_info） |
+| `{job_id}_raw_ocr.html` | HTML 格式输出（带表格结构） |
+| `{job_id}_raw_ocr.md` | Markdown 格式输出 |
+| `{job_id}_confidence_log.md` | 置信度计算日志（含处理时间） |
+
+这些文件用于调试坐标对齐、OCR 准确性等问题。`scale_info` 记录了图像缩放信息，用于坐标转换。
+
+另外，`temp/job_cache.json` 保存任务索引，用于历史缓存功能。
 
 ## 环境要求
 
@@ -234,14 +257,26 @@ npm run dev
 
 ## API 接口
 
+### 文档处理接口
+
 | 接口 | 说明 |
 |------|------|
-| `POST /api/convert` | 上传文件 |
+| `POST /api/convert` | 上传文件并开始处理 |
 | `GET /api/convert/{job_id}/status` | 查询处理状态 |
-| `GET /api/convert/{job_id}/result` | 获取 OCR 结果 |
+| `GET /api/convert/{job_id}/result` | 获取 OCR 结果（Editor.js 格式） |
 | `GET /api/convert/{job_id}/image` | 获取文档图像 |
-| `GET /api/convert/{job_id}/raw-output` | 获取原始 OCR 输出 |
+| `GET /api/convert/{job_id}/original-file` | 下载原始上传文件 |
+| `GET /api/convert/{job_id}/raw-output` | 获取原始 OCR 输出（JSON + HTML + PPStructure） |
 | `GET /api/convert/{job_id}/markdown` | 获取 Markdown 格式输出 |
+| `GET /api/convert/{job_id}/confidence-log` | 获取置信度计算日志 |
+
+### 历史缓存接口
+
+| 接口 | 说明 |
+|------|------|
+| `GET /api/jobs/history` | 获取历史任务列表 |
+| `GET /api/jobs/{job_id}/cached-result` | 获取缓存的识别结果（含 Markdown） |
+| `DELETE /api/jobs/{job_id}` | 删除缓存任务 |
 
 ## 系统要求
 
