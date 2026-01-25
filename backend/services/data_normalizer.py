@@ -211,6 +211,10 @@ class DataNormalizer(DataNormalizerInterface):
             # Estimate font size based on bounding box height
             estimated_font_size = self._estimate_font_size(region)
             
+            # 【新增】从 region.metadata 获取原始类型信息
+            original_struct_type = region.metadata.get('originalStructType', region.classification.value) if region.metadata else region.classification.value
+            edit_type = region.metadata.get('editType', 'table' if block_type == 'table' else 'text') if region.metadata else ('table' if block_type == 'table' else 'text')
+            
             # Add metadata for traceability
             metadata = {
                 "confidence": region.confidence,
@@ -221,6 +225,8 @@ class DataNormalizer(DataNormalizerInterface):
                     "height": region.coordinates.height
                 },
                 "originalClassification": region.classification.value,
+                "originalStructType": original_struct_type,  # PPStructureV3 原始类型
+                "editType": edit_type,  # 编辑类型: text 或 table
                 "estimatedFontSize": estimated_font_size,
                 "processingNotes": []
             }

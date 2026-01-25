@@ -1882,6 +1882,9 @@ table tr:nth-child(even) {
                 item_type = item.get('type', 'text')
                 bbox = item.get('bbox', [0, 0, 0, 0])
                 res = item.get('res', [])
+                # 【新增】获取原始 PPStructureV3 类型和编辑类型
+                original_struct_type = item.get('original_struct_type', item_type)
+                edit_type = item.get('edit_type', 'table' if item_type == 'table' else 'text')
                 
                 # 计算边界框
                 if len(bbox) == 4:
@@ -1953,15 +1956,22 @@ table tr:nth-child(even) {
                     logger.debug(f"Skipping empty {item_type} region")
                     continue
                 
+                # 【新增】构建 metadata，包含原始类型信息
+                region_metadata = {
+                    'originalStructType': original_struct_type,  # PPStructureV3 原始类型
+                    'editType': edit_type,  # 编辑类型: text 或 table
+                }
+                
                 region = Region(
                     coordinates=bounding_box,
                     classification=region_type,
                     confidence=confidence,
-                    content=content
+                    content=content,
+                    metadata=region_metadata
                 )
                 
                 regions.append(region)
-                logger.debug(f"Created region: type={region_type.value}, content_len={len(content)}")
+                logger.debug(f"Created region: type={region_type.value}, struct_type={original_struct_type}, content_len={len(content)}")
                 
             except Exception as e:
                 logger.warning(f"Failed to parse PPStructureV3 item: {e}")
@@ -2606,9 +2616,13 @@ table tr:nth-child(even) {
                 bbox = [0, 0, 0, 0]
             
             # 构建结果字典
+            # 【新增】保存原始 PPStructureV3 类型 (original_struct_type) 和编辑类型 (edit_type)
+            edit_type = 'table' if item_type == 'table' else 'text'
             item_dict = {
                 'type': item_type,
                 'bbox': bbox,
+                'original_struct_type': label,  # PPStructureV3 原始类型
+                'edit_type': edit_type,  # 编辑类型: text 或 table
             }
             
             # 处理内容

@@ -3299,7 +3299,7 @@ for result in results:
 
 ---
 
-## 二十二、置信度前端显示问题（2026-01-25 待解决）
+## 二十二、置信度前端显示问题（2026-01-25 已解决 ✅）
 
 ### 22.1 问题描述
 
@@ -3325,70 +3325,138 @@ blocks = data.get('result', {}).get('blocks', [])
 
 表格区块有置信度（0.99），非表格区块为 `None`。
 
-### 22.3 前端代码
+### 22.3 问题根因
 
-前端代码已更新，但显示仍有问题：
+前端代码中使用了中文字符（如 `Confidence:无`），在某些编码环境下显示为乱码。
+
+### 22.4 解决方案
+
+将前端代码中的中文字符替换为纯 ASCII 字符：
 
 ```javascript
 // frontend/src/index.js - renderBlockList()
 var metaText = 'Pos:(' + Math.round(co.x) + ',' + Math.round(co.y) + ') Size:' + Math.round(co.width) + 'x' + Math.round(co.height);
-// 置信度显示：有值显示数值，null/undefined 显示 N/A
+// 置信度显示：有值显示数值，null/undefined 显示 "-"
 if (region.confidence !== null && region.confidence !== undefined) {
-    metaText += ' Confidence:' + region.confidence.toFixed(2);
+    metaText += ' Conf:' + region.confidence.toFixed(2);
 } else {
-    metaText += ' Confidence:N/A';
+    metaText += ' Conf:-';
 }
 ```
 
-### 22.4 可能原因
-
-1. **浏览器缓存**：旧的 JS 文件被缓存
-2. **Vite 热更新问题**：代码更新未正确推送到浏览器
-3. **字符编码问题**：文件编码与浏览器不匹配
-
-### 22.5 待尝试的解决方案
-
-1. 清除浏览器缓存（Ctrl+Shift+R）
-2. 重启 Vite 开发服务器
-3. 检查 `index.js` 文件编码是否为 UTF-8
-4. 在浏览器控制台检查 `[extractOCRRegions]` 日志输出
-5. 检查 Vite 构建输出是否正确
-
-### 22.6 当前状态
+### 22.5 当前状态
 
 - ✅ 后端 API 正确返回置信度
 - ✅ 表格区块有置信度（从 `table_ocr_pred.rec_scores` 计算平均值）
 - ✅ 非表格区块置信度为 `None`
-- ❌ 前端显示为乱码，待解决
+- ✅ 前端正确显示置信度（有值显示数值，无值显示 `-`）
 
 ---
 
-## 二十三、本次会话总结（2026-01-25）
+## 二十三、Edit Type 和 Struct Type 显示功能（2026-01-25 已完成 ✅）
 
-### 23.1 完成的工作
+### 23.1 功能需求
 
-1. **置信度后端实现**
-   - 修复 `_process_ppstructure_v3_result()` 使用 dict-like 访问模式
-   - 修复 `_convert_layout_block_to_dict()` 使用正确的属性名（`block_label`, `block_bbox`, `block_content`）
-   - 从 `table_res_list[x].table_ocr_pred.rec_scores` 提取表格置信度
-   - 非表格区块置信度设为 `None`
+用户希望在前端显示两个类型属性：
+1. **Edit Type**：`TEXT` 或 `TABLE` - 决定编辑器如何处理该区块
+2. **Struct Type**：PPStructureV3 原始返回的类型（如 `doc_title`, `figure_caption`, `table`）
 
-2. **前端代码更新**
-   - `extractOCRRegions()` 从 `block.metadata.confidence` 提取置信度
-   - `renderBlockList()` 显示置信度（有值显示数值，无值显示 N/A）
+### 23.2 后端实现
 
-3. **API 验证**
-   - 创建 `test_api_confidence.py` 测试脚本
-   - 确认 API 返回正确的置信度数据
+在 `ocr_service.py` 的 `_convert_layout_block_to_dict()` 方法中添加：
 
-### 23.2 待解决问题
+```python
+# 保存原始 PPStructureV3 类型和编辑类型
+edit_type = 'table' if item_type == 'table' else 'text'
+item_dict = {
+    'type': item_type,
+    'bbox': bbox,
+    'original_struct_type': label,  # PPStructureV3 原始类型
+    'edit_type': edit_type,         # 编辑类型: text 或 table
+}
+```
 
-- 前端置信度显示为乱码，需要进一步调试
+在 `data_normalizer.py` 的 `_convert_region_to_block()` 方法中传递到 metadata：
 
-### 23.3 相关文件
+```python
+metadata = {
+    "confidence": region.confidence,
+    "originalCoordinates": {...},
+    "originalStructType": original_struct_type,  # PPStructureV3 原始类型
+    "editType": edit_type,                       # 编辑类型: text 或 table
+    ...
+}
+```
 
-- `backend/services/ocr_service.py` - 置信度提取逻辑
-- `backend/services/data_normalizer.py` - Region 到 Block 转换
-- `frontend/src/index.js` - 前端显示逻辑
-- `test_api_confidence.py` - API 测试脚本
+### 23.3 前端实现
+
+在 `index.js` 的 `extractOCRRegions()` 中提取：
+
+```javascript
+var originalStructType = block.metadata ? block.metadata.originalStructType : block.type;
+var editType = block.metadata ? block.metadata.editType : (block.type === 'table' ? 'table' : 'text');
+```
+
+在 `renderBlockList()` 中显示两个徽章：
+
+```javascript
+// Edit type badge (TEXT or TABLE) - 蓝色/紫色
+var editTypeBadge = document.createElement('span');
+editTypeBadge.className = 'block-edit-type ' + region.editType;
+editTypeBadge.textContent = region.editType.toUpperCase();
+
+// Struct type badge (original PPStructureV3 type) - 灰色
+var structTypeBadge = document.createElement('span');
+structTypeBadge.className = 'block-struct-type';
+structTypeBadge.textContent = region.originalStructType || region.type;
+```
+
+### 23.4 CSS 样式
+
+```css
+/* Edit type badge (TEXT or TABLE) */
+.block-edit-type {
+    font-size: 0.7em;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 700;
+    text-transform: uppercase;
+    margin-right: 6px;
+}
+.block-edit-type.text { background: #2196f3; color: white; }
+.block-edit-type.table { background: #9c27b0; color: white; }
+
+/* Struct type badge (PPStructureV3 original type) */
+.block-struct-type {
+    font-size: 0.7em;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 500;
+    background: #f5f5f5;
+    color: #666;
+    margin-right: auto;
+}
+```
+
+---
+
+## 二十四、本次会话总结（2026-01-25）
+
+### 24.1 完成的工作
+
+1. **置信度显示修复**
+   - 解决前端乱码问题（使用纯 ASCII 字符）
+   - 置信度有值显示数值，无值显示 `-`
+
+2. **Edit Type 和 Struct Type 显示**
+   - 后端：在 `ocr_service.py` 和 `data_normalizer.py` 中添加字段
+   - 前端：在 `index.js` 中提取并显示两个徽章
+   - 样式：蓝色 TEXT / 紫色 TABLE + 灰色 Struct Type
+
+### 24.2 相关文件
+
+- `backend/services/ocr_service.py` - 添加 `original_struct_type` 和 `edit_type` 字段
+- `backend/services/data_normalizer.py` - 传递到 Block metadata
+- `frontend/src/index.js` - 提取并显示类型信息
+- `frontend/src/index.html` - CSS 样式
 

@@ -1,4 +1,4 @@
-import { DocumentProcessor } from './services/DocumentProcessor.js';
+ï»¿import { DocumentProcessor } from './services/DocumentProcessor.js';
 import { UIManager } from './services/UIManager.js';
 
 class App {
@@ -100,12 +100,18 @@ class App {
         var self = this;
         blocks.forEach(function(block, i) {
             var coords = block.metadata ? block.metadata.originalCoordinates : null;
+            var confidence = block.metadata ? block.metadata.confidence : null;
+            var originalStructType = block.metadata ? block.metadata.originalStructType : block.type;
+            var editType = block.metadata ? block.metadata.editType : (block.type === 'table' ? 'table' : 'text');
             regions.push({
                 index: i, blockId: block.id, type: block.type,
                 text: self.getBlockText(block),
                 coordinates: coords || {x:0,y:0,width:100,height:30},
                 hasCoordinates: !!coords,
-                tableHtml: block.data ? block.data.tableHtml : null
+                tableHtml: block.data ? block.data.tableHtml : null,
+                confidence: confidence,
+                originalStructType: originalStructType,
+                editType: editType
             });
         });
         return regions;
@@ -183,13 +189,19 @@ class App {
             var html = (mod && mod.tableHtml) ? mod.tableHtml : region.tableHtml;
             var hdr = document.createElement('div');
             hdr.className = 'block-header';
-            var type = document.createElement('span');
-            type.className = 'block-type ' + region.type;
-            type.textContent = self.getTypeLabel(region.type);
+            // Edit type badge (TEXT or TABLE)
+            var editTypeBadge = document.createElement('span');
+            editTypeBadge.className = 'block-edit-type ' + region.editType;
+            editTypeBadge.textContent = region.editType.toUpperCase();
+            // Struct type badge (original PPStructureV3 type)
+            var structTypeBadge = document.createElement('span');
+            structTypeBadge.className = 'block-struct-type';
+            structTypeBadge.textContent = region.originalStructType || region.type;
             var num = document.createElement('span');
             num.className = 'block-index';
             num.textContent = '#' + (idx + 1);
-            hdr.appendChild(type);
+            hdr.appendChild(editTypeBadge);
+            hdr.appendChild(structTypeBadge);
             hdr.appendChild(num);
             var cnt = document.createElement('div');
             cnt.className = 'block-content';
@@ -198,13 +210,13 @@ class App {
             var meta = document.createElement('div');
             meta.className = 'block-meta';
             var co = region.coordinates;
-            // ÏÔÊ¾Î»ÖÃ¡¢³ß´çºÍÖÃÐÅ¶È
+            // ï¿½ï¿½Ê¾Î»ï¿½Ã¡ï¿½ï¿½ß´ï¿½ï¿½ï¿½ï¿½ï¿½Å¶ï¿½
             var metaText = 'Pos:(' + Math.round(co.x) + ',' + Math.round(co.y) + ') Size:' + Math.round(co.width) + 'x' + Math.round(co.height);
-            // ÖÃÐÅ¶ÈÏÔÊ¾£ºÓÐÖµÏÔÊ¾ÊýÖµ£¬null/undefined ÏÔÊ¾"ÎÞ"
+            // ï¿½ï¿½ï¿½Å¶ï¿½ï¿½ï¿½Ê¾ï¿½ï¿½ï¿½ï¿½Öµï¿½ï¿½Ê¾ï¿½ï¿½Öµï¿½ï¿½null/undefined ï¿½ï¿½Ê¾"ï¿½ï¿½"
             if (region.confidence !== null && region.confidence !== undefined) {
-                metaText += ' Confidence:' + region.confidence.toFixed(2);
+                metaText += ' Conf:' + region.confidence.toFixed(2);
             } else {
-                metaText += ' Confidence:ÎÞ';
+                metaText += ' Conf:-';
             }
             meta.textContent = metaText;
             item.appendChild(hdr);
@@ -397,3 +409,4 @@ document.addEventListener('DOMContentLoaded', function() {
     console.log('DOMContentLoaded - creating App');
     window.app = new App(); 
 });
+
