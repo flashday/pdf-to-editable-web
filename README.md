@@ -109,9 +109,20 @@
 ├── backend/                 # Python 后端
 │   ├── api/                # REST API
 │   ├── services/           # 业务逻辑
-│   │   ├── ocr_service.py      # PaddleOCR 集成
+│   │   ├── ocr_service.py      # PaddleOCR 集成（主服务）
+│   │   ├── ocr/                # OCR 模块化组件
+│   │   │   ├── __init__.py         # 包初始化，导出辅助类
+│   │   │   ├── image_preprocessor.py   # 图像预处理（增强、缩放）
+│   │   │   ├── layout_analyzer.py      # 布局分析、区域分类
+│   │   │   ├── table_processor.py      # 表格检测、结构解析
+│   │   │   ├── output_generator.py     # HTML/Markdown 生成
+│   │   │   ├── ppstructure_parser.py   # PPStructureV3 结果解析
+│   │   │   └── confidence_logger.py    # 置信度日志生成
 │   │   ├── data_normalizer.py  # 数据转换（含类型映射）
-│   │   └── document_processor.py # 处理流程
+│   │   ├── document_processor.py # 处理流程
+│   │   └── job_cache.py        # 历史任务缓存
+│   ├── models/             # 数据模型
+│   ├── tests/              # 单元测试
 │   ├── app.py              # 应用入口
 │   └── requirements.txt    # Python 依赖
 ├── frontend/               # JavaScript 前端
