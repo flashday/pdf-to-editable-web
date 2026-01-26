@@ -7,6 +7,8 @@ import json
 import logging
 import time
 import re
+import os
+from pathlib import Path
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -17,6 +19,11 @@ from backend.services.job_cache import get_job_cache
 from backend.config import ChatOCRConfig
 
 logger = logging.getLogger(__name__)
+
+
+def get_temp_folder() -> Path:
+    """获取临时文件夹路径"""
+    return Path(os.environ.get('TEMP_FOLDER', 'temp'))
 
 
 # ============== 预设模板定义 ==============
@@ -256,6 +263,116 @@ class ChatOCRService:
         """
         template = self.templates.get(template_id)
         return template["fields"] if template else None
+    
+    def _save_extraction_log(self, job_id: str, result: 'ExtractionResult', 
+                             fields: List[str], template: Optional[str] = None) -> None:
+        """
+        保存智能提取日志到 temp 目录（JSON 格式）
+        
+        Args:
+            job_id: 任务 ID
+            result: 提取结果
+            fields: 提取的字段列表
+            template: 使用的模板名称
+        """
+        try:
+            temp_folder = get_temp_folder()
+            log_path = temp_folder / f"{job_id}_extract_log.json"
+            
+            # 读取现有日志（如果存在）
+            existing_logs = []
+            if log_path.exists():
+                with open(log_path, 'r', encoding='utf-8') as f:
+                    existing_logs = json.load(f)
+            
+            # 添加新的提取记录
+            log_entry = {
+                "timestamp": datetime.now().isoformat(),
+                "template": template,
+                "fields_requested": fields,
+                "result": result.to_dict(),
+                "model": ChatOCRConfig.OLLAMA_MODEL
+            }
+            existing_logs.append(log_entry)
+            
+            # 保存日志
+            with open(log_path, 'w', encoding='utf-8') as f:
+                json.dump(existing_logs, f, ensure_ascii=False, indent=2)
+            
+            logger.info(f"Extraction log saved to {log_path}")
+            
+        except Exception as e:
+            logger.warning(f"Failed to save extraction log: {e}")
+    
+    def _save_qa_log(self, job_id: str, result: 'QAResult') -> None:
+        """
+        保存问答日志到 temp 目录（Markdown 格式）
+        
+        Args:
+            job_id: 任务 ID
+            result: 问答结果
+        """
+        try:
+            temp_folder = get_temp_folder()
+            log_path = temp_folder / f"{job_id}_qa_log.md"
+            
+            # 构建 Markdown 内容
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            
+            # 如果文件不存在，添加头部
+            if not log_path.exists():
+                header = f"""# 文档问答日志
+
+**Job ID**: {job_id}
+**LLM 模型**: {ChatOCRConfig.OLLAMA_MODEL}
+**Embedding 模型**: {ChatOCRConfig.EMBEDDING_MODEL}
+
+---
+
+"""
+                with open(log_path, 'w', encoding='utf-8') as f:
+                    f.write(header)
+            
+            # 追加问答记录
+            qa_entry = f"""
+## 问答记录 [{timestamp}]
+
+### 🙋 用户问题
+
+{result.question}
+
+### 🤖 AI 回答
+
+{result.answer}
+
+"""
+            # 添加参考原文
+            if result.references:
+                qa_entry += "### 📎 参考原文\n\n"
+                for i, ref in enumerate(result.references, 1):
+                    qa_entry += f"> {i}. \"{ref}\"\n\n"
+            
+            # 添加元数据
+            qa_entry += f"""### 📊 元数据
+
+| 指标 | 值 |
+|------|-----|
+| 置信度 | {result.confidence * 100:.1f}% |
+| 处理时间 | {result.processing_time:.2f}s |
+| 文档中找到 | {'是' if result.found_in_document else '否'} |
+| 成功 | {'是' if result.success else '否'} |
+
+---
+
+"""
+            
+            with open(log_path, 'a', encoding='utf-8') as f:
+                f.write(qa_entry)
+            
+            logger.info(f"QA log saved to {log_path}")
+            
+        except Exception as e:
+            logger.warning(f"Failed to save QA log: {e}")
 
     
     def _get_document_content(self, job_id: str, query: Optional[str] = None) -> Optional[str]:
@@ -489,7 +606,7 @@ class ChatOCRService:
                 if null_count > 0:
                     warnings.append(f"有 {null_count} 个字段未能从文档中找到")
                 
-                return ExtractionResult(
+                extraction_result = ExtractionResult(
                     job_id=job_id,
                     fields=extracted_fields,
                     confidence=confidence,
@@ -497,8 +614,13 @@ class ChatOCRService:
                     processing_time=time.time() - start_time,
                     success=True
                 )
+                
+                # 保存提取日志
+                self._save_extraction_log(job_id, extraction_result, extract_fields, template)
+                
+                return extraction_result
             else:
-                return ExtractionResult(
+                extraction_result = ExtractionResult(
                     job_id=job_id,
                     fields={field: None for field in extract_fields},
                     success=False,
@@ -506,6 +628,11 @@ class ChatOCRService:
                     warnings=["LLM 返回的结果格式不正确"],
                     processing_time=time.time() - start_time
                 )
+                
+                # 保存提取日志（即使失败也保存）
+                self._save_extraction_log(job_id, extraction_result, extract_fields, template)
+                
+                return extraction_result
                 
         except Exception as e:
             logger.error(f"Extraction failed for job {job_id}: {e}")
@@ -605,7 +732,7 @@ class ChatOCRService:
                 # 计算置信度
                 confidence = 0.9 if found_in_document and references else 0.5
                 
-                return QAResult(
+                qa_result = QAResult(
                     job_id=job_id,
                     question=question,
                     answer=answer,
@@ -615,9 +742,14 @@ class ChatOCRService:
                     processing_time=time.time() - start_time,
                     success=True
                 )
+                
+                # 保存问答日志
+                self._save_qa_log(job_id, qa_result)
+                
+                return qa_result
             else:
                 # 如果无法解析 JSON，尝试直接使用响应作为答案
-                return QAResult(
+                qa_result = QAResult(
                     job_id=job_id,
                     question=question,
                     answer=response_text[:1000] if response_text else "无法生成回答",
@@ -625,6 +757,11 @@ class ChatOCRService:
                     processing_time=time.time() - start_time,
                     success=True
                 )
+                
+                # 保存问答日志
+                self._save_qa_log(job_id, qa_result)
+                
+                return qa_result
                 
         except Exception as e:
             logger.error(f"Document QA failed for job {job_id}: {e}")

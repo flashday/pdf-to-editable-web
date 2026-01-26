@@ -206,10 +206,37 @@
 | `{job_id}_raw_ocr.html` | HTML 格式输出（带表格结构） |
 | `{job_id}_raw_ocr.md` | Markdown 格式输出 |
 | `{job_id}_confidence_log.md` | 置信度计算日志（含处理时间） |
+| `{job_id}_extract_log.json` | 智能提取日志（JSON 格式，累积记录每次提取） |
+| `{job_id}_qa_log.md` | 文档问答日志（Markdown 格式，累积记录每次问答） |
 
 这些文件用于调试坐标对齐、OCR 准确性等问题。`scale_info` 记录了图像缩放信息，用于坐标转换。
 
 另外，`temp/job_cache.json` 保存任务索引，用于历史缓存功能。
+
+### 智能文档理解日志说明
+
+**智能提取日志** (`{job_id}_extract_log.json`)：
+```json
+[
+  {
+    "timestamp": "2026-01-26T17:00:00",
+    "template": "invoice",
+    "fields_requested": ["发票号码", "金额"],
+    "result": {
+      "job_id": "xxx",
+      "fields": {"发票号码": "12345", "金额": "100.00"},
+      "confidence": 1.0,
+      "processing_time": 2.5
+    },
+    "model": "gpt-oss:20b"
+  }
+]
+```
+
+**文档问答日志** (`{job_id}_qa_log.md`)：
+- 每次问答追加记录
+- 包含问题、回答、参考原文、元数据
+- Markdown 格式便于阅读
 
 ## 环境要求
 
