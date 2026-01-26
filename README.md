@@ -12,41 +12,33 @@
 
 ## 🆕 最新更新 (2026-01-26)
 
-**🔧 后端服务加载优化：**
-- ✅ 修复 RAG/Embedding 服务加载超时问题（HuggingFace 离线模式）
-- ✅ 后端服务改为顺序加载：LLM → OCR → RAG（避免并行冲突）
-- ✅ 服务加载时间：LLM 0s + OCR 60s + RAG 3s = 总计约 63 秒
-- ✅ 修复前端 `/api/llm/status` 提前触发 RAG 初始化的问题
-
-## 历史更新 (2026-01-26)
-
-**🔧 界面优化与功能增强：**
-- ✅ 新增服务状态栏：主界面显示 OCR模型/LLM服务/RAG服务 实时状态
-- ✅ 新增对话日志导出：文档问答支持导出 Markdown 格式对话记录
-- ✅ 修复智能提取报错：正确处理 LLMResponse 对象和 RAG 检索结果
-
 **🤖 PP-ChatOCRv4 智能文档理解集成：**
 - ✅ 新增智能信息提取功能（发票、合同、身份证、简历等预设模板）
 - ✅ 新增文档问答功能（基于 RAG 向量检索）
 - ✅ 集成本地 Ollama LLM 服务
 - ✅ 支持 BGE-small-zh-v1.5 中文向量化模型（512维向量）
 - ✅ 使用 ChromaDB 向量数据库
+- ✅ 新增服务状态栏：主界面显示 OCR模型/LLM服务/RAG服务 实时状态
 - ✅ 优雅降级：LLM 不可用时不影响基础 OCR 功能
 
-**置信度显示修复 (2026-01-25)：**
-- ✅ 修复 Block 列表中置信度显示乱码问题（编码兼容性）
-- ✅ 置信度现在正确显示：有值显示数值，无值显示 `-`
+> 详细更新记录请查看 [CHANGELOG.md](CHANGELOG.md)
+
+## 历史更新 (2026-01-25)
+
+**置信度显示修复：**
+- ✅ 修复 Block 列表中置信度显示乱码问题
 
 **Block 类型标识增强：**
-- ✅ 新增 Edit Type 徽章（蓝色 TEXT / 紫色 TABLE）- 决定编辑器处理方式
-- ✅ 新增 Struct Type 徽章（灰色）- 显示 PPStructureV3 原始类型（如 doc_title, figure_caption, table 等）
+- ✅ 新增 Edit Type 徽章（蓝色 TEXT / 紫色 TABLE）
+- ✅ 新增 Struct Type 徽章（灰色）- 显示 PPStructureV3 原始类型
 
-**后端升级 (2026-01-24)：**
+## 历史更新 (2026-01-24)
+
+**后端升级：**
 - ✅ 升级到 PaddleOCR 3.3.3 + PaddlePaddle 3.2.2
 - ✅ 支持 PP-OCRv5（文本识别准确率 +13%）
 - ✅ 支持 PP-StructureV3（表格识别准确率 +6%）
 - ✅ 新增 Markdown 输出 API
-- ✅ 详细迁移指南：`MDFiles/implementation/PADDLEOCR_2X_TO_3X_MIGRATION_GUIDE.md`
 
 ## 功能特点
 
