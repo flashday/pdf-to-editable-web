@@ -1,14 +1,49 @@
 # PDF to Editable Web - 最终工程状态报告
 
 ## 📅 报告日期
-2026-01-25（最后更新）
+2026-01-26（最后更新）
 
 ## 🎯 项目概述
 PDF to Editable Web Layout System - 一个完整的系统，使用 OCR 和 Editor.js 将扫描的 PDF 文档转换为结构化、可编辑的网页内容。
 
 ---
 
-## 🆕 最新更新 (2026-01-25)
+## 🆕 最新更新 (2026-01-26)
+
+### PP-ChatOCRv4 智能文档理解集成 ✅
+
+**新增功能**：
+- ✅ 智能信息提取：从文档中自动提取关键信息（发票号、金额、日期等）
+- ✅ 文档问答：用自然语言向文档提问，获取基于内容的回答
+- ✅ RAG 向量检索：智能检索多页文档中的相关内容
+- ✅ 预设模板：支持发票、合同、身份证、简历等常见文档类型
+- ✅ 优雅降级：LLM 服务不可用时，基础 OCR 功能不受影响
+
+**新增服务**：
+- `backend/services/llm_service.py` - Ollama LLM 服务封装
+- `backend/services/embedding_service.py` - 文本向量化服务（BGE-small-zh-v1.5）
+- `backend/services/vector_store.py` - 向量存储服务（ChromaDB）
+- `backend/services/text_chunker.py` - 文本分块器
+- `backend/services/rag_service.py` - RAG 检索增强生成服务
+- `backend/services/chatocr_service.py` - ChatOCR 智能文档理解服务
+
+**新增 API**：
+- `GET /api/llm/status` - 检查 LLM 服务状态
+- `GET /api/templates` - 获取预设提取模板
+- `POST /api/extract-info` - 从文档中提取关键信息
+- `POST /api/document-qa` - 基于文档内容回答问题
+- `GET /api/rag/status/{job_id}` - 获取文档的 RAG 索引状态
+
+**新增前端组件**：
+- `frontend/src/components/SmartExtract.js` - 智能提取面板
+- `frontend/src/components/DocumentQA.js` - 文档问答面板
+- `frontend/src/components/ChatOCRIntegration.js` - ChatOCR 集成组件
+
+**Git提交**: `ec87193` - feat: 完成 PP-ChatOCRv4 智能文档理解集成
+
+---
+
+## 历史更新 (2026-01-25)
 
 ### OCR结果下载按钮修复 ✅
 

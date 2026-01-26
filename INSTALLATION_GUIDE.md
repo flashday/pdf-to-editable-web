@@ -8,6 +8,7 @@
 - **Node.js**: 14.x 或更高版本
 - **内存**: 至少 4GB RAM
 - **磁盘空间**: 至少 2GB 可用空间
+- **Ollama**（可选）: 用于智能文档理解功能
 
 ### ⚠️ 重要提示
 - **不要使用 Python 3.12+** - PaddleOCR 不兼容
@@ -114,9 +115,29 @@ python -c "import paddle; print('PaddlePaddle OK')"
 
 # 验证其他核心组件
 python -c "import flask; import pydantic; print('All core components OK')"
+
+# 验证智能功能依赖（可选）
+python -c "import sentence_transformers; import chromadb; print('ChatOCR dependencies OK')"
 ```
 
 如果所有命令都输出 "OK"，说明后端依赖安装成功！
+
+### 第六步（可选）：安装 Ollama LLM 服务
+
+如需使用智能文档理解功能（信息提取、文档问答），需要安装 Ollama：
+
+1. 下载 Ollama: https://ollama.ai/download
+2. 安装并启动 Ollama 服务
+3. 拉取模型：
+   ```bash
+   ollama pull gpt-oss:20b
+   # 或使用其他模型
+   ollama pull llama2
+   ```
+4. 验证服务：
+   ```bash
+   curl http://localhost:11434/api/tags
+   ```
 
 ### 第七步：安装前端依赖
 
@@ -158,21 +179,25 @@ Flask==3.0.0
 Flask-CORS==4.0.0
 
 # OCR 引擎（关键）
-paddlepaddle==2.6.2
-paddleocr==2.7.0.3
-opencv-python==4.6.0.66
-numpy>=1.24.3,<2.0
+paddlepaddle==3.2.2
+paddleocr==3.3.3
+opencv-contrib-python>=4.8.0
+numpy>=2.0.0
 
 # 文件处理
 PyPDF2==3.0.1
-Pillow==10.1.0
+Pillow>=10.1.0
 PyMuPDF==1.20.2
 
 # 数据处理
-pydantic==2.5.0
+pydantic>=2.5.0
 jsonschema==4.20.0
 beautifulsoup4==4.12.2
 chardet==5.2.0
+
+# PP-ChatOCRv4 智能功能（可选）
+sentence-transformers>=2.2.0  # 文本向量化
+chromadb>=0.4.0               # 向量数据库
 
 # 测试框架
 pytest==7.4.3
@@ -181,8 +206,8 @@ pytest-mock==3.12.0
 hypothesis==6.92.1
 
 # 其他
-requests==2.31.0
-psutil==5.9.6
+requests>=2.31.0
+psutil>=5.9.6
 python-dotenv==1.0.0
 ```
 
