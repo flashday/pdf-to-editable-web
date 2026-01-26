@@ -1854,25 +1854,36 @@
         // 等待 App 初始化后初始化智能功能
         document.addEventListener('DOMContentLoaded', function() {
             setTimeout(function() {
-                if (typeof initChatOCRIntegration === 'function') {
+                if (typeof initChatOCRIntegration === 'function' && window.app) {
                     window.chatOCR = initChatOCRIntegration({ apiBaseUrl: '' });
                     console.log('ChatOCR integration initialized');
                     
-                    // 监听 jobId 变化
+                    // 监听 jobId 变化 - 包装 handleProcessingComplete
                     var originalHandleComplete = window.app.handleProcessingComplete.bind(window.app);
                     window.app.handleProcessingComplete = async function(data, jobId) {
                         await originalHandleComplete(data, jobId);
                         if (window.chatOCR) {
+                            console.log('Setting chatOCR jobId:', jobId);
                             window.chatOCR.setJobId(jobId);
                         }
                     };
                     
+                    // 同时包装 loadCachedJob，确保从缓存加载时也能设置 jobId
+                    var originalLoadCached = window.app.loadCachedJob.bind(window.app);
+                    window.app.loadCachedJob = async function(jobId) {
+                        await originalLoadCached(jobId);
+                        // handleProcessingComplete 已经被包装，会自动调用 setJobId
+                    };
+                    
                     // 如果已有 jobId，设置它
                     if (window.app && window.app.currentJobId) {
+                        console.log('Setting existing chatOCR jobId:', window.app.currentJobId);
                         window.chatOCR.setJobId(window.app.currentJobId);
                     }
+                } else {
+                    console.warn('ChatOCR init failed: initChatOCRIntegration=', typeof initChatOCRIntegration, 'window.app=', !!window.app);
                 }
-            }, 600);
+            }, 800);
         });
     </script>
     

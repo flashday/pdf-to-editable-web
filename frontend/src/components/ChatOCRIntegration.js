@@ -32,13 +32,21 @@ class ChatOCRIntegration {
             const response = await fetch(`${this.options.apiBaseUrl}/api/llm/status`);
             const data = await response.json();
             
-            if (data.success) {
-                this.llmAvailable = data.data.available;
+            console.log('LLM status response:', data);
+            
+            if (data.success && data.data) {
+                // API 返回 data.data.available 或 data.data.llm_available
+                this.llmAvailable = data.data.available || data.data.llm_available || false;
+                console.log('LLM available:', this.llmAvailable);
                 this.updateButtonStates();
                 
                 if (!this.llmAvailable) {
                     console.log('LLM service not available, smart features disabled');
                 }
+            } else {
+                console.log('LLM status check failed:', data);
+                this.llmAvailable = false;
+                this.updateButtonStates();
             }
         } catch (error) {
             console.error('Failed to check LLM status:', error);
@@ -247,16 +255,20 @@ class ChatOCRIntegration {
         
         const canUse = this.llmAvailable && this.currentJobId;
         
+        console.log('updateButtonStates: llmAvailable=', this.llmAvailable, 'currentJobId=', this.currentJobId, 'canUse=', canUse);
+        
         if (extractBtn) {
             extractBtn.disabled = !canUse;
             extractBtn.title = canUse ? '智能信息提取' : 
                               (!this.llmAvailable ? 'LLM 服务不可用' : '请先上传文档');
+            console.log('extractBtn.disabled =', extractBtn.disabled);
         }
         
         if (qaBtn) {
             qaBtn.disabled = !canUse;
             qaBtn.title = canUse ? '文档问答' : 
                          (!this.llmAvailable ? 'LLM 服务不可用' : '请先上传文档');
+            console.log('qaBtn.disabled =', qaBtn.disabled);
         }
         
         if (statusDot) {
