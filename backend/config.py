@@ -92,8 +92,8 @@ class ChatOCRConfig:
     CHUNK_OVERLAP = int(os.environ.get('CHUNK_OVERLAP', '50'))
     
     # RAG 检索配置
-    # 10 页文档约 20-40 个分块，Top-15 可覆盖约 50%
-    RAG_TOP_K = int(os.environ.get('RAG_TOP_K', '15'))
+    # 10 页文档约 30-40 个分块，Top-30 可覆盖约 80%
+    RAG_TOP_K = int(os.environ.get('RAG_TOP_K', '30'))
     
     # LLM 上下文限制（字符数）
     # 128K tokens ≈ 50-60K 中文字符，保守设置 32000
