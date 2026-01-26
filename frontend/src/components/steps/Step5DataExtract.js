@@ -49,6 +49,29 @@ export class Step5DataExtract {
      * 显示组件
      */
     show() {
+        console.log('Step5DataExtract: Showing Step 5 UI');
+        
+        // 隐藏步骤4相关界面
+        const blockList = document.getElementById('blockList');
+        const confirmArea = document.getElementById('preEntryConfirmArea');
+        const imagePanel = document.querySelector('.image-panel');
+        const downloadButtons = document.getElementById('downloadButtons');
+        const confidenceReport = document.getElementById('confidenceReport');
+        const editModeToggle = document.getElementById('editModeToggle');
+        const markdownView = document.getElementById('markdownView');
+        
+        if (blockList) blockList.style.display = 'none';
+        if (confirmArea) confirmArea.style.display = 'none';
+        if (imagePanel) imagePanel.style.display = 'none';
+        if (downloadButtons) downloadButtons.style.display = 'none';
+        if (confidenceReport) confidenceReport.style.display = 'none';
+        if (editModeToggle) editModeToggle.style.display = 'none';
+        if (markdownView) markdownView.style.display = 'none';
+        
+        // 隐藏步骤6容器（如果存在）
+        const step6Container = document.getElementById('step6Container');
+        if (step6Container) step6Container.style.display = 'none';
+        
         this.render();
         this.bindEvents();
     }
@@ -57,7 +80,10 @@ export class Step5DataExtract {
      * 隐藏组件
      */
     hide() {
-        // 清理工作
+        const step5Container = document.getElementById('step5Container');
+        if (step5Container) {
+            step5Container.style.display = 'none';
+        }
     }
 
     /**
@@ -439,7 +465,30 @@ export class Step5DataExtract {
      * 确认并进入下一步
      */
     confirmAndProceed() {
+        // 隐藏步骤5界面
+        const step5Container = document.getElementById('step5Container');
+        if (step5Container) step5Container.style.display = 'none';
+        
         eventBus.emit(EVENTS.STEP_COMPLETED, { step: 5 });
+        
+        // 切换到步骤6界面
+        this.switchToStep6();
+    }
+    
+    /**
+     * 切换到步骤6界面
+     */
+    switchToStep6() {
+        // 显示步骤6界面
+        if (window.step6Component) {
+            window.step6Component.show();
+        } else {
+            // 动态加载 Step6
+            import('./Step6Confirmation.js').then(module => {
+                window.step6Component = new module.Step6Confirmation(document.body);
+                window.step6Component.show();
+            });
+        }
     }
 }
 

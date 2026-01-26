@@ -18,6 +18,54 @@ export class Step4PreEntry {
      * 显示组件
      */
     show() {
+        console.log('Step4PreEntry: Showing Step 4 UI');
+        
+        // 确保上传区域隐藏
+        const uploadSection = document.querySelector('.upload-section');
+        if (uploadSection) uploadSection.style.display = 'none';
+        
+        // 确保主内容区域可见（左右分栏布局）
+        const mainContent = document.getElementById('mainContent');
+        if (mainContent) {
+            mainContent.classList.add('visible');
+            mainContent.style.display = 'flex';
+            mainContent.style.flexDirection = 'row';
+            mainContent.style.width = '100%';
+            mainContent.style.height = 'calc(100vh - 200px)';
+            mainContent.style.minHeight = '500px';
+        }
+        
+        // 显示步骤4的界面元素
+        const imagePanel = document.querySelector('.image-panel');
+        const editorPanel = document.querySelector('.editor-panel');
+        const blockList = document.getElementById('blockList');
+        const downloadButtons = document.getElementById('downloadButtons');
+        const confidenceReport = document.getElementById('confidenceReport');
+        const editModeToggle = document.getElementById('editModeToggle');
+        
+        if (imagePanel) {
+            imagePanel.style.display = 'flex';
+            imagePanel.style.flex = '0 0 50%';
+            imagePanel.style.width = '50%';
+            imagePanel.style.maxWidth = '50%';
+        }
+        if (editorPanel) {
+            editorPanel.style.display = 'flex';
+            editorPanel.style.flex = '0 0 50%';
+            editorPanel.style.width = '50%';
+            editorPanel.style.maxWidth = '50%';
+        }
+        if (blockList) blockList.style.display = 'flex';
+        if (downloadButtons) downloadButtons.style.display = 'flex';
+        if (confidenceReport) confidenceReport.style.display = 'block';
+        if (editModeToggle) editModeToggle.style.display = 'flex';
+        
+        // 隐藏步骤5和步骤6的容器
+        const step5Container = document.getElementById('step5Container');
+        const step6Container = document.getElementById('step6Container');
+        if (step5Container) step5Container.style.display = 'none';
+        if (step6Container) step6Container.style.display = 'none';
+        
         this.render();
         this.bindEvents();
     }
@@ -406,6 +454,42 @@ export class Step4PreEntry {
         
         // 通知步骤完成
         eventBus.emit(EVENTS.STEP_COMPLETED, { step: 4 });
+        
+        // 切换到步骤5界面
+        this.switchToStep5();
+    }
+    
+    /**
+     * 切换到步骤5界面
+     */
+    switchToStep5() {
+        console.log('Step4PreEntry: Switching to Step 5');
+        
+        // 隐藏步骤4相关界面
+        const blockList = document.getElementById('blockList');
+        const confirmArea = document.getElementById('preEntryConfirmArea');
+        const imagePanel = document.querySelector('.image-panel');
+        const downloadButtons = document.getElementById('downloadButtons');
+        const confidenceReport = document.getElementById('confidenceReport');
+        const editModeToggle = document.getElementById('editModeToggle');
+        
+        if (blockList) blockList.style.display = 'none';
+        if (confirmArea) confirmArea.style.display = 'none';
+        if (imagePanel) imagePanel.style.display = 'none';
+        if (downloadButtons) downloadButtons.style.display = 'none';
+        if (confidenceReport) confidenceReport.style.display = 'none';
+        if (editModeToggle) editModeToggle.style.display = 'none';
+        
+        // 显示步骤5界面
+        if (window.step5Component) {
+            window.step5Component.show();
+        } else {
+            // 动态加载 Step5
+            import('./Step5DataExtract.js').then(module => {
+                window.step5Component = new module.Step5DataExtract(document.body);
+                window.step5Component.show();
+            });
+        }
     }
 }
 

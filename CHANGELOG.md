@@ -8,6 +8,81 @@
 
 ---
 
+## [2026-01-27] - 步骤界面独立化 & 数据提取 API 修复
+
+### 步骤界面独立显示修复
+
+**问题**：各步骤界面之间相互干扰，切换步骤时旧界面元素仍然可见
+
+**修复内容**：
+- 步骤 4（预录入）显示左右分栏布局（左：原始文档图片，右：Block 列表）
+- 切换到步骤 4 时隐藏上传区域
+- 更新 CSS 布局：`.main-content`、`.image-panel`、`.editor-panel` 设置明确的 50% 宽度
+- 添加 `showStep4UI()` 方法处理步骤 4 界面显示
+- 更新 `loadCachedJob()` 函数正确设置布局样式
+
+**修改文件**：
+- `frontend/src/index.js`
+- `frontend/src/utils/globalFunctions.js`
+- `frontend/src/styles/layout.css`
+- `frontend/src/components/steps/Step4PreEntry.js`
+
+---
+
+### 步骤 4 到步骤 5 确认按钮
+
+**问题**：步骤 4 预录入编辑完成后，没有按钮可以进入步骤 5
+
+**修复内容**：
+- 添加 `renderStep4ConfirmButton()` 方法
+- 添加全局函数：
+  - `window.createStep4ConfirmButton()` - 创建绿色确认按钮
+  - `window.confirmStep4AndProceed()` - 处理步骤转换
+  - `window.switchToStep5UI()` - 切换到步骤 5 界面
+- 按钮显示在编辑面板底部："✓ 确认并进入步骤5（数据提取）"
+- 修复按钮可见性问题：
+  - `.editor-panel` 从 `overflow: hidden` 改为 `overflow: visible`
+  - 确认按钮添加 `position: sticky; bottom: 0; z-index: 100`
+  - 添加 `flex-shrink: 0; min-height: 60px` 防止按钮被压缩
+
+**修改文件**：
+- `frontend/src/index.js`
+- `frontend/src/utils/globalFunctions.js`
+- `frontend/src/styles/layout.css`
+- `frontend/src/styles/components.css`
+- `frontend/src/index.html`
+
+---
+
+### 步骤 5 数据提取 API 修复
+
+**问题**：点击"开始提取"按钮报错 `Unexpected token '<', "<!doctype "... is not valid JSON`
+
+**根因**：
+1. 前端调用 `/api/llm/extract` 但后端只有 `/api/extract-info`
+2. API 返回的 `LLMResponse` 是对象，但代码用字典方法访问（`.get()`）
+3. JSON 解析正则 `r'\{[^{}]*\}'` 无法匹配多字段的嵌套 JSON
+
+**修复内容**：
+- 新增三个 API 端点到 `backend/api/chatocr_routes.py`：
+  - `POST /api/llm/extract` - 使用 LLM 从文本提取指定字段
+  - `POST /api/llm/qa` - 使用 LLM 回答文档问题
+  - `GET /api/checkpoint-config` - 获取检查点配置
+- 修复 `LLMResponse` 对象访问方式：
+  - `result.get('success')` → `result.success`
+  - `result.get('response')` → `result.content`
+  - `result.get('error')` → `result.error_message`
+- 改进 JSON 解析逻辑，支持多种格式：
+  1. 直接解析整个响应
+  2. 提取 ```json ... ``` 代码块
+  3. 找到最外层 `{...}` 对象（支持嵌套）
+  4. 解析失败时返回原始响应
+
+**修改文件**：
+- `backend/api/chatocr_routes.py`
+
+---
+
 ## [2026-01-26] - V3 前端升级完成
 
 ### 前端 V3 升级 - 测试覆盖完成

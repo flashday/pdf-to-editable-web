@@ -94,6 +94,275 @@ def get_llm_status():
         return _error_response(f"检查 LLM 状态失败: {str(e)}", 500)
 
 
+@chatocr_bp.route('/llm/extract', methods=['POST'])
+def llm_extract():
+    """
+    POST /api/llm/extract
+    使用 LLM 从文本中提取指定字段
+    
+    请求体:
+    {
+        "text": "文档全文内容...",
+        "fields": ["字段1", "字段2", ...],
+        "template": "发票"  // 可选，模板名称
+    }
+    
+    响应:
+    {
+        "success": true,
+        "data": {
+            "字段1": "值1",
+            "字段2": "值2",
+            ...
+        }
+    }
+    """
+    try:
+        # 检查服务是否可用
+        service = get_chatocr_service()
+        if not service:
+            return _error_response("ChatOCR 功能未启用", 503, "SERVICE_DISABLED")
+        
+        # 解析请求
+        data = request.get_json()
+        if not data:
+            return _error_response("请求体不能为空", 400, "INVALID_REQUEST")
+        
+        text = data.get('text', '')
+        fields = data.get('fields', [])
+        template_name = data.get('template', '自定义')
+        
+        if not text:
+            return _error_response("text 不能为空", 400, "MISSING_TEXT")
+        
+        if not fields or len(fields) == 0:
+            return _error_response("fields 不能为空", 400, "MISSING_FIELDS")
+        
+        # 构建提取 prompt
+        fields_str = '\n'.join([f"- {field}" for field in fields])
+        prompt = f"""请从以下文档内容中提取指定字段的值。
+
+文档内容：
+{text[:8000]}
+
+需要提取的字段：
+{fields_str}
+
+请以 JSON 格式返回提取结果，格式如下：
+{{
+  "字段名1": "提取的值1",
+  "字段名2": "提取的值2"
+}}
+
+如果某个字段在文档中找不到对应的值，请将该字段的值设为 null。
+只返回 JSON，不要有其他内容。"""
+
+        # 调用 LLM
+        result = service.llm_service.generate(prompt)
+        
+        # LLMResponse 是对象，不是字典
+        if not result or not result.success:
+            return _error_response(
+                result.error_message if result else 'LLM 调用失败',
+                500,
+                "LLM_ERROR"
+            )
+        
+        # 解析 LLM 返回的 JSON
+        response_text = result.content or '{}'
+        
+        # 尝试提取 JSON 部分
+        import json
+        import re
+        
+        logger.info(f"LLM response for extraction: {response_text[:500]}...")
+        
+        extracted_data = None
+        
+        # 方法1: 尝试直接解析整个响应
+        try:
+            extracted_data = json.loads(response_text.strip())
+        except json.JSONDecodeError:
+            pass
+        
+        # 方法2: 尝试找到 JSON 代码块 (```json ... ```)
+        if extracted_data is None:
+            json_block_match = re.search(r'```(?:json)?\s*(\{[\s\S]*?\})\s*```', response_text)
+            if json_block_match:
+                try:
+                    extracted_data = json.loads(json_block_match.group(1))
+                except json.JSONDecodeError:
+                    pass
+        
+        # 方法3: 尝试找到最外层的 JSON 对象（支持嵌套）
+        if extracted_data is None:
+            # 找到第一个 { 和最后一个 }
+            first_brace = response_text.find('{')
+            last_brace = response_text.rfind('}')
+            if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
+                json_str = response_text[first_brace:last_brace + 1]
+                try:
+                    extracted_data = json.loads(json_str)
+                except json.JSONDecodeError:
+                    pass
+        
+        # 方法4: 如果所有方法都失败，返回原始响应
+        if extracted_data is None:
+            logger.warning(f"Failed to parse JSON from LLM response, returning raw text")
+            extracted_data = {fields[0]: response_text} if fields else {"raw_response": response_text}
+        
+        return _success_response(extracted_data)
+        
+    except Exception as e:
+        logger.error(f"LLM extract failed: {e}")
+        return _error_response(f"信息提取失败: {str(e)}", 500)
+
+
+@chatocr_bp.route('/llm/qa', methods=['POST'])
+def llm_qa():
+    """
+    POST /api/llm/qa
+    使用 LLM 回答关于文档的问题
+    
+    请求体:
+    {
+        "question": "问题内容",
+        "context": "文档上下文",
+        "job_id": "xxx"  // 可选
+    }
+    
+    响应:
+    {
+        "success": true,
+        "data": {
+            "answer": "回答内容",
+            "confidence": 0.85
+        }
+    }
+    """
+    try:
+        # 检查服务是否可用
+        service = get_chatocr_service()
+        if not service:
+            return _error_response("ChatOCR 功能未启用", 503, "SERVICE_DISABLED")
+        
+        # 解析请求
+        data = request.get_json()
+        if not data:
+            return _error_response("请求体不能为空", 400, "INVALID_REQUEST")
+        
+        question = data.get('question', '')
+        context = data.get('context', '')
+        job_id = data.get('job_id')
+        
+        if not question:
+            return _error_response("question 不能为空", 400, "MISSING_QUESTION")
+        
+        # 如果有 job_id，尝试从缓存获取文档内容
+        if job_id and not context:
+            from backend.services.job_cache import job_cache
+            job_data = job_cache.get_job(job_id)
+            if job_data and job_data.get('result'):
+                blocks = job_data['result'].get('blocks', [])
+                context = '\n'.join([
+                    block.get('data', {}).get('text', '') 
+                    for block in blocks 
+                    if block.get('data', {}).get('text')
+                ])
+        
+        if not context:
+            return _error_response("context 不能为空", 400, "MISSING_CONTEXT")
+        
+        # 构建问答 prompt
+        prompt = f"""请根据以下文档内容回答问题。
+
+文档内容：
+{context[:8000]}
+
+问题：{question}
+
+请直接回答问题，如果文档中没有相关信息，请说明"文档中未找到相关信息"。"""
+
+        # 调用 LLM
+        result = service.llm_service.generate(prompt)
+        
+        # LLMResponse 是对象，不是字典
+        if not result or not result.success:
+            return _error_response(
+                result.error_message if result else 'LLM 调用失败',
+                500,
+                "LLM_ERROR"
+            )
+        
+        answer = result.content or '无法回答'
+        
+        # 简单的置信度估算
+        confidence = 0.8
+        if '未找到' in answer or '没有' in answer or '不确定' in answer:
+            confidence = 0.3
+        elif len(answer) > 50:
+            confidence = 0.9
+        
+        return _success_response({
+            "answer": answer,
+            "confidence": confidence
+        })
+        
+    except Exception as e:
+        logger.error(f"LLM QA failed: {e}")
+        return _error_response(f"问答失败: {str(e)}", 500)
+
+
+@chatocr_bp.route('/checkpoint-config', methods=['GET'])
+def get_checkpoint_config():
+    """
+    GET /api/checkpoint-config
+    获取检查点配置
+    
+    响应:
+    {
+        "success": true,
+        "checkpoints": [
+            {"question": "文档中的主要金额是多少？"},
+            {"question": "文档的日期是什么？"},
+            ...
+        ]
+    }
+    """
+    try:
+        # 尝试从配置文件加载
+        import os
+        import json
+        
+        # 从项目根目录查找配置文件
+        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        config_path = os.path.join(base_dir, 'config', 'checkpoint_config.json')
+        
+        if os.path.exists(config_path):
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+                return jsonify({
+                    "success": True,
+                    "checkpoints": config.get('checkpoints', [])
+                })
+        
+        # 默认检查点
+        default_checkpoints = [
+            {"question": "文档中的主要金额是多少？"},
+            {"question": "文档的日期是什么？"},
+            {"question": "文档涉及的主要当事方有哪些？"}
+        ]
+        
+        return jsonify({
+            "success": True,
+            "checkpoints": default_checkpoints
+        })
+        
+    except Exception as e:
+        logger.error(f"Failed to get checkpoint config: {e}")
+        return _error_response(f"获取检查点配置失败: {str(e)}", 500)
+
+
 @chatocr_bp.route('/templates', methods=['GET'])
 def get_templates():
     """

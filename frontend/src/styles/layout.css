@@ -68,19 +68,24 @@
     display: none;
     height: calc(100vh - 200px);
     min-height: 500px;
+    width: 100%;
 }
 
 .main-content.visible {
-    display: flex;
+    display: flex !important;
+    flex-direction: row;
 }
 
 /* 左侧图像预览区 */
 .image-panel {
-    flex: 1;
+    flex: 0 0 50%;
+    width: 50%;
+    max-width: 50%;
     border-right: 1px solid var(--border-color);
     display: flex;
     flex-direction: column;
     background: var(--bg-secondary);
+    overflow: hidden;
 }
 
 .image-panel-header {
@@ -111,10 +116,13 @@
 
 /* 右侧编辑器区 */
 .editor-panel {
-    flex: 1;
+    flex: 0 0 50%;
+    width: 50%;
+    max-width: 50%;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
+    overflow: visible;
+    position: relative;
 }
 
 .editor-panel-header {
@@ -242,15 +250,16 @@
 /* 平板设备 (768px - 1023px) */
 @media (max-width: 1023px) {
     .main-content.visible {
-        flex-direction: column;
-        height: auto;
-        min-height: auto;
+        flex-direction: column !important;
+        height: auto !important;
+        min-height: auto !important;
     }
     
     .image-panel,
     .editor-panel {
-        flex: none;
-        width: 100%;
+        flex: none !important;
+        width: 100% !important;
+        max-width: 100% !important;
         border-right: none;
         border-bottom: 1px solid var(--border-color);
     }

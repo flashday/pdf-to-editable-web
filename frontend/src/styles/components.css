@@ -1165,3 +1165,58 @@
     max-width: 300px;
     margin: 0 auto;
 }
+
+
+/* ============================================
+   步骤4确认按钮区域
+   ============================================ */
+
+#step4ConfirmArea {
+    padding: 15px;
+    border-top: 2px solid #28a745;
+    background: linear-gradient(to right, #f8f9fa, #e8f5e9);
+    text-align: center;
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+    align-items: center;
+    flex-shrink: 0;
+    min-height: 60px;
+    position: sticky;
+    bottom: 0;
+    z-index: 100;
+    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+}
+
+#step4ConfirmBtn {
+    background: #28a745;
+    color: white;
+    border: none;
+    padding: 12px 28px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 15px;
+    font-weight: 600;
+    transition: all 0.2s;
+    box-shadow: 0 2px 4px rgba(40, 167, 69, 0.3);
+}
+
+#step4ConfirmBtn:hover {
+    background: #218838;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(40, 167, 69, 0.4);
+}
+
+#step4ConfirmBtn:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 4px rgba(40, 167, 69, 0.3);
+}
+
+/* 确保编辑器容器不会遮挡确认按钮 */
+.editor-container {
+    flex: 1;
+    overflow: auto;
+    padding: 15px;
+    position: relative;
+    padding-bottom: 80px; /* 为确认按钮留出空间 */
+}

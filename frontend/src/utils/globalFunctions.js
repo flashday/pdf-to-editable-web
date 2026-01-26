@@ -68,13 +68,75 @@ window.deleteHistoryJob = async function(jobId) {
 
 window.loadCachedJob = async function(jobId) {
     console.log('Loading cached job:', jobId);
+    
+    // 安全的步骤状态更新函数
+    var setStepStatus = function(step, status, time) {
+        if (window.app && typeof window.app.setStepStatus === 'function') {
+            window.app.setStepStatus(step, status, time);
+        } else {
+            // 直接操作 DOM 作为后备方案
+            var stepEl = document.getElementById('step' + step);
+            if (stepEl) {
+                stepEl.classList.remove('completed', 'active', 'waiting', 'error');
+                if (status) stepEl.classList.add(status);
+            }
+            var timeEl = document.getElementById('step' + step + 'Time');
+            if (timeEl && time !== undefined) timeEl.textContent = time;
+        }
+    };
+    
     try {
+        // 更新步骤状态：从缓存加载，跳过步骤1-3
+        setStepStatus(1, 'completed', '✓');
+        setStepStatus(2, 'completed', '缓存');
+        setStepStatus(3, 'completed', '缓存');
+        setStepStatus(4, 'active', '加载中...');
+        
+        // 立即隐藏上传区域，显示主内容区域（左右分栏）
+        var uploadSection = document.querySelector('.upload-section');
+        if (uploadSection) {
+            uploadSection.style.display = 'none';
+            console.log('loadCachedJob: upload-section hidden');
+        }
+        
+        // 显示主内容区域（左边图片，右边编辑器）
+        var mainContent = document.getElementById('mainContent');
+        if (mainContent) {
+            mainContent.classList.add('visible');
+            mainContent.style.display = 'flex';
+            mainContent.style.flexDirection = 'row';
+            mainContent.style.width = '100%';
+            mainContent.style.height = 'calc(100vh - 200px)';
+            mainContent.style.minHeight = '500px';
+            console.log('loadCachedJob: mainContent visible with flex row');
+        }
+        
+        // 确保左侧图像面板可见
+        var imagePanel = document.querySelector('.image-panel');
+        if (imagePanel) {
+            imagePanel.style.display = 'flex';
+            imagePanel.style.flex = '0 0 50%';
+            imagePanel.style.width = '50%';
+            imagePanel.style.maxWidth = '50%';
+            console.log('loadCachedJob: image-panel visible (50%)');
+        }
+        
+        // 确保右侧编辑器面板可见
+        var editorPanel = document.querySelector('.editor-panel');
+        if (editorPanel) {
+            editorPanel.style.display = 'flex';
+            editorPanel.style.flex = '0 0 50%';
+            editorPanel.style.width = '50%';
+            editorPanel.style.maxWidth = '50%';
+            console.log('loadCachedJob: editor-panel visible (50%)');
+        }
+        
         var res = await fetch('/api/jobs/' + jobId + '/cached-result');
         var data = await res.json();
         console.log('Cached result:', data);
         if (data.status === 'completed' && data.result) {
             console.log('✅ 缓存加载成功！blocks: ' + data.result.blocks.length);
-            if (window.app) {
+            if (window.app && typeof window.app.handleProcessingComplete === 'function') {
                 var processedData = {
                     blocks: data.result.blocks,
                     confidence_report: data.confidence_report,
@@ -82,12 +144,32 @@ window.loadCachedJob = async function(jobId) {
                     cached: true
                 };
                 await window.app.handleProcessingComplete(processedData, jobId);
+                setStepStatus(4, 'completed', '✓');
+                
+                // 确保确认按钮被渲染
+                if (window.app && typeof window.app.renderStep4ConfirmButton === 'function') {
+                    console.log('loadCachedJob: Calling renderStep4ConfirmButton');
+                    window.app.renderStep4ConfirmButton();
+                } else {
+                    console.log('loadCachedJob: renderStep4ConfirmButton not available, creating button directly');
+                    window.createStep4ConfirmButton();
+                }
+            } else {
+                console.error('window.app.handleProcessingComplete not available');
+                alert('❌ 应用未完全加载，请刷新页面后重试');
             }
         } else {
+            setStepStatus(4, 'error', '失败');
+            // 恢复上传区域显示
+            if (uploadSection) uploadSection.style.display = 'block';
             alert('❌ 加载失败: ' + (data.error || '未知错误'));
         }
     } catch(e) {
         console.error('Error:', e);
+        setStepStatus(4, 'error', '失败');
+        // 恢复上传区域显示
+        var uploadSection = document.querySelector('.upload-section');
+        if (uploadSection) uploadSection.style.display = 'block';
         alert('❌ 加载失败: ' + e.message);
     }
 };
@@ -394,6 +476,126 @@ window.downloadBlob = function(blob, filename) {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+};
+
+// ============================================================
+// 步骤4确认按钮
+// ============================================================
+
+window.createStep4ConfirmButton = function() {
+    console.log('createStep4ConfirmButton: Creating confirm button');
+    var confirmArea = document.getElementById('step4ConfirmArea');
+    
+    // 如果已存在，先移除
+    if (confirmArea) {
+        confirmArea.remove();
+    }
+    
+    // 创建确认区域
+    confirmArea = document.createElement('div');
+    confirmArea.id = 'step4ConfirmArea';
+    confirmArea.style.cssText = 'padding: 15px; border-top: 2px solid #28a745; background: linear-gradient(to right, #f8f9fa, #e8f5e9); text-align: center; display: flex; justify-content: center; gap: 15px; align-items: center; flex-shrink: 0; min-height: 60px; position: sticky; bottom: 0; z-index: 100;';
+    
+    // 提示文字
+    var hint = document.createElement('span');
+    hint.style.cssText = 'color: #666; font-size: 13px;';
+    hint.textContent = '预录入完成后，点击确认进入下一步 →';
+    
+    // 确认按钮
+    var confirmBtn = document.createElement('button');
+    confirmBtn.id = 'step4ConfirmBtn';
+    confirmBtn.textContent = '✓ 确认并进入步骤5（数据提取）';
+    confirmBtn.style.cssText = 'background: #28a745; color: white; border: none; padding: 12px 28px; border-radius: 6px; cursor: pointer; font-size: 15px; font-weight: 600; transition: all 0.2s; box-shadow: 0 2px 4px rgba(40,167,69,0.3);';
+    confirmBtn.onmouseover = function() { 
+        this.style.background = '#218838'; 
+        this.style.transform = 'translateY(-1px)';
+        this.style.boxShadow = '0 4px 8px rgba(40,167,69,0.4)';
+    };
+    confirmBtn.onmouseout = function() { 
+        this.style.background = '#28a745'; 
+        this.style.transform = 'translateY(0)';
+        this.style.boxShadow = '0 2px 4px rgba(40,167,69,0.3)';
+    };
+    confirmBtn.onclick = function(e) { 
+        e.preventDefault();
+        e.stopPropagation();
+        console.log('Step 4 confirm button clicked!');
+        window.confirmStep4AndProceed();
+    };
+    
+    confirmArea.appendChild(hint);
+    confirmArea.appendChild(confirmBtn);
+    
+    // 添加到编辑器面板底部
+    var editorPanel = document.querySelector('.editor-panel');
+    if (editorPanel) {
+        editorPanel.appendChild(confirmArea);
+        console.log('createStep4ConfirmButton: Button added to editor panel');
+        
+        // 确保按钮可见 - 滚动到底部
+        setTimeout(function() {
+            confirmArea.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        }, 100);
+    } else {
+        console.error('createStep4ConfirmButton: editor-panel not found!');
+    }
+};
+
+window.confirmStep4AndProceed = function() {
+    console.log('confirmStep4AndProceed: Proceeding to Step 5');
+    
+    // 更新步骤状态
+    if (window.app && typeof window.app.setStepStatus === 'function') {
+        window.app.setStepStatus(4, 'completed', '✓');
+        window.app.setStepStatus(5, 'active');
+    } else {
+        // 直接操作 DOM
+        var step4 = document.getElementById('step4');
+        var step5 = document.getElementById('step5');
+        if (step4) {
+            step4.classList.remove('active');
+            step4.classList.add('completed');
+        }
+        if (step5) {
+            step5.classList.remove('waiting');
+            step5.classList.add('active');
+        }
+    }
+    
+    // 切换到步骤5界面
+    window.switchToStep5UI();
+};
+
+window.switchToStep5UI = function() {
+    console.log('switchToStep5UI: Switching to Step 5');
+    
+    // 隐藏步骤4相关界面
+    var blockList = document.getElementById('blockList');
+    var confirmArea = document.getElementById('step4ConfirmArea');
+    var imagePanel = document.querySelector('.image-panel');
+    var downloadButtons = document.getElementById('downloadButtons');
+    var confidenceReport = document.getElementById('confidenceReport');
+    var editModeToggle = document.getElementById('editModeToggle');
+    var markdownView = document.getElementById('markdownView');
+    
+    if (blockList) blockList.style.display = 'none';
+    if (confirmArea) confirmArea.style.display = 'none';
+    if (imagePanel) imagePanel.style.display = 'none';
+    if (downloadButtons) downloadButtons.style.display = 'none';
+    if (confidenceReport) confidenceReport.style.display = 'none';
+    if (editModeToggle) editModeToggle.style.display = 'none';
+    if (markdownView) markdownView.style.display = 'none';
+    
+    // 隐藏 OCR 区域标记
+    document.querySelectorAll('.ocr-region').forEach(function(el) { el.style.display = 'none'; });
+    
+    // 显示步骤5界面
+    if (window.step5Component && typeof window.step5Component.show === 'function') {
+        window.step5Component.show();
+    } else {
+        console.error('switchToStep5UI: step5Component not found');
+        alert('步骤5组件未加载，请刷新页面');
+    }
 };
 
 // ============================================================

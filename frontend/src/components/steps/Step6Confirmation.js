@@ -16,6 +16,27 @@ export class Step6Confirmation {
      * 显示组件
      */
     show() {
+        console.log('Step6Confirmation: Showing Step 6 UI');
+        
+        // 隐藏步骤5界面
+        const step5Container = document.getElementById('step5Container');
+        if (step5Container) step5Container.style.display = 'none';
+        
+        // 确保步骤4的元素也隐藏
+        const blockList = document.getElementById('blockList');
+        const confirmArea = document.getElementById('preEntryConfirmArea');
+        const imagePanel = document.querySelector('.image-panel');
+        const downloadButtons = document.getElementById('downloadButtons');
+        const confidenceReport = document.getElementById('confidenceReport');
+        const editModeToggle = document.getElementById('editModeToggle');
+        
+        if (blockList) blockList.style.display = 'none';
+        if (confirmArea) confirmArea.style.display = 'none';
+        if (imagePanel) imagePanel.style.display = 'none';
+        if (downloadButtons) downloadButtons.style.display = 'none';
+        if (confidenceReport) confidenceReport.style.display = 'none';
+        if (editModeToggle) editModeToggle.style.display = 'none';
+        
         this.render();
         this.bindEvents();
     }
@@ -278,6 +299,42 @@ export class Step6Confirmation {
         
         stateManager.set('finalStatus', 'rejected');
         eventBus.emit(EVENTS.FINAL_REJECTED);
+        
+        // 返回步骤4
+        this.returnToStep4();
+    }
+    
+    /**
+     * 返回步骤4界面
+     */
+    returnToStep4() {
+        console.log('Step6Confirmation: Returning to Step 4');
+        
+        // 隐藏步骤6界面
+        const step6Container = document.getElementById('step6Container');
+        if (step6Container) step6Container.style.display = 'none';
+        
+        // 显示步骤4界面元素
+        const blockList = document.getElementById('blockList');
+        const confirmArea = document.getElementById('preEntryConfirmArea');
+        const imagePanel = document.querySelector('.image-panel');
+        const downloadButtons = document.getElementById('downloadButtons');
+        const confidenceReport = document.getElementById('confidenceReport');
+        const editModeToggle = document.getElementById('editModeToggle');
+        
+        if (blockList) blockList.style.display = 'block';
+        if (confirmArea) confirmArea.style.display = 'block';
+        if (imagePanel) imagePanel.style.display = 'flex';
+        if (downloadButtons) downloadButtons.style.display = 'flex';
+        if (confidenceReport) confidenceReport.style.display = 'block';
+        if (editModeToggle) editModeToggle.style.display = 'flex';
+        
+        // 更新步骤状态
+        if (window.app) {
+            window.app.setStepStatus(4, 'active');
+            window.app.setStepStatus(5, 'waiting');
+            window.app.setStepStatus(6, 'waiting');
+        }
     }
 
     /**
