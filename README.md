@@ -630,7 +630,10 @@ VECTOR_DB_PATH=./vector_db                # 向量数据库路径
 # 文本分块配置
 CHUNK_SIZE=500                            # 分块大小（字符）
 CHUNK_OVERLAP=50                          # 分块重叠（字符）
-RAG_TOP_K=5                               # 检索返回数量
+RAG_TOP_K=30                              # 检索返回数量（10页文档约80%覆盖率）
+
+# LLM 上下文限制
+LLM_CONTEXT_LIMIT=32000                   # 发送给 LLM 的最大字符数
 ```
 
 ### 配置说明
@@ -645,7 +648,8 @@ RAG_TOP_K=5                               # 检索返回数量
 | `EMBEDDING_MODEL` | `BAAI/bge-small-zh-v1.5` | 中文向量化模型 |
 | `CHUNK_SIZE` | `500` | 文本分块大小 |
 | `CHUNK_OVERLAP` | `50` | 分块重叠大小 |
-| `RAG_TOP_K` | `5` | 检索返回的相关片段数量 |
+| `RAG_TOP_K` | `30` | 检索返回的相关片段数量（10页文档约80%覆盖率） |
+| `LLM_CONTEXT_LIMIT` | `32000` | 发送给 LLM 的最大字符数 |
 
 ### 降级策略
 
