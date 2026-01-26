@@ -1,0 +1,296 @@
+/* steps.css - 工作流步骤进度条样式 (V3 Enhanced) */
+
+/* 流程进度条容器 */
+.workflow-container {
+    display: flex;
+    gap: 20px;
+    padding: 15px 20px;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-light);
+}
+
+.workflow-progress {
+    flex: 1;
+}
+
+.workflow-steps {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: relative;
+    padding: 0 10px;
+}
+
+/* 步骤连接线 - 增强版 */
+.workflow-steps::before {
+    content: '';
+    position: absolute;
+    top: 20px;
+    left: 40px;
+    right: 40px;
+    height: 3px;
+    background: linear-gradient(90deg, #dee2e6 0%, #dee2e6 100%);
+    z-index: 0;
+    transition: background 0.5s ease;
+}
+
+/* 进度线覆盖层 */
+.workflow-steps::after {
+    content: '';
+    position: absolute;
+    top: 20px;
+    left: 40px;
+    height: 3px;
+    background: linear-gradient(90deg, var(--success-color), #007bff);
+    z-index: 0;
+    width: 0;
+    transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 根据当前步骤动态调整进度线 */
+.workflow-steps[data-current-step="2"]::after { width: calc((100% - 80px) * 0.2); }
+.workflow-steps[data-current-step="3"]::after { width: calc((100% - 80px) * 0.4); }
+.workflow-steps[data-current-step="4"]::after { width: calc((100% - 80px) * 0.6); }
+.workflow-steps[data-current-step="5"]::after { width: calc((100% - 80px) * 0.8); }
+.workflow-steps[data-current-step="6"]::after { width: calc(100% - 80px); }
+
+/* 单个步骤 */
+.workflow-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+    z-index: 1;
+    cursor: default;
+    transition: transform 0.3s ease;
+}
+
+.workflow-step:hover {
+    transform: translateY(-2px);
+}
+
+.step-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-full);
+    background: #dee2e6;
+    color: #6c757d;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 14px;
+    margin-bottom: 8px;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    border: 3px solid #fff;
+    box-shadow: var(--shadow-sm);
+    position: relative;
+    overflow: hidden;
+}
+
+/* 步骤图标光晕效果 */
+.step-icon::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    transition: width 0.4s ease, height 0.4s ease;
+}
+
+.workflow-step.active .step-icon::before,
+.workflow-step.completed .step-icon::before {
+    width: 100%;
+    height: 100%;
+}
+
+.step-label {
+    font-size: 12px;
+    color: #6c757d;
+    text-align: center;
+    max-width: 80px;
+    transition: all 0.3s ease;
+}
+
+.step-time {
+    font-size: 10px;
+    color: var(--text-light);
+    margin-top: 2px;
+    transition: all 0.3s ease;
+    opacity: 0;
+    transform: translateY(-5px);
+}
+
+.workflow-step.completed .step-time,
+.workflow-step.active .step-time,
+.workflow-step.error .step-time {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+/* 步骤状态 - 已完成 */
+.workflow-step.completed .step-icon {
+    background: var(--success-color);
+    color: white;
+    box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+    animation: stepComplete 0.5s ease;
+}
+
+.workflow-step.completed .step-label {
+    color: var(--success-color);
+    font-weight: 500;
+}
+
+@keyframes stepComplete {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.2); }
+    100% { transform: scale(1); }
+}
+
+/* 步骤状态 - 进行中 */
+.workflow-step.active .step-icon {
+    background: linear-gradient(135deg, #007bff, #0056b3);
+    color: white;
+    animation: activePulse 2s infinite;
+    box-shadow: 0 4px 15px rgba(0, 123, 255, 0.4);
+}
+
+.workflow-step.active .step-label {
+    color: #007bff;
+    font-weight: 600;
+}
+
+@keyframes activePulse {
+    0%, 100% { 
+        transform: scale(1);
+        box-shadow: 0 4px 15px rgba(0, 123, 255, 0.4);
+    }
+    50% { 
+        transform: scale(1.08);
+        box-shadow: 0 6px 20px rgba(0, 123, 255, 0.6);
+    }
+}
+
+/* 步骤状态 - 等待中 */
+.workflow-step.waiting .step-icon {
+    background: linear-gradient(135deg, var(--warning-color), #e0a800);
+    color: #212529;
+    animation: waitingPulse 1.5s infinite;
+}
+
+.workflow-step.waiting .step-label {
+    color: #856404;
+}
+
+@keyframes waitingPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
+/* 步骤状态 - 错误 */
+.workflow-step.error .step-icon {
+    background: linear-gradient(135deg, var(--danger-color), #c82333);
+    color: white;
+    animation: errorShake 0.5s ease;
+    box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3);
+}
+
+.workflow-step.error .step-label {
+    color: var(--danger-color);
+}
+
+@keyframes errorShake {
+    0%, 100% { transform: translateX(0); }
+    20%, 60% { transform: translateX(-3px); }
+    40%, 80% { transform: translateX(3px); }
+}
+
+/* LLM 状态指示器 */
+.llm-status-bar {
+    display: flex;
+    gap: 20px;
+    padding: 8px 15px;
+    background: linear-gradient(135deg, #f0f4f8, #e8ecf0);
+    border-radius: var(--radius-md);
+    margin-top: 10px;
+    font-size: 12px;
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.llm-status-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: transform 0.2s ease;
+}
+
+.llm-status-item:hover {
+    transform: scale(1.02);
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: var(--radius-full);
+    background: var(--text-light);
+    transition: all 0.3s ease;
+}
+
+.status-dot.checking {
+    background: var(--warning-color);
+    animation: dotBlink 1s infinite;
+    box-shadow: 0 0 8px rgba(255, 193, 7, 0.5);
+}
+
+.status-dot.online {
+    background: var(--success-color);
+    box-shadow: 0 0 8px rgba(40, 167, 69, 0.5);
+    animation: dotGlow 2s infinite;
+}
+
+.status-dot.offline {
+    background: var(--danger-color);
+    box-shadow: 0 0 8px rgba(220, 53, 69, 0.5);
+}
+
+.status-dot.warning {
+    background: #fd7e14;
+    box-shadow: 0 0 8px rgba(253, 126, 20, 0.5);
+    animation: dotBlink 1.5s infinite;
+}
+
+@keyframes dotBlink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+}
+
+@keyframes dotGlow {
+    0%, 100% { box-shadow: 0 0 8px rgba(40, 167, 69, 0.5); }
+    50% { box-shadow: 0 0 12px rgba(40, 167, 69, 0.8); }
+}
+
+.status-label {
+    color: #495057;
+    font-weight: 500;
+}
+
+.status-text {
+    color: #6c757d;
+    transition: color 0.3s ease;
+}
+
+.status-text.online {
+    color: var(--success-color);
+}
+
+.status-text.offline {
+    color: var(--danger-color);
+}
+
+.status-text.warning {
+    color: #fd7e14;
+}

@@ -1,0 +1,408 @@
+/**
+ * globalFunctions.js - 全局函数
+ * 从 index.html 抽取的全局函数
+ */
+
+// 当前视图模式
+window.currentViewMode = 'block';
+window.markdownCache = null;
+
+// ============================================================
+// 历史面板相关
+// ============================================================
+
+window.loadHistoryPanel = async function() {
+    console.log('loadHistoryPanel called');
+    var list = document.getElementById('historyPanelList');
+    if (!list) { console.error('historyPanelList not found'); return; }
+    
+    list.innerHTML = '<div class="history-panel-empty">加载中...</div>';
+    
+    try {
+        var res = await fetch('/api/jobs/history?limit=10');
+        var data = await res.json();
+        console.log('History data:', data);
+        
+        if (data.success && data.jobs && data.jobs.length > 0) {
+            var sortedJobs = data.jobs.slice().sort(function(a, b) {
+                return a.created_at - b.created_at;
+            });
+            list.innerHTML = sortedJobs.map(function(job, idx) {
+                var seq = idx + 1;
+                return '<div class="history-panel-item" data-job-id="' + job.job_id + '">' +
+                    '<span class="item-seq">' + seq + '</span>' +
+                    '<span class="item-icon" onclick="window.loadCachedJob(\'' + job.job_id + '\')">📄</span>' +
+                    '<div class="item-info" onclick="window.loadCachedJob(\'' + job.job_id + '\')">' +
+                        '<div class="item-name" title="' + job.filename + '">' + job.filename + '</div>' +
+                        '<div class="item-meta">' + Math.round(job.processing_time) + 's</div>' +
+                    '</div>' +
+                    '<span class="item-badge">' + (job.confidence_score ? Math.round(job.confidence_score * 100) + '%' : '-') + '</span>' +
+                    '<button class="item-delete" onclick="event.stopPropagation();window.deleteHistoryJob(\'' + job.job_id + '\')" title="删除">🗑</button>' +
+                '</div>';
+            }).join('');
+        } else {
+            list.innerHTML = '<div class="history-panel-empty">暂无缓存记录</div>';
+        }
+    } catch(e) {
+        console.error('loadHistoryPanel error:', e);
+        list.innerHTML = '<div class="history-panel-empty">加载失败</div>';
+    }
+};
+
+window.deleteHistoryJob = async function(jobId) {
+    if (!confirm('确定删除此缓存记录？')) return;
+    try {
+        var res = await fetch('/api/jobs/' + jobId, { method: 'DELETE' });
+        var data = await res.json();
+        if (data.success) {
+            console.log('Deleted job:', jobId);
+            window.loadHistoryPanel();
+        } else {
+            alert('删除失败: ' + (data.error || '未知错误'));
+        }
+    } catch(e) {
+        console.error('Delete error:', e);
+        alert('删除失败: ' + e.message);
+    }
+};
+
+window.loadCachedJob = async function(jobId) {
+    console.log('Loading cached job:', jobId);
+    try {
+        var res = await fetch('/api/jobs/' + jobId + '/cached-result');
+        var data = await res.json();
+        console.log('Cached result:', data);
+        if (data.status === 'completed' && data.result) {
+            console.log('✅ 缓存加载成功！blocks: ' + data.result.blocks.length);
+            if (window.app) {
+                var processedData = {
+                    blocks: data.result.blocks,
+                    confidence_report: data.confidence_report,
+                    markdown: data.markdown,
+                    cached: true
+                };
+                await window.app.handleProcessingComplete(processedData, jobId);
+            }
+        } else {
+            alert('❌ 加载失败: ' + (data.error || '未知错误'));
+        }
+    } catch(e) {
+        console.error('Error:', e);
+        alert('❌ 加载失败: ' + e.message);
+    }
+};
+
+// ============================================================
+// 服务状态检查
+// ============================================================
+
+window.checkAllServicesStatus = async function() {
+    console.log('checkAllServicesStatus called');
+    
+    try {
+        var res = await fetch('/api/services/status');
+        var data = await res.json();
+        console.log('Services status:', data);
+        
+        // OCR 状态
+        if (data.ocr) {
+            if (data.ocr.loaded) {
+                var timeStr = data.ocr.time > 0 ? ' (' + data.ocr.time.toFixed(1) + 's)' : '';
+                window.updateStatusItem('llmOcrStatus', 'llmOcrText', 'online', '就绪' + timeStr);
+            } else if (data.ocr.loading) {
+                window.updateStatusItem('llmOcrStatus', 'llmOcrText', 'checking', '加载中...');
+            } else {
+                window.updateStatusItem('llmOcrStatus', 'llmOcrText', 'offline', data.ocr.error || '未就绪');
+            }
+        }
+        
+        // LLM 状态
+        if (data.llm) {
+            if (data.llm.loaded) {
+                window.updateStatusItem('llmLlmStatus', 'llmLlmText', 'online', 'Ollama');
+            } else if (data.llm.loading) {
+                window.updateStatusItem('llmLlmStatus', 'llmLlmText', 'checking', '检测中...');
+            } else {
+                window.updateStatusItem('llmLlmStatus', 'llmLlmText', 'offline', data.llm.error || '未连接');
+            }
+        }
+        
+        // RAG 状态
+        if (data.rag) {
+            if (data.rag.loaded) {
+                var ragTimeStr = data.rag.time > 0 ? ' (' + data.rag.time.toFixed(1) + 's)' : '';
+                window.updateStatusItem('llmRagStatus', 'llmRagText', 'online', '就绪' + ragTimeStr);
+            } else if (data.rag.loading) {
+                window.updateStatusItem('llmRagStatus', 'llmRagText', 'checking', '加载中...');
+            } else {
+                window.updateStatusItem('llmRagStatus', 'llmRagText', 'warning', data.rag.error || '未启用');
+            }
+        }
+        
+        // 如果还有服务在加载中，继续轮询
+        if (!data.all_ready) {
+            setTimeout(window.checkAllServicesStatus, 3000);
+        }
+    } catch (e) {
+        console.log('Services status check failed:', e.message);
+        window.checkAllServicesStatusFallback();
+    }
+};
+
+window.checkAllServicesStatusFallback = async function() {
+    try {
+        var healthRes = await fetch('/api/health');
+        var healthData = await healthRes.json();
+        if (healthData.status === 'healthy') {
+            window.updateStatusItem('llmOcrStatus', 'llmOcrText', 'online', '就绪');
+        } else {
+            window.updateStatusItem('llmOcrStatus', 'llmOcrText', 'warning', '加载中');
+        }
+    } catch (e) {
+        window.updateStatusItem('llmOcrStatus', 'llmOcrText', 'offline', '离线');
+    }
+    
+    try {
+        var llmRes = await fetch('/api/llm/status');
+        var llmData = await llmRes.json();
+        
+        if (llmData.success && llmData.data) {
+            var d = llmData.data;
+            if (d.llm_available || d.available) {
+                window.updateStatusItem('llmLlmStatus', 'llmLlmText', 'online', d.model || 'Ollama');
+            } else {
+                window.updateStatusItem('llmLlmStatus', 'llmLlmText', 'offline', '未连接');
+            }
+            if (d.rag_available) {
+                window.updateStatusItem('llmRagStatus', 'llmRagText', 'online', '就绪');
+            } else {
+                window.updateStatusItem('llmRagStatus', 'llmRagText', 'warning', '未启用');
+            }
+        } else {
+            window.updateStatusItem('llmLlmStatus', 'llmLlmText', 'offline', '不可用');
+            window.updateStatusItem('llmRagStatus', 'llmRagText', 'offline', '不可用');
+        }
+    } catch (e) {
+        window.updateStatusItem('llmLlmStatus', 'llmLlmText', 'offline', '检测失败');
+        window.updateStatusItem('llmRagStatus', 'llmRagText', 'offline', '检测失败');
+    }
+};
+
+window.updateStatusItem = function(itemId, textId, status, text) {
+    var item = document.getElementById(itemId);
+    var textEl = document.getElementById(textId);
+    if (!item || !textEl) return;
+    
+    var dot = item.querySelector('.status-dot');
+    if (dot) {
+        dot.classList.remove('checking', 'online', 'offline', 'warning');
+        dot.classList.add(status);
+    }
+    textEl.classList.remove('online', 'offline', 'warning');
+    textEl.classList.add(status);
+    textEl.textContent = text;
+};
+
+// ============================================================
+// 视图切换
+// ============================================================
+
+window.switchViewMode = async function(mode) {
+    console.log('Switching view mode to:', mode);
+    window.currentViewMode = mode;
+    
+    var blockBtn = document.getElementById('blockModeBtn');
+    var mdBtn = document.getElementById('markdownModeBtn');
+    var blockList = document.getElementById('blockList');
+    var mdView = document.getElementById('markdownView');
+    var ocrRegions = document.querySelectorAll('.ocr-region');
+    
+    if (mode === 'block') {
+        blockBtn.classList.add('active');
+        mdBtn.classList.remove('active');
+        blockList.style.display = 'flex';
+        mdView.style.display = 'none';
+        ocrRegions.forEach(function(r) { r.style.display = 'block'; });
+    } else {
+        blockBtn.classList.remove('active');
+        mdBtn.classList.add('active');
+        blockList.style.display = 'none';
+        mdView.style.display = 'block';
+        ocrRegions.forEach(function(r) { r.style.display = 'none'; });
+        await window.loadMarkdownView();
+    }
+};
+
+window.loadMarkdownView = async function() {
+    var jobId = window.app ? window.app.currentJobId : null;
+    var mdContent = document.getElementById('markdownContent');
+    
+    if (!jobId) {
+        mdContent.innerHTML = '<div class="markdown-loading">请先上传文件或选择历史任务</div>';
+        return;
+    }
+    
+    if (window.markdownCache && window.markdownCache.jobId === jobId) {
+        mdContent.innerHTML = window.markdownCache.html;
+        return;
+    }
+    
+    mdContent.innerHTML = '<div class="markdown-loading">⏳ 加载Markdown中...</div>';
+    
+    try {
+        var res = await fetch('/api/convert/' + jobId + '/markdown');
+        var data = await res.json();
+        
+        if (data.markdown) {
+            var html = window.renderMarkdown(data.markdown);
+            mdContent.innerHTML = html;
+            window.markdownCache = { jobId: jobId, html: html, raw: data.markdown };
+        } else {
+            mdContent.innerHTML = '<div class="markdown-loading">❌ Markdown不可用</div>';
+        }
+    } catch(e) {
+        console.error('Load markdown error:', e);
+        mdContent.innerHTML = '<div class="markdown-loading">❌ 加载失败: ' + e.message + '</div>';
+    }
+};
+
+window.renderMarkdown = function(md) {
+    if (typeof marked !== 'undefined') {
+        marked.setOptions({ gfm: true, breaks: true, tables: true });
+        return marked.parse(md);
+    } else {
+        return '<pre>' + md.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</pre>';
+    }
+};
+
+// ============================================================
+// 下载函数
+// ============================================================
+
+window.downloadMarkdown = async function() {
+    var jobId = window.app ? window.app.currentJobId : null;
+    if (!jobId) { alert('无任务ID'); return; }
+    
+    try {
+        if (window.markdownCache && window.markdownCache.jobId === jobId && window.markdownCache.raw) {
+            window.downloadBlob(new Blob([window.markdownCache.raw], {type: 'text/markdown'}), 'ocr-result-' + jobId + '.md');
+            return;
+        }
+        
+        var res = await fetch('/api/convert/' + jobId + '/markdown');
+        var data = await res.json();
+        if (data.markdown) {
+            window.downloadBlob(new Blob([data.markdown], {type: 'text/markdown'}), 'ocr-result-' + jobId + '.md');
+        } else {
+            alert('Markdown不可用');
+        }
+    } catch(e) {
+        alert('下载失败: ' + e.message);
+    }
+};
+
+window.downloadConfidenceLog = async function() {
+    var jobId = window.app ? window.app.currentJobId : null;
+    if (!jobId) { alert('无任务ID'); return; }
+    try {
+        var res = await fetch('/api/convert/' + jobId + '/confidence-log');
+        var data = await res.json();
+        if (data.confidence_log) {
+            window.downloadBlob(new Blob([data.confidence_log], {type: 'text/markdown'}), 'confidence-log-' + jobId + '.md');
+        } else {
+            alert('错误: ' + (data.error || '日志不可用'));
+        }
+    } catch(e) {
+        alert('下载失败: ' + e.message);
+    }
+};
+
+window.downloadPPStructure = async function() {
+    var jobId = window.app ? window.app.currentJobId : null;
+    if (!jobId) { alert('无任务ID'); return; }
+    try {
+        var res = await fetch('/api/convert/' + jobId + '/raw-output');
+        var data = await res.json();
+        if (data.ppstructure_json) {
+            window.downloadBlob(new Blob([JSON.stringify(data.ppstructure_json, null, 2)], {type: 'application/json'}), 'ppstructure-' + jobId + '.json');
+        } else {
+            alert('错误: 布局JSON不可用');
+        }
+    } catch(e) { alert('下载失败: ' + e.message); }
+};
+
+window.downloadOriginalFile = async function() {
+    var jobId = window.app ? window.app.currentJobId : null;
+    if (!jobId) { alert('无任务ID'); return; }
+    try {
+        var res = await fetch('/api/convert/' + jobId + '/original-file');
+        if (!res.ok) {
+            var errData = await res.json();
+            alert('错误: ' + (errData.error || '下载失败'));
+            return;
+        }
+        var contentDisposition = res.headers.get('Content-Disposition');
+        var filename = 'original-' + jobId;
+        if (contentDisposition) {
+            var match = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+            if (match && match[1]) {
+                filename = match[1].replace(/['"]/g, '');
+            }
+        }
+        var blob = await res.blob();
+        window.downloadBlob(blob, filename);
+    } catch(e) {
+        console.error('Download original file error:', e);
+        alert('下载失败: ' + e.message);
+    }
+};
+
+window.downloadRawOcrJson = async function() {
+    var jobId = window.app ? window.app.currentJobId : null;
+    if (!jobId) { alert('无任务ID'); return; }
+    try {
+        var res = await fetch('/api/convert/' + jobId + '/raw-output');
+        var data = await res.json();
+        if (data.raw_json) {
+            window.downloadBlob(new Blob([JSON.stringify(data.raw_json, null, 2)], {type: 'application/json'}), 'raw-ocr-' + jobId + '.json');
+        } else {
+            alert('错误: OCR结果JSON不可用');
+        }
+    } catch(e) { alert('下载失败: ' + e.message); }
+};
+
+window.downloadRawHtml = async function() {
+    var jobId = window.app ? window.app.currentJobId : null;
+    if (!jobId) { alert('无任务ID'); return; }
+    try {
+        var res = await fetch('/api/convert/' + jobId + '/raw-output');
+        var data = await res.json();
+        if (data.raw_html) {
+            window.downloadBlob(new Blob([data.raw_html], {type: 'text/html'}), 'raw-ocr-' + jobId + '.html');
+        } else {
+            alert('错误: HTML结果不可用');
+        }
+    } catch(e) { alert('下载失败: ' + e.message); }
+};
+
+window.downloadBlob = function(blob, filename) {
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+};
+
+// ============================================================
+// 页面初始化
+// ============================================================
+
+document.addEventListener('DOMContentLoaded', function() {
+    setTimeout(function() {
+        window.loadHistoryPanel();
+        window.checkAllServicesStatus();
+    }, 200);
+});

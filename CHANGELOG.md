@@ -8,7 +8,98 @@
 
 ---
 
+## [2026-01-26] - V3 前端升级完成
+
+### 前端 V3 升级 - 测试覆盖完成
+
+**新增测试文件**：
+- `frontend/src/__tests__/EventBus.test.js` - 事件总线测试（15 用例）
+  - 事件订阅/发布、多监听器、取消订阅、once 单次监听、通配符事件
+- `frontend/src/__tests__/StateManager.test.js` - 状态管理测试（20 用例）
+  - 状态获取/设置、嵌套路径、批量更新、状态订阅、持久化
+- `frontend/src/__tests__/StepManager.test.js` - 步骤管理测试（25 用例）
+  - 步骤导航、状态转换、验证逻辑、事件触发、边界条件
+- `backend/tests/test_v3_api.py` - V3 API 测试（24 用例）
+  - 修正记录 API、检查点 API、最终结果 API、模板管理 API、检查点配置 API
+- `backend/tests/test_v3_integration.py` - V3 集成测试（13 用例）
+  - 完整工作流测试、修正数据传递、驳回流程、数据持久化
+
+**测试结果**：
+- 前端测试：193 passed（含 V3 核心服务 60 用例）
+- 后端测试：37 passed（含 V3 API 37 用例）
+- 全部测试通过 ✅
+
+---
+
+### 前端 V3 升级 - 组件化重构（续）
+
+**UI/UX 增强**：
+- 步骤进度条动画：完成动画、脉冲效果、错误抖动
+- 面板展开/收起动画：平滑过渡、悬停效果
+- 加载状态指示器：全局加载遮罩、内联加载器、骨架屏
+- Toast 通知系统：成功/错误/警告/信息四种类型
+- 响应式布局：支持桌面、平板、手机、横屏手机
+- 高对比度模式支持
+- 减少动画模式支持（prefers-reduced-motion）
+
+**index.js 集成**：
+- 版本更新至 v9
+- 集成 Step1ModelLoad、Step2FileUpload、Step3Recognition 组件
+- 添加 EventBus 事件监听
+- 保持向后兼容
+
+**文档更新**：
+- README.md 添加 V3 功能说明
+- 创建 MDFiles/USER_GUIDE.md 用户操作指南
+
+---
+
 ## [2026-01-26]
+
+### 前端 V3 升级 - 组件化重构
+
+**新增功能**：
+- 6 步工作流：模型加载 → 上传文件 → 智能识别 → 预录入 → 数据提取 → 财务确认
+- 步骤 4 预录入：Block 编辑、修正记录保存
+- 步骤 5 数据提取：模板选择、LLM 关键词提取、检查点验证
+- 步骤 6 财务确认：检查点答案展示、JSON 数据复制、确认/驳回流程
+
+**新增文件**：
+- CSS 模块化：
+  - `frontend/src/styles/base.css` - CSS 变量和重置样式
+  - `frontend/src/styles/layout.css` - 主布局样式
+  - `frontend/src/styles/steps.css` - 工作流步骤进度条样式
+  - `frontend/src/styles/panels.css` - 面板样式
+  - `frontend/src/styles/components.css` - 组件样式
+- 核心服务：
+  - `frontend/src/services/EventBus.js` - 事件总线（发布订阅模式）
+  - `frontend/src/services/StateManager.js` - 全局状态管理器
+  - `frontend/src/services/StepManager.js` - 步骤管理器
+- 步骤组件：
+  - `frontend/src/components/steps/Step1ModelLoad.js` - 模型加载
+  - `frontend/src/components/steps/Step2FileUpload.js` - 文件上传
+  - `frontend/src/components/steps/Step3Recognition.js` - 智能识别
+  - `frontend/src/components/steps/Step4PreEntry.js` - 预录入
+  - `frontend/src/components/steps/Step5DataExtract.js` - 数据提取
+  - `frontend/src/components/steps/Step6Confirmation.js` - 财务确认
+- 面板组件：
+  - `frontend/src/components/panels/HistoryPanel.js` - 历史缓存面板
+  - `frontend/src/components/panels/TemplatePanel.js` - 关键词模板面板
+  - `frontend/src/components/panels/CheckpointPanel.js` - 检查点设定面板
+- 后端 API：
+  - `backend/api/v3_routes.py` - V3 升级 API 路由
+    - `/api/corrections/{job_id}` - 修正记录 API
+    - `/api/checkpoints/{job_id}` - 检查点结果 API
+    - `/api/final/{job_id}` - 最终结果 API
+    - `/api/templates` - 模板管理 API
+    - `/api/checkpoint-config` - 检查点配置 API
+
+**修改文件**：
+- `frontend/src/index.html` - 精简重写，引入 CSS 模块
+- `frontend/src/utils/globalFunctions.js` - 抽取内联脚本
+- `backend/api/__init__.py` - 注册 V3 路由
+
+---
 
 ### 3e09306 - fix: 修复智能提取和问答按钮灰色不可用问题
 

@@ -1,0 +1,64 @@
+[
+  {
+    "id": "tpl_1769441688142",
+    "name": "测试模板",
+    "fields": [
+      "公司名称",
+      "金额",
+      "日期"
+    ],
+    "isPreset": false,
+    "createdAt": "2026-01-26T23:34:48Z"
+  },
+  {
+    "id": "tpl_1769441688178",
+    "name": "新名称",
+    "fields": [
+      "field1",
+      "field2"
+    ],
+    "isPreset": false,
+    "createdAt": "2026-01-26T23:34:48Z",
+    "updatedAt": "2026-01-26T23:34:48Z"
+  },
+  {
+    "id": "tpl_1769441688652",
+    "name": "持久化模板",
+    "fields": [
+      "field1"
+    ],
+    "isPreset": false,
+    "createdAt": "2026-01-26T23:34:48Z"
+  },
+  {
+    "id": "tpl_1769441724046",
+    "name": "测试模板",
+    "fields": [
+      "公司名称",
+      "金额",
+      "日期"
+    ],
+    "isPreset": false,
+    "createdAt": "2026-01-26T23:35:24Z"
+  },
+  {
+    "id": "tpl_1769441724087",
+    "name": "新名称",
+    "fields": [
+      "field1",
+      "field2"
+    ],
+    "isPreset": false,
+    "createdAt": "2026-01-26T23:35:24Z",
+    "updatedAt": "2026-01-26T23:35:24Z"
+  },
+  {
+    "id": "tpl_1769441724649",
+    "name": "持久化模板",
+    "fields": [
+      "field1"
+    ],
+    "isPreset": false,
+    "createdAt": "2026-01-26T23:35:24Z"
+  }
+]

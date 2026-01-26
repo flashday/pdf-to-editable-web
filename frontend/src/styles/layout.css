@@ -1,0 +1,607 @@
+/* layout.css - 主布局样式 */
+
+/* 主容器 */
+.container {
+    max-width: 1600px;
+    margin: 0 auto;
+    background: white;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+    overflow: hidden;
+}
+
+/* 头部 */
+.header {
+    background: var(--bg-dark);
+    color: white;
+    padding: 15px 20px;
+    text-align: center;
+}
+
+.header h1 {
+    margin: 0 0 5px 0;
+    font-size: 1.5em;
+}
+
+.header p {
+    margin: 0;
+    opacity: 0.8;
+    font-size: 0.9em;
+}
+
+/* 上传区域 */
+.upload-section {
+    padding: 15px 20px;
+    border-bottom: 1px solid var(--border-light);
+    background: var(--bg-secondary);
+}
+
+.upload-area {
+    border: 2px dashed var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 25px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color var(--transition-normal), background-color var(--transition-normal);
+}
+
+.upload-area:hover {
+    border-color: var(--primary-color);
+    background-color: #f0f8ff;
+}
+
+.upload-area.dragover {
+    border-color: var(--primary-hover);
+    background-color: var(--bg-tertiary);
+}
+
+.upload-area p {
+    margin: 5px 0;
+}
+
+.file-input {
+    display: none;
+}
+
+/* 主内容区域 - 左右分栏 */
+.main-content {
+    display: none;
+    height: calc(100vh - 200px);
+    min-height: 500px;
+}
+
+.main-content.visible {
+    display: flex;
+}
+
+/* 左侧图像预览区 */
+.image-panel {
+    flex: 1;
+    border-right: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-secondary);
+}
+
+.image-panel-header {
+    padding: 10px 15px;
+    background: var(--bg-tertiary);
+    border-bottom: 1px solid var(--border-color);
+    font-weight: 600;
+    color: #495057;
+}
+
+.image-container {
+    flex: 1;
+    overflow: auto;
+    padding: 10px;
+    position: relative;
+}
+
+.image-wrapper {
+    position: relative;
+    display: inline-block;
+}
+
+#documentImage {
+    max-width: 100%;
+    height: auto;
+    display: block;
+}
+
+/* 右侧编辑器区 */
+.editor-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.editor-panel-header {
+    padding: 8px 12px;
+    background: var(--bg-tertiary);
+    border-bottom: 1px solid var(--border-color);
+    font-weight: 600;
+    color: #495057;
+    font-size: 0.9em;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.editor-container {
+    flex: 1;
+    overflow: auto;
+    padding: 15px;
+    position: relative;
+}
+
+/* 底层图像背景 */
+.editor-background-image {
+    position: absolute;
+    top: 15px;
+    left: 15px;
+    right: 15px;
+    opacity: 0.15;
+    pointer-events: none;
+    z-index: 0;
+}
+
+.editor-background-image img {
+    width: 100%;
+    height: auto;
+}
+
+#editor {
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    min-height: 300px;
+    background: rgba(255, 255, 255, 0.85);
+    position: relative;
+    z-index: 1;
+}
+
+/* 图例 */
+.legend {
+    padding: 8px 15px;
+    background: var(--bg-secondary);
+    border-top: 1px solid var(--border-color);
+    font-size: 0.85em;
+    color: var(--text-secondary);
+}
+
+.legend-item {
+    display: inline-flex;
+    align-items: center;
+    margin-right: 15px;
+}
+
+.legend-color {
+    width: 16px;
+    height: 16px;
+    border-radius: 3px;
+    margin-right: 5px;
+}
+
+.legend-color.normal {
+    background: rgba(52, 152, 219, 0.3);
+    border: 2px solid rgba(52, 152, 219, 0.6);
+}
+
+.legend-color.hover {
+    background: rgba(231, 76, 60, 0.3);
+    border: 2px solid rgba(231, 76, 60, 0.8);
+}
+
+.legend-color.active {
+    background: rgba(46, 204, 113, 0.3);
+    border: 2px solid rgba(46, 204, 113, 0.8);
+}
+
+
+/* ============================================
+   V3 响应式布局适配
+   ============================================ */
+
+/* 大屏幕 (>= 1400px) */
+@media (min-width: 1400px) {
+    .container {
+        max-width: 1600px;
+    }
+    
+    .main-content {
+        height: calc(100vh - 180px);
+    }
+    
+    .workflow-steps {
+        padding: 0 20px;
+    }
+}
+
+/* 中等屏幕 (1024px - 1399px) */
+@media (max-width: 1399px) {
+    .container {
+        max-width: 100%;
+        margin: 0;
+        border-radius: 0;
+    }
+    
+    .workflow-container {
+        flex-direction: column;
+        gap: 15px;
+    }
+    
+    .history-panel {
+        width: 100%;
+        max-height: 150px;
+    }
+}
+
+/* 平板设备 (768px - 1023px) */
+@media (max-width: 1023px) {
+    .main-content.visible {
+        flex-direction: column;
+        height: auto;
+        min-height: auto;
+    }
+    
+    .image-panel,
+    .editor-panel {
+        flex: none;
+        width: 100%;
+        border-right: none;
+        border-bottom: 1px solid var(--border-color);
+    }
+    
+    .image-panel {
+        max-height: 50vh;
+    }
+    
+    .editor-panel {
+        min-height: 400px;
+    }
+    
+    .workflow-steps {
+        flex-wrap: wrap;
+        gap: 10px;
+        justify-content: center;
+    }
+    
+    .workflow-steps::before,
+    .workflow-steps::after {
+        display: none;
+    }
+    
+    .workflow-step {
+        flex: 0 0 auto;
+        min-width: 80px;
+    }
+    
+    .llm-status-bar {
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+    
+    .editor-panel-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .download-buttons {
+        width: 100%;
+        justify-content: flex-start;
+    }
+}
+
+/* 小平板/大手机 (576px - 767px) */
+@media (max-width: 767px) {
+    .header {
+        padding: 12px 15px;
+    }
+    
+    .header h1 {
+        font-size: 1.2em;
+    }
+    
+    .upload-section {
+        padding: 10px 15px;
+    }
+    
+    .upload-area {
+        padding: 20px 15px;
+    }
+    
+    .workflow-container {
+        padding: 10px 15px;
+    }
+    
+    .workflow-step {
+        min-width: 60px;
+    }
+    
+    .step-icon {
+        width: 32px;
+        height: 32px;
+        font-size: 12px;
+    }
+    
+    .step-label {
+        font-size: 10px;
+        max-width: 60px;
+    }
+    
+    .step-time {
+        font-size: 9px;
+    }
+    
+    .llm-status-bar {
+        gap: 12px;
+        font-size: 11px;
+    }
+    
+    .history-panel {
+        padding: 10px;
+    }
+    
+    .history-panel-item {
+        padding: 6px 8px;
+        font-size: 11px;
+    }
+    
+    .image-panel {
+        max-height: 40vh;
+    }
+    
+    .editor-container {
+        padding: 10px;
+    }
+    
+    .block-item {
+        padding: 10px;
+    }
+    
+    .block-content {
+        font-size: 0.85em;
+    }
+    
+    /* 弹窗适配 */
+    .text-edit-popup {
+        width: 90vw;
+        max-width: 300px;
+    }
+    
+    .table-edit-popup {
+        min-width: auto;
+        width: 95vw;
+        max-height: 90vh;
+    }
+    
+    .smart-panel {
+        width: calc(100vw - 40px);
+        right: 20px;
+        left: 20px;
+    }
+    
+    /* Toast 适配 */
+    .toast-container {
+        left: 10px;
+        right: 10px;
+        top: auto;
+        bottom: 20px;
+    }
+    
+    .toast {
+        max-width: 100%;
+    }
+}
+
+/* 手机设备 (< 576px) */
+@media (max-width: 575px) {
+    body {
+        font-size: 14px;
+    }
+    
+    .header {
+        padding: 10px;
+    }
+    
+    .header h1 {
+        font-size: 1.1em;
+    }
+    
+    .header p {
+        font-size: 0.8em;
+    }
+    
+    .workflow-container {
+        padding: 8px 10px;
+    }
+    
+    .workflow-steps {
+        gap: 5px;
+    }
+    
+    .workflow-step {
+        min-width: 50px;
+    }
+    
+    .step-icon {
+        width: 28px;
+        height: 28px;
+        font-size: 11px;
+        border-width: 2px;
+    }
+    
+    .step-label {
+        font-size: 9px;
+        max-width: 50px;
+    }
+    
+    .llm-status-bar {
+        gap: 8px;
+        padding: 6px 10px;
+        font-size: 10px;
+    }
+    
+    .status-dot {
+        width: 6px;
+        height: 6px;
+    }
+    
+    .upload-area {
+        padding: 15px 10px;
+    }
+    
+    .upload-area p {
+        font-size: 0.9em;
+    }
+    
+    .image-panel {
+        max-height: 35vh;
+    }
+    
+    .editor-panel {
+        min-height: 300px;
+    }
+    
+    .block-item {
+        padding: 8px;
+    }
+    
+    .block-header {
+        flex-wrap: wrap;
+        gap: 4px;
+    }
+    
+    .block-edit-type,
+    .block-struct-type {
+        font-size: 0.65em;
+        padding: 1px 4px;
+    }
+    
+    .block-content {
+        font-size: 0.8em;
+    }
+    
+    .block-meta {
+        font-size: 0.7em;
+    }
+    
+    /* 确认对话框适配 */
+    .confirm-dialog {
+        min-width: auto;
+        width: calc(100vw - 40px);
+        max-width: 350px;
+    }
+    
+    .confirm-dialog-header {
+        padding: 12px 15px;
+    }
+    
+    .confirm-dialog-body {
+        padding: 15px;
+    }
+    
+    .confirm-dialog-footer {
+        padding: 10px 15px;
+        flex-direction: column;
+    }
+    
+    .confirm-dialog-btn {
+        width: 100%;
+    }
+}
+
+/* 横屏手机适配 */
+@media (max-height: 500px) and (orientation: landscape) {
+    .main-content.visible {
+        flex-direction: row;
+        height: calc(100vh - 120px);
+    }
+    
+    .image-panel,
+    .editor-panel {
+        flex: 1;
+        max-height: none;
+        border-bottom: none;
+    }
+    
+    .image-panel {
+        border-right: 1px solid var(--border-color);
+    }
+    
+    .workflow-container {
+        padding: 5px 10px;
+    }
+    
+    .workflow-steps::before,
+    .workflow-steps::after {
+        display: block;
+    }
+}
+
+/* 打印样式 */
+@media print {
+    .header,
+    .upload-section,
+    .workflow-container,
+    .history-panel,
+    .download-buttons,
+    .legend,
+    .toast-container,
+    .loading-overlay {
+        display: none !important;
+    }
+    
+    .main-content.visible {
+        display: block;
+        height: auto;
+    }
+    
+    .image-panel,
+    .editor-panel {
+        width: 100%;
+        border: none;
+        page-break-inside: avoid;
+    }
+    
+    .block-item {
+        break-inside: avoid;
+    }
+}
+
+/* 高对比度模式 */
+@media (prefers-contrast: high) {
+    .workflow-step.completed .step-icon {
+        background: #006400;
+    }
+    
+    .workflow-step.active .step-icon {
+        background: #00008B;
+    }
+    
+    .workflow-step.error .step-icon {
+        background: #8B0000;
+    }
+    
+    .status-dot.online {
+        background: #006400;
+    }
+    
+    .status-dot.offline {
+        background: #8B0000;
+    }
+}
+
+/* 减少动画模式 */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}

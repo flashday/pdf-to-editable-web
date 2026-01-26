@@ -1,0 +1,10 @@
+{
+  "checkpoints": [
+    {
+      "enabled": true,
+      "id": "persist-test",
+      "question": "持久化问题"
+    }
+  ],
+  "updatedAt": "2026-01-26T23:35:24Z"
+}
