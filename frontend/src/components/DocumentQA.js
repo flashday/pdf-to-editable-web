@@ -32,7 +32,10 @@ class DocumentQAPanel {
             <div class="document-qa-panel">
                 <div class="panel-header">
                     <h3>💬 文档问答</h3>
-                    <button class="close-btn" title="关闭">&times;</button>
+                    <div class="header-actions">
+                        <button class="export-btn" title="导出对话日志">📥</button>
+                        <button class="close-btn" title="关闭">&times;</button>
+                    </div>
                 </div>
                 
                 <div class="panel-body">
@@ -100,6 +103,34 @@ class DocumentQAPanel {
                 margin: 0;
                 font-size: 16px;
                 color: #333;
+            }
+            
+            .document-qa-panel .header-actions {
+                display: flex;
+                gap: 8px;
+                align-items: center;
+            }
+            
+            .document-qa-panel .export-btn {
+                background: none;
+                border: 1px solid #ddd;
+                font-size: 14px;
+                cursor: pointer;
+                color: #666;
+                padding: 4px 8px;
+                border-radius: 4px;
+                transition: all 0.2s;
+            }
+            
+            .document-qa-panel .export-btn:hover {
+                background: #f0f0f0;
+                border-color: #ccc;
+                color: #333;
+            }
+            
+            .document-qa-panel .export-btn:disabled {
+                opacity: 0.5;
+                cursor: not-allowed;
             }
             
             .document-qa-panel .close-btn {
@@ -322,6 +353,11 @@ class DocumentQAPanel {
         // 关闭按钮
         this.container.querySelector('.close-btn').addEventListener('click', () => {
             if (this.options.onClose) this.options.onClose();
+        });
+        
+        // 导出按钮
+        this.container.querySelector('.export-btn').addEventListener('click', () => {
+            this.exportConversationLog();
         });
         
         // 输入框
@@ -552,6 +588,76 @@ class DocumentQAPanel {
                 this.submitQuestion();
             });
         });
+    }
+    
+    /**
+     * 导出对话日志为 Markdown 文件
+     */
+    exportConversationLog() {
+        if (this.history.length === 0) {
+            alert('暂无对话记录可导出');
+            return;
+        }
+        
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+        const filename = `document-qa-log-${timestamp}.md`;
+        
+        // 构建 Markdown 内容
+        let content = `# 文档问答对话日志\n\n`;
+        content += `**导出时间**: ${new Date().toLocaleString('zh-CN')}\n`;
+        content += `**文档 Job ID**: ${this.currentJobId || '未知'}\n`;
+        content += `**对话轮数**: ${this.history.length}\n\n`;
+        content += `---\n\n`;
+        
+        this.history.forEach((item, index) => {
+            content += `## 对话 ${index + 1}\n\n`;
+            content += `### 🙋 用户问题\n\n`;
+            content += `${item.question}\n\n`;
+            content += `### 🤖 AI 回答\n\n`;
+            content += `${item.answer.answer}\n\n`;
+            
+            // 添加参考原文
+            if (item.answer.references && item.answer.references.length > 0) {
+                content += `#### 📎 参考原文\n\n`;
+                item.answer.references.forEach((ref, refIndex) => {
+                    content += `> ${refIndex + 1}. "${ref}"\n\n`;
+                });
+            }
+            
+            // 添加元数据
+            content += `#### 📊 元数据\n\n`;
+            content += `| 指标 | 值 |\n`;
+            content += `|------|----|\n`;
+            content += `| 置信度 | ${(item.answer.confidence * 100).toFixed(1)}% |\n`;
+            content += `| 处理时间 | ${item.answer.processing_time.toFixed(2)}s |\n`;
+            content += `| 文档中找到 | ${item.answer.found_in_document ? '是' : '否'} |\n`;
+            
+            if (item.answer.timestamp) {
+                content += `| 回答时间 | ${new Date(item.answer.timestamp).toLocaleString('zh-CN')} |\n`;
+            }
+            
+            content += `\n---\n\n`;
+        });
+        
+        // 添加技术说明
+        content += `## 技术说明\n\n`;
+        content += `- **LLM 模型**: Ollama gpt-oss:20b (私有化部署)\n`;
+        content += `- **RAG 检索**: 基于向量相似度的文档片段检索\n`;
+        content += `- **Embedding**: BAAI/bge-small-zh-v1.5 (中文优化，512维向量)\n`;
+        content += `- **向量数据库**: ChromaDB\n`;
+        
+        // 创建下载
+        const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        console.log(`对话日志已导出: ${filename}`);
     }
 }
 

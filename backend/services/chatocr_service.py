@@ -276,11 +276,13 @@ class ChatOCRService:
         if query and self.rag_service and ChatOCRConfig.ENABLE_RAG:
             try:
                 results = self.rag_service.retrieve(job_id, query, top_k=5)
-                if results and results.documents:
-                    # 合并检索到的文档片段
-                    content = "\n\n".join(results.documents)
-                    logger.info(f"Retrieved {len(results.documents)} chunks via RAG for job {job_id}")
-                    return content
+                if results and results.chunks:
+                    # 从 chunks 中提取文档内容
+                    documents = [chunk.get("document", "") for chunk in results.chunks if chunk.get("document")]
+                    if documents:
+                        content = "\n\n".join(documents)
+                        logger.info(f"Retrieved {len(documents)} chunks via RAG for job {job_id}")
+                        return content
             except Exception as e:
                 logger.warning(f"RAG retrieval failed, falling back to full content: {e}")
         
@@ -451,10 +453,23 @@ class ChatOCRService:
         # 调用 LLM
         try:
             messages = [{"role": "user", "content": prompt}]
-            response = self.llm_service.chat(messages)
+            llm_response = self.llm_service.chat(messages)
+            
+            # 检查 LLM 响应是否成功
+            if not llm_response.success:
+                return ExtractionResult(
+                    job_id=job_id,
+                    fields={field: None for field in extract_fields},
+                    success=False,
+                    error=llm_response.error_message or "LLM 请求失败",
+                    processing_time=time.time() - start_time
+                )
+            
+            # 从 LLMResponse 对象中提取文本内容
+            response_text = llm_response.content
             
             # 解析响应
-            result = self._parse_json_response(response)
+            result = self._parse_json_response(response_text)
             
             if result:
                 # 确保所有字段都有值
@@ -559,10 +574,24 @@ class ChatOCRService:
         # 调用 LLM
         try:
             messages = [{"role": "user", "content": prompt}]
-            response = self.llm_service.chat(messages)
+            llm_response = self.llm_service.chat(messages)
+            
+            # 检查 LLM 响应是否成功
+            if not llm_response.success:
+                return QAResult(
+                    job_id=job_id,
+                    question=question,
+                    answer="LLM 服务请求失败，请稍后重试。",
+                    success=False,
+                    error=llm_response.error_message or "LLM 请求失败",
+                    processing_time=time.time() - start_time
+                )
+            
+            # 从 LLMResponse 对象中提取文本内容
+            response_text = llm_response.content
             
             # 解析响应
-            result = self._parse_json_response(response)
+            result = self._parse_json_response(response_text)
             
             if result:
                 answer = result.get("answer", "")
@@ -591,7 +620,7 @@ class ChatOCRService:
                 return QAResult(
                     job_id=job_id,
                     question=question,
-                    answer=response[:1000] if response else "无法生成回答",
+                    answer=response_text[:1000] if response_text else "无法生成回答",
                     confidence=0.3,
                     processing_time=time.time() - start_time,
                     success=True

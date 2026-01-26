@@ -898,6 +898,61 @@
             50% { transform: scale(1.1); }
         }
         
+        /* ========== LLM 状态指示器 ========== */
+        .llm-status-bar {
+            display: flex;
+            gap: 20px;
+            padding: 8px 15px;
+            background: #f0f4f8;
+            border-radius: 6px;
+            margin-top: 10px;
+            font-size: 12px;
+        }
+        .llm-status-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #adb5bd;
+        }
+        .status-dot.checking {
+            background: #ffc107;
+            animation: blink 1s infinite;
+        }
+        .status-dot.online {
+            background: #28a745;
+        }
+        .status-dot.offline {
+            background: #dc3545;
+        }
+        .status-dot.warning {
+            background: #fd7e14;
+        }
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+        .status-label {
+            color: #495057;
+            font-weight: 500;
+        }
+        .status-text {
+            color: #6c757d;
+        }
+        .status-text.online {
+            color: #28a745;
+        }
+        .status-text.offline {
+            color: #dc3545;
+        }
+        .status-text.warning {
+            color: #fd7e14;
+        }
+        
         /* ========== 右侧历史缓存面板 ========== */
         .history-panel {
             width: 220px;
@@ -1107,6 +1162,24 @@
                         <div class="step-time" id="step4Time"></div>
                     </div>
                 </div>
+                <!-- LLM 状态指示器 -->
+                <div class="llm-status-bar" id="llmStatusBar">
+                    <div class="llm-status-item" id="llmOcrStatus">
+                        <span class="status-dot checking"></span>
+                        <span class="status-label">OCR模型</span>
+                        <span class="status-text" id="llmOcrText">检测中...</span>
+                    </div>
+                    <div class="llm-status-item" id="llmLlmStatus">
+                        <span class="status-dot checking"></span>
+                        <span class="status-label">LLM服务</span>
+                        <span class="status-text" id="llmLlmText">检测中...</span>
+                    </div>
+                    <div class="llm-status-item" id="llmRagStatus">
+                        <span class="status-dot checking"></span>
+                        <span class="status-label">RAG服务</span>
+                        <span class="status-text" id="llmRagText">检测中...</span>
+                    </div>
+                </div>
             </div>
             
             <!-- 右侧：历史缓存记录 -->
@@ -1181,10 +1254,73 @@
                 }
             };
             
-            // 页面加载完成后自动加载历史
+            // 统一检查所有服务状态（OCR + LLM + RAG）
+            window.checkAllServicesStatus = async function() {
+                console.log('checkAllServicesStatus called');
+                
+                // 1. 检查 OCR/后端健康状态
+                try {
+                    var healthRes = await fetch('/api/health');
+                    var healthData = await healthRes.json();
+                    if (healthData.status === 'healthy') {
+                        window.updateStatusItem('llmOcrStatus', 'llmOcrText', 'online', '就绪');
+                    } else {
+                        window.updateStatusItem('llmOcrStatus', 'llmOcrText', 'warning', '加载中');
+                    }
+                } catch (e) {
+                    window.updateStatusItem('llmOcrStatus', 'llmOcrText', 'offline', '离线');
+                }
+                
+                // 2. 检查 LLM + RAG 状态（一个API返回所有信息）
+                try {
+                    var llmRes = await fetch('/api/llm/status');
+                    var llmData = await llmRes.json();
+                    
+                    if (llmData.success && llmData.data) {
+                        var d = llmData.data;
+                        // LLM 状态
+                        if (d.llm_available) {
+                            window.updateStatusItem('llmLlmStatus', 'llmLlmText', 'online', d.model || 'Ollama');
+                        } else {
+                            window.updateStatusItem('llmLlmStatus', 'llmLlmText', 'offline', '未连接');
+                        }
+                        // RAG 状态
+                        if (d.rag_available) {
+                            window.updateStatusItem('llmRagStatus', 'llmRagText', 'online', '就绪');
+                        } else {
+                            window.updateStatusItem('llmRagStatus', 'llmRagText', 'warning', '未启用');
+                        }
+                    } else {
+                        window.updateStatusItem('llmLlmStatus', 'llmLlmText', 'offline', '不可用');
+                        window.updateStatusItem('llmRagStatus', 'llmRagText', 'offline', '不可用');
+                    }
+                } catch (e) {
+                    window.updateStatusItem('llmLlmStatus', 'llmLlmText', 'offline', '检测失败');
+                    window.updateStatusItem('llmRagStatus', 'llmRagText', 'offline', '检测失败');
+                }
+            };
+            
+            // 更新状态项
+            window.updateStatusItem = function(itemId, textId, status, text) {
+                var item = document.getElementById(itemId);
+                var textEl = document.getElementById(textId);
+                if (!item || !textEl) return;
+                
+                var dot = item.querySelector('.status-dot');
+                if (dot) {
+                    dot.classList.remove('checking', 'online', 'offline', 'warning');
+                    dot.classList.add(status);
+                }
+                textEl.classList.remove('online', 'offline', 'warning');
+                textEl.classList.add(status);
+                textEl.textContent = text;
+            };
+            
+            // 页面加载完成后自动检查
             document.addEventListener('DOMContentLoaded', function() {
                 setTimeout(function() {
                     window.loadHistoryPanel();
+                    window.checkAllServicesStatus();
                 }, 200);
             });
             
