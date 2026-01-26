@@ -61,3 +61,58 @@ config = {
     'production': ProductionConfig,
     'default': DevelopmentConfig
 }
+
+
+class ChatOCRConfig:
+    """
+    PP-ChatOCRv4 智能文档理解配置
+    
+    支持通过环境变量配置所有参数
+    """
+    # Ollama LLM 配置
+    OLLAMA_BASE_URL = os.environ.get('OLLAMA_BASE_URL', 'http://localhost:11434')
+    OLLAMA_MODEL = os.environ.get('OLLAMA_MODEL', 'gpt-oss:20b')
+    OLLAMA_TIMEOUT = int(os.environ.get('OLLAMA_TIMEOUT', '60'))
+    
+    # LLM 生成参数
+    LLM_MAX_TOKENS = int(os.environ.get('LLM_MAX_TOKENS', '4096'))
+    LLM_TEMPERATURE = float(os.environ.get('LLM_TEMPERATURE', '0.1'))
+    LLM_MAX_RETRIES = int(os.environ.get('LLM_MAX_RETRIES', '2'))
+    
+    # 功能开关
+    ENABLE_CHATOCR = os.environ.get('ENABLE_CHATOCR', 'true').lower() == 'true'
+    ENABLE_RAG = os.environ.get('ENABLE_RAG', 'true').lower() == 'true'
+    
+    # RAG 向量检索配置
+    EMBEDDING_MODEL = os.environ.get('EMBEDDING_MODEL', 'BAAI/bge-small-zh-v1.5')
+    VECTOR_DB_PATH = os.environ.get('VECTOR_DB_PATH', './vector_db')
+    
+    # 文本分块配置
+    CHUNK_SIZE = int(os.environ.get('CHUNK_SIZE', '500'))
+    CHUNK_OVERLAP = int(os.environ.get('CHUNK_OVERLAP', '50'))
+    
+    # RAG 检索配置
+    RAG_TOP_K = int(os.environ.get('RAG_TOP_K', '5'))
+    
+    @classmethod
+    def is_enabled(cls) -> bool:
+        """检查 ChatOCR 功能是否启用"""
+        return cls.ENABLE_CHATOCR
+    
+    @classmethod
+    def get_config_dict(cls) -> dict:
+        """获取配置字典（用于调试）"""
+        return {
+            'ollama_base_url': cls.OLLAMA_BASE_URL,
+            'ollama_model': cls.OLLAMA_MODEL,
+            'ollama_timeout': cls.OLLAMA_TIMEOUT,
+            'llm_max_tokens': cls.LLM_MAX_TOKENS,
+            'llm_temperature': cls.LLM_TEMPERATURE,
+            'enable_chatocr': cls.ENABLE_CHATOCR,
+            'enable_rag': cls.ENABLE_RAG,
+            'embedding_model': cls.EMBEDDING_MODEL,
+            'vector_db_path': cls.VECTOR_DB_PATH,
+            'chunk_size': cls.CHUNK_SIZE,
+            'chunk_overlap': cls.CHUNK_OVERLAP,
+            'rag_top_k': cls.RAG_TOP_K
+        }

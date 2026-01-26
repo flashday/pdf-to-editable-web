@@ -21,6 +21,7 @@ from backend.services.status_tracker import status_tracker, ProcessingStage
 from backend.services.performance_monitor import performance_monitor
 from backend.services.error_handler import error_handler
 from backend.services.job_cache import get_job_cache
+from backend.config import ChatOCRConfig
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +63,7 @@ class DocumentProcessor(DocumentProcessorInterface):
         # Initialize services lazily
         self._ocr_service = None
         self._data_normalizer = None
+        self._rag_service = None
         
         # Processing results storage (in-memory for now)
         self._results: Dict[str, ProcessingResult] = {}
@@ -90,6 +92,19 @@ class DocumentProcessor(DocumentProcessorInterface):
             self._data_normalizer = DataNormalizer()
             logger.info("Data normalizer initialized")
         return self._data_normalizer
+    
+    @property
+    def rag_service(self):
+        """Lazy initialization of RAG service"""
+        if self._rag_service is None and ChatOCRConfig.ENABLE_RAG:
+            try:
+                from backend.services.rag_service import get_rag_service
+                self._rag_service = get_rag_service()
+                logger.info("RAG service initialized")
+            except Exception as e:
+                logger.warning(f"Failed to initialize RAG service: {e}")
+                self._rag_service = None
+        return self._rag_service
     
     def process_document(self, document: Document) -> Document:
         """
@@ -244,6 +259,9 @@ class DocumentProcessor(DocumentProcessorInterface):
                     )
             except Exception as cache_error:
                 logger.warning(f"Failed to save job to cache: {cache_error}")
+            
+            # 构建 RAG 向量索引（异步，不阻塞主流程）
+            self._build_rag_index_async(document.id, editor_data)
             
             # Clean up temporary files
             self._cleanup_temp_files(document.id)
@@ -427,6 +445,128 @@ class DocumentProcessor(DocumentProcessorInterface):
             return ProcessingStatus.FAILED
         else:
             return ProcessingStatus.PROCESSING
+    
+    def _build_rag_index_async(self, document_id: str, editor_data: EditorJSData) -> None:
+        """
+        异步构建 RAG 向量索引
+        
+        在后台线程中执行，不阻塞主处理流程
+        索引失败不影响 OCR 结果的返回
+        
+        Args:
+            document_id: 文档 ID
+            editor_data: Editor.js 格式的数据
+        """
+        if not ChatOCRConfig.ENABLE_RAG:
+            logger.debug("RAG indexing disabled")
+            return
+        
+        def build_index():
+            try:
+                rag = self.rag_service
+                if rag is None:
+                    logger.warning("RAG service not available, skipping indexing")
+                    return
+                
+                # 从 editor_data 提取文本
+                text = self._extract_text_from_editor_data(editor_data)
+                
+                if not text or len(text.strip()) < 50:
+                    logger.info(f"Document {document_id} has insufficient text for indexing")
+                    return
+                
+                # 构建索引
+                status = rag.index_document(document_id, text)
+                
+                if status.indexed:
+                    logger.info(f"RAG index built for {document_id}: {status.chunk_count} chunks in {status.index_time:.2f}s")
+                else:
+                    logger.warning(f"RAG indexing failed for {document_id}: {status.error}")
+                    
+            except Exception as e:
+                logger.error(f"RAG indexing error for {document_id}: {e}")
+        
+        # 在后台线程中执行
+        thread = threading.Thread(target=build_index, daemon=True)
+        thread.start()
+    
+    def _extract_text_from_editor_data(self, editor_data: EditorJSData) -> str:
+        """
+        从 Editor.js 数据中提取纯文本
+        
+        Args:
+            editor_data: Editor.js 格式的数据
+            
+        Returns:
+            str: 提取的文本内容
+        """
+        text_parts = []
+        
+        for block in editor_data.blocks:
+            if block.type == 'paragraph':
+                text = block.data.get('text', '')
+                if text:
+                    text_parts.append(text)
+            elif block.type == 'header':
+                text = block.data.get('text', '')
+                if text:
+                    text_parts.append(text)
+            elif block.type == 'table':
+                # 从表格 HTML 中提取文本
+                html = block.data.get('tableHtml', '')
+                if html:
+                    text = self._extract_text_from_html(html)
+                    if text:
+                        text_parts.append(text)
+            elif block.type == 'list':
+                items = block.data.get('items', [])
+                for item in items:
+                    if isinstance(item, str):
+                        text_parts.append(item)
+                    elif isinstance(item, dict):
+                        text_parts.append(item.get('content', ''))
+        
+        return '\n\n'.join(text_parts)
+    
+    def _extract_text_from_html(self, html: str) -> str:
+        """
+        从 HTML 中提取纯文本
+        
+        Args:
+            html: HTML 字符串
+            
+        Returns:
+            str: 提取的文本
+        """
+        try:
+            from bs4 import BeautifulSoup
+            soup = BeautifulSoup(html, 'html.parser')
+            return soup.get_text(separator=' ', strip=True)
+        except Exception:
+            # 简单的正则提取
+            import re
+            text = re.sub(r'<[^>]+>', ' ', html)
+            return ' '.join(text.split())
+    
+    def get_rag_index_status(self, document_id: str) -> Optional[dict]:
+        """
+        获取文档的 RAG 索引状态
+        
+        Args:
+            document_id: 文档 ID
+            
+        Returns:
+            dict: 索引状态信息，如果 RAG 未启用则返回 None
+        """
+        if not ChatOCRConfig.ENABLE_RAG:
+            return None
+        
+        rag = self.rag_service
+        if rag is None:
+            return None
+        
+        status = rag.get_index_status(document_id)
+        return status.to_dict()
 
 
 # Global document processor instance (will be initialized with app config)

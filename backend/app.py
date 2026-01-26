@@ -12,12 +12,16 @@ Provides complete end-to-end workflow from file upload to Editor.js rendering
 from flask import Flask, send_from_directory, jsonify
 from flask_cors import CORS
 from backend.api import api_bp
-from backend.config import Config
+from backend.api.chatocr_routes import chatocr_bp
+from backend.config import Config, ChatOCRConfig
 from backend.services.ocr_service import preload_models, is_models_loaded, is_models_loading
 from backend.services.job_cache import init_job_cache
 import os
 import threading
 import time
+import logging
+
+logger = logging.getLogger(__name__)
 
 def create_app(config_class=Config):
     """
@@ -46,6 +50,11 @@ def create_app(config_class=Config):
     
     # Register API blueprint
     app.register_blueprint(api_bp, url_prefix='/api')
+    
+    # Register ChatOCR API blueprint (智能文档理解)
+    if ChatOCRConfig.ENABLE_CHATOCR:
+        app.register_blueprint(chatocr_bp)
+        logger.info("ChatOCR API routes registered")
     
     # Health check endpoint at root level
     @app.route('/health')

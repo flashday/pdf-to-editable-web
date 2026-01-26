@@ -1656,6 +1656,38 @@
     
     <script type="module" src="index.js"></script>
     
+    <!-- 智能文档理解组件 -->
+    <script src="components/SmartExtract.js"></script>
+    <script src="components/DocumentQA.js"></script>
+    <script src="components/ChatOCRIntegration.js"></script>
+    
+    <!-- 初始化智能功能 -->
+    <script>
+        // 等待 App 初始化后初始化智能功能
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(function() {
+                if (typeof initChatOCRIntegration === 'function') {
+                    window.chatOCR = initChatOCRIntegration({ apiBaseUrl: '' });
+                    console.log('ChatOCR integration initialized');
+                    
+                    // 监听 jobId 变化
+                    var originalHandleComplete = window.app.handleProcessingComplete.bind(window.app);
+                    window.app.handleProcessingComplete = async function(data, jobId) {
+                        await originalHandleComplete(data, jobId);
+                        if (window.chatOCR) {
+                            window.chatOCR.setJobId(jobId);
+                        }
+                    };
+                    
+                    // 如果已有 jobId，设置它
+                    if (window.app && window.app.currentJobId) {
+                        window.chatOCR.setJobId(window.app.currentJobId);
+                    }
+                }
+            }, 600);
+        });
+    </script>
+    
     <!-- 修复：覆盖 drawOCRRegions 添加序号标签 -->
     <script>
         // 等待 App 初始化后覆盖 drawOCRRegions

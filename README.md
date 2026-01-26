@@ -10,9 +10,17 @@
 - main 分支不向下兼容 PaddleOCR 2.x
 - 如需使用旧版本，请切换到对应 Tag
 
-## 🆕 最新更新 (2026-01-25)
+## 🆕 最新更新 (2026-01-26)
 
-**置信度显示修复：**
+**🤖 PP-ChatOCRv4 智能文档理解集成：**
+- ✅ 新增智能信息提取功能（发票、合同、身份证、简历等预设模板）
+- ✅ 新增文档问答功能（基于 RAG 向量检索）
+- ✅ 集成本地 Ollama LLM 服务
+- ✅ 支持 BGE-small-zh-v1.5 中文向量化模型
+- ✅ 使用 ChromaDB 向量数据库
+- ✅ 优雅降级：LLM 不可用时不影响基础 OCR 功能
+
+**置信度显示修复 (2026-01-25)：**
 - ✅ 修复 Block 列表中置信度显示乱码问题（编码兼容性）
 - ✅ 置信度现在正确显示：有值显示数值，无值显示 `-`
 
@@ -44,6 +52,16 @@
 - **下载功能**：支持 6 种格式导出
 - 实时处理状态更新
 - 置信度报告
+
+### 🤖 智能文档理解功能（PP-ChatOCRv4）
+
+- **智能信息提取**：从文档中自动提取关键信息（发票号、金额、日期等）
+- **预设模板**：支持发票、合同、身份证、简历等常见文档类型
+- **自定义字段**：支持用户自定义提取字段
+- **文档问答**：用自然语言向文档提问，获取基于内容的回答
+- **RAG 向量检索**：智能检索多页文档中的相关内容
+- **引用原文**：回答中引用文档原文作为依据
+- **优雅降级**：LLM 服务不可用时，基础 OCR 功能不受影响
 
 ## 界面布局
 
@@ -108,7 +126,8 @@
 ```
 ├── backend/                 # Python 后端
 │   ├── api/                # REST API
-│   │   └── routes.py           # API 路由定义
+│   │   ├── routes.py           # API 路由定义
+│   │   └── chatocr_routes.py   # 智能文档理解 API 路由
 │   ├── services/           # 业务逻辑
 │   │   ├── ocr_service.py      # PaddleOCR 集成（主服务）
 │   │   ├── ocr/                # OCR 模块化组件
@@ -119,6 +138,12 @@
 │   │   │   ├── output_generator.py     # HTML/Markdown 生成
 │   │   │   ├── ppstructure_parser.py   # PPStructureV3 结果解析
 │   │   │   └── confidence_logger.py    # 置信度日志生成
+│   │   ├── llm_service.py          # Ollama LLM 服务封装
+│   │   ├── embedding_service.py    # 文本向量化服务（BGE）
+│   │   ├── vector_store.py         # 向量存储服务（ChromaDB）
+│   │   ├── text_chunker.py         # 文本分块器
+│   │   ├── rag_service.py          # RAG 检索增强生成服务
+│   │   ├── chatocr_service.py      # ChatOCR 智能文档理解服务
 │   │   ├── data_normalizer.py      # 数据转换（含类型映射）
 │   │   ├── document_processor.py   # 处理流程
 │   │   ├── job_cache.py            # 历史任务缓存
@@ -142,9 +167,14 @@
 ├── frontend/               # JavaScript 前端
 │   ├── src/
 │   │   ├── services/       # 前端服务
+│   │   ├── components/     # React 组件
+│   │   │   ├── SmartExtract.js     # 智能提取面板
+│   │   │   ├── DocumentQA.js       # 文档问答面板
+│   │   │   └── ChatOCRIntegration.js # ChatOCR 集成组件
 │   │   ├── index.html      # 主页面（含样式）
 │   │   └── index.js        # 应用入口
 │   └── package.json        # Node.js 依赖
+├── vector_db/              # 向量数据库存储目录
 ├── temp/                   # 临时文件目录（调试用）
 ├── uploads/                # 上传文件目录
 ├── logs/                   # 日志目录
@@ -180,6 +210,22 @@
 - Node.js 16+
 - PaddleOCR 3.3.3
 - PaddlePaddle 3.2.2 (⚠️ 不要使用 3.3.0，有 oneDNN 兼容性问题)
+- Ollama（可选，用于智能文档理解功能）
+
+### 智能文档理解依赖（可选）
+
+如需使用 PP-ChatOCRv4 智能功能，还需安装：
+
+```bash
+# 向量化模型
+pip install sentence-transformers
+
+# 向量数据库
+pip install chromadb
+
+# Ollama LLM 服务（需单独安装）
+# 参考: https://ollama.ai/download
+```
 
 ## 技术架构
 
@@ -327,11 +373,137 @@ npm run dev
 | `GET /api/jobs/{job_id}/cached-result` | 获取缓存的识别结果（含 Markdown） |
 | `DELETE /api/jobs/{job_id}` | 删除缓存任务 |
 
+### 智能文档理解接口（PP-ChatOCRv4）
+
+| 接口 | 说明 |
+|------|------|
+| `GET /api/llm/status` | 检查 LLM 服务状态 |
+| `GET /api/templates` | 获取预设提取模板列表 |
+| `POST /api/extract-info` | 从文档中提取关键信息 |
+| `POST /api/document-qa` | 基于文档内容回答问题 |
+| `GET /api/rag/status/{job_id}` | 获取文档的 RAG 索引状态 |
+
+#### 智能提取 API 详情
+
+**POST /api/extract-info**
+
+请求体：
+```json
+{
+    "job_id": "xxx",
+    "fields": ["发票号", "金额", "日期"],
+    "template": "invoice"
+}
+```
+
+响应：
+```json
+{
+    "success": true,
+    "data": {
+        "job_id": "xxx",
+        "fields": {
+            "发票号": "12345678",
+            "金额": "1,234.56",
+            "日期": "2026-01-25"
+        },
+        "confidence": 0.95,
+        "warnings": [],
+        "processing_time": 2.3
+    }
+}
+```
+
+**POST /api/document-qa**
+
+请求体：
+```json
+{
+    "job_id": "xxx",
+    "question": "这份文档的总金额是多少？"
+}
+```
+
+响应：
+```json
+{
+    "success": true,
+    "data": {
+        "job_id": "xxx",
+        "question": "这份文档的总金额是多少？",
+        "answer": "根据文档内容，总金额为 1,234.56 元。",
+        "references": ["金额合计：1,234.56"],
+        "confidence": 0.9,
+        "processing_time": 1.5
+    }
+}
+```
+
+#### 预设模板
+
+| 模板 ID | 名称 | 提取字段 |
+|---------|------|----------|
+| `invoice` | 发票 | 发票号码、开票日期、金额合计、税额、购买方名称、销售方名称 |
+| `contract` | 合同 | 甲方、乙方、合同金额、签订日期、合同期限、违约条款 |
+| `id_card` | 身份证 | 姓名、性别、民族、出生日期、住址、身份证号码 |
+| `resume` | 简历 | 姓名、联系电话、电子邮箱、教育背景、工作经历、技能特长 |
+
 ## 系统要求
 
 - **操作系统**: Windows 11, macOS 13+, Linux
 - **内存**: 最少 4GB RAM
 - **存储**: 1GB 可用空间
+
+## 智能文档理解配置（PP-ChatOCRv4）
+
+### 环境变量配置
+
+通过环境变量或 `.env` 文件配置智能功能：
+
+```bash
+# Ollama LLM 配置
+OLLAMA_BASE_URL=http://localhost:11434    # Ollama 服务地址
+OLLAMA_MODEL=gpt-oss:20b                  # 使用的模型名称
+OLLAMA_TIMEOUT=60                         # 请求超时时间（秒）
+
+# LLM 生成参数
+LLM_MAX_TOKENS=4096                       # 最大生成 token 数
+LLM_TEMPERATURE=0.1                       # 生成温度（0-1）
+LLM_MAX_RETRIES=2                         # 最大重试次数
+
+# 功能开关
+ENABLE_CHATOCR=true                       # 启用智能文档理解
+ENABLE_RAG=true                           # 启用 RAG 向量检索
+
+# RAG 向量检索配置
+EMBEDDING_MODEL=BAAI/bge-small-zh-v1.5    # 向量化模型
+VECTOR_DB_PATH=./vector_db                # 向量数据库路径
+
+# 文本分块配置
+CHUNK_SIZE=500                            # 分块大小（字符）
+CHUNK_OVERLAP=50                          # 分块重叠（字符）
+RAG_TOP_K=5                               # 检索返回数量
+```
+
+### 配置说明
+
+| 配置项 | 默认值 | 说明 |
+|--------|--------|------|
+| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama 服务地址 |
+| `OLLAMA_MODEL` | `gpt-oss:20b` | LLM 模型名称 |
+| `OLLAMA_TIMEOUT` | `60` | LLM 请求超时时间（秒） |
+| `ENABLE_CHATOCR` | `true` | 是否启用智能功能 |
+| `ENABLE_RAG` | `true` | 是否启用 RAG 向量检索 |
+| `EMBEDDING_MODEL` | `BAAI/bge-small-zh-v1.5` | 中文向量化模型 |
+| `CHUNK_SIZE` | `500` | 文本分块大小 |
+| `CHUNK_OVERLAP` | `50` | 分块重叠大小 |
+| `RAG_TOP_K` | `5` | 检索返回的相关片段数量 |
+
+### 降级策略
+
+- **LLM 不可用**：智能提取和问答功能禁用，基础 OCR 功能正常
+- **RAG 不可用**：回退到全文发送模式（可能影响长文档处理）
+- **超时处理**：60 秒超时后返回错误，允许用户重试
 
 ## License
 
