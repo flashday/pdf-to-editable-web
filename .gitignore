@@ -74,6 +74,7 @@ logs/
 backend/uploads/
 backend/temp/
 backend/logs/
+vector_db/
 
 # Hypothesis testing
 .hypothesis/
