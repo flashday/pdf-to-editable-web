@@ -55,6 +55,23 @@ def get_llm_status():
     }
     """
     try:
+        # 先检查服务是否正在加载中（避免在加载过程中触发初始化）
+        from backend.app import get_service_status
+        service_status = get_service_status()
+        
+        # 如果 RAG 正在加载中，返回加载中状态
+        if service_status['rag']['loading']:
+            return _success_response({
+                "available": False,
+                "llm_available": service_status['llm']['loaded'],
+                "rag_available": False,
+                "model": ChatOCRConfig.OLLAMA_MODEL,
+                "base_url": ChatOCRConfig.OLLAMA_BASE_URL,
+                "chatocr_enabled": ChatOCRConfig.ENABLE_CHATOCR,
+                "rag_enabled": ChatOCRConfig.ENABLE_RAG,
+                "message": "RAG 服务正在加载中..."
+            })
+        
         service = get_chatocr_service()
         
         if not service:

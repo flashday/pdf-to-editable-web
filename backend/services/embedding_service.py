@@ -2,6 +2,13 @@
 Embedding Service - 文本向量化服务
 使用 BGE-small-zh-v1.5 模型进行中文文本向量化
 """
+import os
+# ⚠️ 必须在导入任何 HuggingFace 相关库之前设置离线模式
+# 避免网络请求导致加载卡住
+os.environ['HF_HUB_OFFLINE'] = '1'
+os.environ['TRANSFORMERS_OFFLINE'] = '1'
+os.environ['HF_DATASETS_OFFLINE'] = '1'
+
 import logging
 import time
 from typing import List, Optional, Union
@@ -67,21 +74,28 @@ class EmbeddingService:
     def _load_model(self):
         """加载模型"""
         try:
+            print(f"      [Embedding] 导入 sentence_transformers...")
             from sentence_transformers import SentenceTransformer
+            print(f"      [Embedding] sentence_transformers 导入完成")
             
             logger.info(f"Loading embedding model: {self._model_name}")
+            print(f"      [Embedding] 开始加载模型: {self._model_name} (离线模式)")
             start_time = time.time()
             
+            print(f"      [Embedding] 调用 SentenceTransformer()...")
             self._model = SentenceTransformer(self._model_name)
+            print(f"      [Embedding] SentenceTransformer() 返回")
             
             load_time = time.time() - start_time
             logger.info(f"Embedding model loaded in {load_time:.2f}s")
+            print(f"      [Embedding] 模型加载完成，耗时: {load_time:.2f}s")
             
         except ImportError:
             logger.error("sentence-transformers not installed. Run: pip install sentence-transformers")
             raise
         except Exception as e:
             logger.error(f"Failed to load embedding model: {e}")
+            print(f"      [Embedding] 加载失败: {e}")
             raise
     
     @property

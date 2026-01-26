@@ -12,6 +12,14 @@
 
 ## 🆕 最新更新 (2026-01-26)
 
+**🔧 后端服务加载优化：**
+- ✅ 修复 RAG/Embedding 服务加载超时问题（HuggingFace 离线模式）
+- ✅ 后端服务改为顺序加载：LLM → OCR → RAG（避免并行冲突）
+- ✅ 服务加载时间：LLM 0s + OCR 60s + RAG 3s = 总计约 63 秒
+- ✅ 修复前端 `/api/llm/status` 提前触发 RAG 初始化的问题
+
+## 历史更新 (2026-01-26)
+
 **🔧 界面优化与功能增强：**
 - ✅ 新增服务状态栏：主界面显示 OCR模型/LLM服务/RAG服务 实时状态
 - ✅ 新增对话日志导出：文档问答支持导出 Markdown 格式对话记录
@@ -260,6 +268,19 @@ pip install chromadb
 # Ollama LLM 服务（需单独安装）
 # 参考: https://ollama.ai/download
 ```
+
+### HuggingFace 离线模式
+
+如果您的网络环境无法访问 HuggingFace 网站，系统已配置为离线模式运行：
+
+- Embedding 模型首次加载时会自动下载到本地缓存
+- 后续启动将使用本地缓存，无需网络连接
+- 环境变量已在 `embedding_service.py` 中自动设置：
+  ```python
+  os.environ['HF_HUB_OFFLINE'] = '1'
+  os.environ['TRANSFORMERS_OFFLINE'] = '1'
+  os.environ['HF_DATASETS_OFFLINE'] = '1'
+  ```
 
 ## 技术架构
 

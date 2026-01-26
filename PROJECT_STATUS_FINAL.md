@@ -10,6 +10,34 @@ PDF to Editable Web Layout System - 一个完整的系统，使用 OCR 和 Edito
 
 ## 🆕 最新更新 (2026-01-26)
 
+### 后端服务加载优化 ✅
+
+**问题**：RAG/Embedding 服务加载时卡住超时
+
+**根因**：HuggingFace 网站无法访问，`SentenceTransformer` 每次加载都尝试检查远程更新导致超时
+
+**修复**：
+- 在 `embedding_service.py` 开头设置离线模式环境变量：
+  ```python
+  os.environ['HF_HUB_OFFLINE'] = '1'
+  os.environ['TRANSFORMERS_OFFLINE'] = '1'
+  os.environ['HF_DATASETS_OFFLINE'] = '1'
+  ```
+- 后端服务改为顺序加载：LLM → OCR → RAG（避免并行冲突）
+- 修复 `/api/llm/status` 端点在 RAG 加载中时返回"加载中"状态而不触发重复初始化
+
+**效果**：
+- Embedding 模型加载从超时变为 0.08 秒
+- 服务加载时间：LLM 0s + OCR 60s + RAG 3s = 总计约 63 秒
+- 三个服务全部正常启动
+
+**修改文件**：
+- `backend/services/embedding_service.py` - 添加离线模式环境变量
+- `backend/api/chatocr_routes.py` - 修复 `/api/llm/status` 端点
+- `backend/app.py` - 改为顺序加载服务
+
+---
+
 ### PP-ChatOCRv4 智能文档理解集成 ✅
 
 **新增功能**：

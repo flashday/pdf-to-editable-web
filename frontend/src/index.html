@@ -1258,6 +1258,60 @@
             window.checkAllServicesStatus = async function() {
                 console.log('checkAllServicesStatus called');
                 
+                // 使用新的统一服务状态接口
+                try {
+                    var res = await fetch('/api/services/status');
+                    var data = await res.json();
+                    console.log('Services status:', data);
+                    
+                    // OCR 状态
+                    if (data.ocr) {
+                        if (data.ocr.loaded) {
+                            var timeStr = data.ocr.time > 0 ? ' (' + data.ocr.time.toFixed(1) + 's)' : '';
+                            window.updateStatusItem('llmOcrStatus', 'llmOcrText', 'online', '就绪' + timeStr);
+                        } else if (data.ocr.loading) {
+                            window.updateStatusItem('llmOcrStatus', 'llmOcrText', 'checking', '加载中...');
+                        } else {
+                            window.updateStatusItem('llmOcrStatus', 'llmOcrText', 'offline', data.ocr.error || '未就绪');
+                        }
+                    }
+                    
+                    // LLM 状态
+                    if (data.llm) {
+                        if (data.llm.loaded) {
+                            window.updateStatusItem('llmLlmStatus', 'llmLlmText', 'online', 'Ollama');
+                        } else if (data.llm.loading) {
+                            window.updateStatusItem('llmLlmStatus', 'llmLlmText', 'checking', '检测中...');
+                        } else {
+                            window.updateStatusItem('llmLlmStatus', 'llmLlmText', 'offline', data.llm.error || '未连接');
+                        }
+                    }
+                    
+                    // RAG 状态
+                    if (data.rag) {
+                        if (data.rag.loaded) {
+                            var ragTimeStr = data.rag.time > 0 ? ' (' + data.rag.time.toFixed(1) + 's)' : '';
+                            window.updateStatusItem('llmRagStatus', 'llmRagText', 'online', '就绪' + ragTimeStr);
+                        } else if (data.rag.loading) {
+                            window.updateStatusItem('llmRagStatus', 'llmRagText', 'checking', '加载中...');
+                        } else {
+                            window.updateStatusItem('llmRagStatus', 'llmRagText', 'warning', data.rag.error || '未启用');
+                        }
+                    }
+                    
+                    // 如果还有服务在加载中，继续轮询
+                    if (!data.all_ready) {
+                        setTimeout(window.checkAllServicesStatus, 3000);
+                    }
+                } catch (e) {
+                    console.log('Services status check failed:', e.message);
+                    // 降级到旧接口
+                    window.checkAllServicesStatusFallback();
+                }
+            };
+            
+            // 降级检查（兼容旧接口）
+            window.checkAllServicesStatusFallback = async function() {
                 // 1. 检查 OCR/后端健康状态
                 try {
                     var healthRes = await fetch('/api/health');
@@ -1271,20 +1325,18 @@
                     window.updateStatusItem('llmOcrStatus', 'llmOcrText', 'offline', '离线');
                 }
                 
-                // 2. 检查 LLM + RAG 状态（一个API返回所有信息）
+                // 2. 检查 LLM + RAG 状态
                 try {
                     var llmRes = await fetch('/api/llm/status');
                     var llmData = await llmRes.json();
                     
                     if (llmData.success && llmData.data) {
                         var d = llmData.data;
-                        // LLM 状态
                         if (d.llm_available) {
                             window.updateStatusItem('llmLlmStatus', 'llmLlmText', 'online', d.model || 'Ollama');
                         } else {
                             window.updateStatusItem('llmLlmStatus', 'llmLlmText', 'offline', '未连接');
                         }
-                        // RAG 状态
                         if (d.rag_available) {
                             window.updateStatusItem('llmRagStatus', 'llmRagText', 'online', '就绪');
                         } else {
