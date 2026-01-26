@@ -562,7 +562,7 @@ class ChatOCRService:
         field_template = ",\n".join([f'    "{field}": "提取的值或null"' for field in extract_fields])
         prompt = EXTRACTION_PROMPT.format(
             prompt_hint=prompt_hint,
-            document_content=document_content[:8000],  # 限制内容长度
+            document_content=document_content[:ChatOCRConfig.LLM_CONTEXT_LIMIT],  # 使用配置的上下文限制
             fields=", ".join(extract_fields),
             field_template=field_template
         )
@@ -694,7 +694,7 @@ class ChatOCRService:
         
         # 构建 prompt
         prompt = QA_PROMPT.format(
-            document_content=document_content[:8000],  # 限制内容长度
+            document_content=document_content[:ChatOCRConfig.LLM_CONTEXT_LIMIT],  # 使用配置的上下文限制
             question=question
         )
         

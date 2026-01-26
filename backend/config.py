@@ -92,7 +92,11 @@ class ChatOCRConfig:
     CHUNK_OVERLAP = int(os.environ.get('CHUNK_OVERLAP', '50'))
     
     # RAG 检索配置
-    RAG_TOP_K = int(os.environ.get('RAG_TOP_K', '5'))
+    RAG_TOP_K = int(os.environ.get('RAG_TOP_K', '10'))
+    
+    # LLM 上下文限制（字符数）
+    # 128K tokens ≈ 50-60K 中文字符，保守设置 32000
+    LLM_CONTEXT_LIMIT = int(os.environ.get('LLM_CONTEXT_LIMIT', '32000'))
     
     @classmethod
     def is_enabled(cls) -> bool:
@@ -114,5 +118,6 @@ class ChatOCRConfig:
             'vector_db_path': cls.VECTOR_DB_PATH,
             'chunk_size': cls.CHUNK_SIZE,
             'chunk_overlap': cls.CHUNK_OVERLAP,
-            'rag_top_k': cls.RAG_TOP_K
+            'rag_top_k': cls.RAG_TOP_K,
+            'llm_context_limit': cls.LLM_CONTEXT_LIMIT
         }
