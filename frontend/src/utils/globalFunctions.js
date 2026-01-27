@@ -246,6 +246,19 @@ window.checkAllServicesStatus = async function() {
         var data = await res.json();
         console.log('Services status:', data);
         
+        // 检查是否所有服务都返回 loaded: false 且没有 loading
+        // 这种情况说明后端是通过 start_backend.py 启动的，没有更新状态变量
+        // 需要使用 fallback 逻辑来检测实际状态
+        var allNotLoaded = data.ocr && !data.ocr.loaded && !data.ocr.loading &&
+                          data.llm && !data.llm.loaded && !data.llm.loading &&
+                          data.rag && !data.rag.loaded && !data.rag.loading;
+        
+        if (allNotLoaded) {
+            console.log('All services report not loaded, using fallback detection');
+            window.checkAllServicesStatusFallback();
+            return;
+        }
+        
         // OCR 状态
         if (data.ocr) {
             if (data.ocr.loaded) {

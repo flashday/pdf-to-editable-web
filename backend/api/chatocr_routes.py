@@ -577,3 +577,47 @@ def get_rag_status(job_id: str):
     except Exception as e:
         logger.error(f"Failed to get RAG status for {job_id}: {e}")
         return _error_response(f"获取 RAG 状态失败: {str(e)}", 500)
+
+
+@chatocr_bp.route('/llm-log/<job_id>', methods=['GET'])
+def get_llm_log(job_id: str):
+    """
+    GET /api/llm-log/<job_id>
+    获取指定 Job 的 LLM 调用日志
+    
+    参数:
+    - summary: 是否只返回摘要（不包含完整 prompt/response），默认 false
+    
+    响应:
+    {
+        "success": true,
+        "data": {
+            "job_id": "xxx",
+            "created_at": "2026-01-27T10:00:00",
+            "total_calls": 5,
+            "successful_calls": 4,
+            "failed_calls": 1,
+            "total_processing_time": 12.5,
+            "calls": [...]
+        }
+    }
+    """
+    try:
+        from backend.services.llm_logger import get_llm_logger
+        
+        llm_logger = get_llm_logger()
+        summary_only = request.args.get('summary', 'false').lower() == 'true'
+        
+        if summary_only:
+            log_data = llm_logger.get_log_summary(job_id)
+        else:
+            log_data = llm_logger.get_log(job_id)
+        
+        if not log_data:
+            return _error_response(f"未找到 Job {job_id} 的 LLM 日志", 404, "LOG_NOT_FOUND")
+        
+        return _success_response(log_data)
+        
+    except Exception as e:
+        logger.error(f"Failed to get LLM log for {job_id}: {e}")
+        return _error_response(f"获取 LLM 日志失败: {str(e)}", 500)

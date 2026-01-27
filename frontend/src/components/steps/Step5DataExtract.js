@@ -330,6 +330,9 @@ export class Step5DataExtract {
                     <span id="extractStatusIcon">⏳</span> 数据提取: <span id="extractStatusText">待执行</span> &nbsp;|&nbsp;
                     <span id="checkpointStatusIcon">⏳</span> 检查点验证: <span id="checkpointStatusText">待执行</span>
                 </div>
+                <button id="downloadLlmLogBtn" style="background: #6c5ce7; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; margin-right: 10px;" title="下载 LLM 调用日志">
+                    📋 LLM日志
+                </button>
                 <button id="submitToStep6Btn" disabled style="background: #6c757d; color: white; border: none; padding: 10px 24px; border-radius: 6px; cursor: not-allowed; font-size: 14px; font-weight: 600; opacity: 0.6;">
                     ➡️ 提交到财务确认
                 </button>
@@ -451,6 +454,48 @@ export class Step5DataExtract {
         const submitBtn = document.getElementById('submitToStep6Btn');
         if (submitBtn) {
             submitBtn.addEventListener('click', () => this.submitToStep6());
+        }
+        
+        // 下载 LLM 日志按钮
+        const downloadLlmLogBtn = document.getElementById('downloadLlmLogBtn');
+        if (downloadLlmLogBtn) {
+            downloadLlmLogBtn.addEventListener('click', () => this.downloadLlmLog());
+        }
+    }
+    
+    /**
+     * 下载 LLM 调用日志
+     */
+    async downloadLlmLog() {
+        const globalStateManager = window.stateManager || stateManager;
+        const jobId = globalStateManager.get('jobId') || (window.app ? window.app.currentJobId : null);
+        
+        if (!jobId) {
+            alert('无法获取 Job ID，请确保已完成文档处理');
+            return;
+        }
+        
+        try {
+            const response = await fetch(`/api/llm-log/${jobId}`);
+            const data = await response.json();
+            
+            if (data.success && data.data) {
+                // 创建下载
+                const blob = new Blob([JSON.stringify(data.data, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${jobId}_llm_log.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            } else {
+                alert(data.error || '暂无 LLM 调用日志');
+            }
+        } catch (error) {
+            console.error('Failed to download LLM log:', error);
+            alert('下载 LLM 日志失败: ' + error.message);
         }
     }
     

@@ -8,6 +8,65 @@
 
 ---
 
+## [2026-01-27] - LLM 调用日志记录功能
+
+### 新增：LLM 调用日志记录与下载
+
+**需求**：用户需要查看 LLM 调用的详细日志（prompt、response、耗时等），便于调试和分析
+
+**实现内容**：
+
+1. `backend/services/llm_logger.py` (新建)
+   - `LLMLogger` 类：LLM 调用日志记录器
+   - `log_call()` 方法：记录每次 LLM 调用的详细信息
+     - job_id、call_type、prompt、response、success、processing_time、model、error
+   - `get_log()` 方法：获取完整日志
+   - `get_log_summary()` 方法：获取摘要（不含完整 prompt/response）
+   - 日志保存到 `temp/{job_id}_llm_log.json`
+   - 全局单例模式：`get_llm_logger()`
+
+2. `backend/services/chatocr_service.py`
+   - 在 `extract_info()` 方法中添加日志记录
+   - 在 `document_qa()` 方法中添加日志记录
+   - 记录内容：prompt、response、耗时、成功/失败状态
+
+3. `backend/api/chatocr_routes.py`
+   - 新增 API：`GET /api/llm-log/<job_id>`
+   - 支持 `?summary=true` 参数返回摘要
+
+4. `frontend/src/components/steps/Step5DataExtract.js`
+   - 顶部操作栏添加"📋 LLM日志"下载按钮
+   - 新增 `downloadLlmLog()` 方法：调用 API 下载 JSON 日志文件
+
+5. `frontend/src/index.html`
+   - 版本号更新：`Step5DataExtract.js?v=36`
+
+**日志文件格式**：
+```json
+{
+  "job_id": "xxx",
+  "created_at": "2026-01-27T10:00:00",
+  "total_calls": 5,
+  "successful_calls": 4,
+  "failed_calls": 1,
+  "total_processing_time": 12.5,
+  "calls": [
+    {
+      "id": 1,
+      "timestamp": "...",
+      "type": "extract-info",
+      "model": "gpt-oss:20b",
+      "prompt": "...",
+      "response": "...",
+      "success": true,
+      "processing_time": 2.5
+    }
+  ]
+}
+```
+
+---
+
 ## [2026-01-27] - 步骤5提交按钮及界面优化
 
 ### 新增：步骤5"提交到财务确认"按钮

@@ -16,6 +16,7 @@ from datetime import datetime
 from backend.services.llm_service import get_llm_service, OllamaLLMService
 from backend.services.rag_service import get_rag_service, RAGService
 from backend.services.job_cache import get_job_cache
+from backend.services.llm_logger import get_llm_logger
 from backend.config import ChatOCRConfig
 
 logger = logging.getLogger(__name__)
@@ -676,7 +677,27 @@ class ChatOCRService:
         # 调用 LLM
         try:
             messages = [{"role": "user", "content": prompt}]
+            llm_start_time = time.time()
             llm_response = self.llm_service.chat(messages)
+            llm_processing_time = time.time() - llm_start_time
+            
+            # 记录 LLM 调用日志
+            llm_logger = get_llm_logger()
+            llm_logger.log_call(
+                job_id=job_id,
+                call_type="extract-info",
+                prompt=prompt,
+                response=llm_response.content if llm_response.success else "",
+                success=llm_response.success,
+                processing_time=llm_processing_time,
+                model=ChatOCRConfig.OLLAMA_MODEL,
+                error=llm_response.error_message if not llm_response.success else None,
+                metadata={
+                    "template": template,
+                    "fields": extract_fields,
+                    "document_length": len(document_content) if document_content else 0
+                }
+            )
             
             # 检查 LLM 响应是否成功
             if not llm_response.success:
@@ -807,7 +828,26 @@ class ChatOCRService:
         # 调用 LLM
         try:
             messages = [{"role": "user", "content": prompt}]
+            llm_start_time = time.time()
             llm_response = self.llm_service.chat(messages)
+            llm_processing_time = time.time() - llm_start_time
+            
+            # 记录 LLM 调用日志
+            llm_logger = get_llm_logger()
+            llm_logger.log_call(
+                job_id=job_id,
+                call_type="document-qa",
+                prompt=prompt,
+                response=llm_response.content if llm_response.success else "",
+                success=llm_response.success,
+                processing_time=llm_processing_time,
+                model=ChatOCRConfig.OLLAMA_MODEL,
+                error=llm_response.error_message if not llm_response.success else None,
+                metadata={
+                    "question": question,
+                    "document_length": len(document_content) if document_content else 0
+                }
+            )
             
             # 检查 LLM 响应是否成功
             if not llm_response.success:
