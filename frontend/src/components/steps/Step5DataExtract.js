@@ -247,26 +247,13 @@ export class Step5DataExtract {
         
         console.log('=== Step5: autoSelectDocumentType START ===');
         console.log('Step5: selectedDocumentTypeId from stateManager:', selectedTypeId);
-        console.log('Step5: typeof selectedTypeId:', typeof selectedTypeId);
-        console.log('Step5: available documentTypes count:', this.documentTypes.length);
-        console.log('Step5: available documentTypes IDs:', this.documentTypes.map(t => t.id));
-        console.log('Step5: full stateManager state:', JSON.stringify(globalStateManager.getState ? globalStateManager.getState() : {}, null, 2));
         
         if (selectedTypeId) {
-            console.log('Step5: Looking for document type with id:', selectedTypeId);
-            const docType = this.documentTypes.find(t => {
-                console.log('Step5: Comparing', t.id, '===', selectedTypeId, ':', t.id === selectedTypeId);
-                return t.id === selectedTypeId;
-            });
+            const docType = this.documentTypes.find(t => t.id === selectedTypeId);
             if (docType) {
                 this.selectedTemplate = docType;
-                console.log('Step5: ✅ Auto-selected document type:', docType.name, 'id:', docType.id);
-            } else {
-                console.log('Step5: ❌ Document type not found in list:', selectedTypeId);
-                console.log('Step5: Available IDs:', this.documentTypes.map(t => t.id).join(', '));
+                console.log('Step5: ✅ Auto-selected document type:', docType.name);
             }
-        } else {
-            console.log('Step5: ⚠️ No selectedDocumentTypeId in stateManager');
         }
         
         // 如果没有选中，默认选第一个
@@ -343,16 +330,10 @@ export class Step5DataExtract {
                 <div class="step5-left-panel" style="display: flex; flex-direction: column; background: #fafbfc; border-radius: 8px; padding: 15px; border: 1px solid #e1e4e8; box-sizing: border-box; overflow: hidden;">
                     <h4 style="margin: 0 0 15px 0; color: #24292e; font-size: 15px; border-bottom: 1px solid #e1e4e8; padding-bottom: 10px; flex-shrink: 0;">📋 数据提取</h4>
                     
-                    <!-- 模板选择区 -->
+                    <!-- 模板选择区 - 显示选中的单据类型 -->
                     <div class="template-section" style="margin-bottom: 15px; flex-shrink: 0;">
-                        <div style="font-size: 13px; color: #586069; margin-bottom: 8px;">选择提取模板：</div>
-                        <div class="template-list" id="templateList" style="display: flex; flex-wrap: wrap; gap: 8px;">
-                            ${templates.map(t => `
-                                <button class="template-btn" data-template-id="${t.id}" 
-                                    style="padding: 6px 14px; border: 1px solid ${this.selectedTemplate && this.selectedTemplate.id === t.id ? '#3498db' : '#d1d5da'}; border-radius: 6px; background: ${this.selectedTemplate && this.selectedTemplate.id === t.id ? '#3498db' : 'white'}; color: ${this.selectedTemplate && this.selectedTemplate.id === t.id ? 'white' : '#24292e'}; cursor: pointer; transition: all 0.2s; font-size: 13px;">
-                                    ${t.name}
-                                </button>
-                            `).join('')}
+                        <div style="font-size: 13px; color: #586069; margin-bottom: 8px;">提取的单据类型：<strong style="color: #3498db;">${this.selectedTemplate ? this.selectedTemplate.name : '未选择'}</strong></div>
+                        <div class="template-list" id="templateList" style="display: none;">
                         </div>
                     </div>
                     

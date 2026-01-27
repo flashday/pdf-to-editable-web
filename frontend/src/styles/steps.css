@@ -444,18 +444,19 @@
 .history-modal-body {
     flex: 1;
     overflow-y: auto;
-    padding: 16px;
+    padding: 12px;
+    max-height: calc(80vh - 60px);
 }
 
-/* 历史记录项样式 */
+/* 历史记录项样式 - 紧凑版 */
 .history-panel-item {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 12px 15px;
+    gap: 10px;
+    padding: 8px 12px;
     border: 1px solid #e0e0e0;
-    border-radius: 8px;
-    margin-bottom: 10px;
+    border-radius: 6px;
+    margin-bottom: 6px;
     cursor: pointer;
     transition: all 0.2s ease;
     background: #fafafa;
@@ -471,24 +472,25 @@
     margin-bottom: 0;
 }
 
-/* 序号 */
+/* 序号 - 高对比度深色背景白色文字 */
 .history-panel-item .item-seq {
-    width: 24px;
-    height: 24px;
-    background: linear-gradient(135deg, #6c757d, #495057);
-    color: white;
+    width: 26px;
+    height: 26px;
+    background: #495057;
+    color: #ffffff;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 11px;
-    font-weight: 600;
+    font-size: 12px;
+    font-weight: 700;
     flex-shrink: 0;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
 }
 
 /* 图标 */
 .history-panel-item .item-icon {
-    font-size: 20px;
+    font-size: 16px;
     flex-shrink: 0;
     cursor: pointer;
 }
@@ -498,83 +500,100 @@
     flex: 1;
     min-width: 0;
     cursor: pointer;
+    line-height: 1.3;
 }
 
 .history-panel-item .item-name {
     font-weight: 600;
     color: #333;
-    font-size: 13px;
+    font-size: 12px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    margin-bottom: 4px;
+    margin-bottom: 2px;
 }
 
 /* 单据类型 */
 .history-panel-item .item-doctype {
-    font-size: 11px;
+    font-size: 10px;
     color: #28a745;
     font-weight: 500;
-    margin-bottom: 2px;
+    margin-bottom: 1px;
+    display: inline;
 }
 
 /* 创建时间 */
 .history-panel-item .item-time {
-    font-size: 11px;
+    font-size: 10px;
     color: #888;
-    margin-bottom: 2px;
+    margin-bottom: 0;
+    display: inline;
+    margin-left: 8px;
 }
 
 /* 处理时间 */
 .history-panel-item .item-meta {
-    font-size: 10px;
+    font-size: 9px;
     color: #999;
+    display: inline;
+    margin-left: 8px;
 }
 
-/* 置信度徽章 */
+/* 元信息行 - 单据类型、时间、处理时间在同一行 */
+.history-panel-item .item-meta-row {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    flex-wrap: wrap;
+}
+
+/* 置信度徽章 - 增大尺寸和对比度 */
 .history-panel-item .item-badge {
-    padding: 4px 10px;
+    padding: 4px 12px;
     border-radius: 12px;
-    font-size: 11px;
-    font-weight: 600;
+    font-size: 12px;
+    font-weight: 700;
     flex-shrink: 0;
+    min-width: 48px;
+    text-align: center;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.15);
 }
 
 .history-panel-item .item-badge.excellent {
-    background: linear-gradient(135deg, #28a745, #20c997);
+    background: #28a745;
     color: white;
 }
 
 .history-panel-item .item-badge.good {
-    background: linear-gradient(135deg, #17a2b8, #6dd5ed);
+    background: #17a2b8;
     color: white;
 }
 
 .history-panel-item .item-badge.fair {
-    background: linear-gradient(135deg, #ffc107, #ffdb4d);
-    color: #333;
+    background: #fd7e14;
+    color: white;
 }
 
 .history-panel-item .item-badge.poor {
-    background: linear-gradient(135deg, #dc3545, #ff6b6b);
+    background: #dc3545;
     color: white;
 }
 
 .history-panel-item .item-badge.unknown {
-    background: #e0e0e0;
-    color: #666;
+    background: #6c757d;
+    color: white;
 }
 
 /* 删除按钮 */
 .history-panel-item .item-delete {
     background: none;
     border: none;
-    font-size: 16px;
+    font-size: 14px;
     cursor: pointer;
     opacity: 0.5;
     transition: opacity 0.2s, transform 0.2s;
     flex-shrink: 0;
-    padding: 4px;
+    padding: 2px;
 }
 
 .history-panel-item .item-delete:hover {

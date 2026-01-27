@@ -226,11 +226,11 @@ frontend/src/
 ### 当前版本号
 | 文件 | 版本 | 更新日期 |
 |------|------|----------|
-| index.js | v51 (t=20260127j) | 2026-01-27 |
-| globalFunctions.js | v26 | 2026-01-27 |
-| 内联脚本 | v6 | 2026-01-27 |
+| index.js | v52 (t=20260128a) | 2026-01-28 |
+| globalFunctions.js | v28 | 2026-01-28 |
+| 内联脚本 | v7 (方案A) | 2026-01-28 |
 | Step5DataExtract.js | v37 | 2026-01-27 |
-| Step6Confirmation.js | v18 | 2026-01-27 |
+| Step6Confirmation.js | v19 | 2026-01-28 |
 
 ### 版本号更新规则
 - 修改文件后，版本号 +1
@@ -253,9 +253,11 @@ frontend/src/
 | 函数 | 位置 | 说明 |
 |------|------|------|
 | `handleProcessingComplete()` | index.js | OCR 完成后处理 |
-| `extractOCRRegions()` | index.js | 提取 OCR 区域 |
-| `renderBlockList()` | index.js | 渲染 Block 列表 |
-| `renderBlockListInline()` | 内联脚本 | 渲染 Block 列表（内联版） |
+| `extractOCRRegions()` | globalFunctions.js | 提取 OCR 区域（统一入口） |
+| `renderBlockList()` | globalFunctions.js | 渲染 Block 列表（统一入口） |
+| `drawOCRRegions()` | globalFunctions.js | 绘制 OCR 区域框（统一入口） |
+| `showConfidenceReport()` | globalFunctions.js | 显示置信度报告（统一入口） |
+| `showStep4UI()` | globalFunctions.js | 显示步骤4界面（统一入口） |
 
 ### 历史缓存
 | 函数 | 位置 | 说明 |
@@ -282,3 +284,42 @@ frontend/src/
 - **原因**：TEMP_DIR 路径错误
 - **解决**：修正为项目根目录的 temp
 - **状态**：✅ 已解决
+
+### 问题4：步骤4左边坐标框不显示
+- **原因**：内联脚本处理 OCR 结果后没有调用绘制区域框的函数
+- **解决**：按方案A重构，将 `drawOCRRegions` 移到 `globalFunctions.js` 作为统一入口
+- **状态**：✅ 已解决（2026-01-28）
+
+---
+
+## 八、方案A重构记录（2026-01-28）
+
+### 重构内容
+按照 4.1 短期优化方案A，将以下函数从内联脚本移到 `globalFunctions.js` 作为统一入口：
+
+| 函数 | 原位置 | 新位置 | 说明 |
+|------|--------|--------|------|
+| `extractOCRRegions()` | 内联脚本 | globalFunctions.js | 提取 OCR 区域信息 |
+| `renderBlockList()` | 内联脚本 | globalFunctions.js | 渲染 Block 列表 |
+| `drawOCRRegions()` | 内联脚本 | globalFunctions.js | 绘制 OCR 区域框 |
+| `showConfidenceReport()` | 内联脚本 | globalFunctions.js | 显示置信度报告 |
+| `showStep4UI()` | 内联脚本 | globalFunctions.js | 显示步骤4界面 |
+
+### 内联脚本改动
+内联脚本（v7）现在只是简单的包装函数，调用 `globalFunctions.js` 中的统一入口：
+
+```javascript
+function drawOCRRegionsInline(blocks) {
+    if (window.drawOCRRegions) {
+        window.drawOCRRegions(blocks);
+    } else {
+        console.error('drawOCRRegions not found in globalFunctions.js');
+    }
+}
+```
+
+### 优势
+1. **统一入口**：所有数据处理函数都在 `globalFunctions.js` 中
+2. **易于维护**：修改一处，全局生效
+3. **调试方便**：函数位置明确，日志统一
+4. **缓存友好**：`globalFunctions.js` 不是 ES6 模块，缓存问题较少

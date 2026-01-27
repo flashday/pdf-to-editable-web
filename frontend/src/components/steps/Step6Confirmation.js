@@ -21,6 +21,10 @@ export class Step6Confirmation {
         // 更新步骤状态 - 将步骤6设为激活状态
         this.updateStepStatus();
         
+        // 更新左侧面板标题为"财务确认"
+        const editorPanelHeader = document.querySelector('.editor-panel-header > span');
+        if (editorPanelHeader) editorPanelHeader.textContent = '📋 财务确认';
+        
         // 隐藏步骤5界面
         const step5Container = document.getElementById('step5Container');
         if (step5Container) step5Container.style.display = 'none';
@@ -48,7 +52,17 @@ export class Step6Confirmation {
      * 更新步骤状态
      */
     updateStepStatus() {
-        // 方法1: 通过 window.app
+        console.log('Step6: Updating step status');
+        
+        // 使用全局统一的 updateStepStatus 函数（确保进度线正确更新）
+        if (typeof window.updateStepStatus === 'function') {
+            window.updateStepStatus(5, 'completed', '✓');
+            window.updateStepStatus(6, 'active');
+            console.log('Step6: Updated status via window.updateStepStatus');
+            return;
+        }
+        
+        // 备用方法: 通过 window.app
         if (window.app && typeof window.app.setStepStatus === 'function') {
             window.app.setStepStatus(5, 'completed', '✓');
             window.app.setStepStatus(6, 'active');
@@ -56,8 +70,8 @@ export class Step6Confirmation {
             return;
         }
         
-        // 方法2: 直接操作 DOM
-        console.log('Step6: Updating status via DOM');
+        // 最后备用: 直接操作 DOM
+        console.log('Step6: Updating status via DOM (fallback)');
         
         // 更新步骤5为完成
         const step5 = document.getElementById('step5');
@@ -73,6 +87,12 @@ export class Step6Confirmation {
         if (step6) {
             step6.classList.remove('completed', 'waiting', 'error');
             step6.classList.add('active');
+        }
+        
+        // 更新进度线
+        const workflowSteps = document.getElementById('workflowSteps');
+        if (workflowSteps) {
+            workflowSteps.setAttribute('data-current-step', '6');
         }
     }
 
@@ -126,7 +146,7 @@ export class Step6Confirmation {
             <div class="step6-content" style="display: flex; flex-direction: column; height: 100%; gap: 15px;">
                 <!-- 标题栏 -->
                 <div class="step6-header" style="flex-shrink: 0; text-align: center; padding-bottom: 10px; border-bottom: 2px solid #e9ecef;">
-                    <h3 style="margin: 0 0 8px 0; color: #333; font-size: 18px;">📋 财务确认 - 数据核验</h3>
+                    <h3 style="margin: 0 0 8px 0; color: #333; font-size: 18px;">📋 财务确认</h3>
                     <div style="display: flex; justify-content: center; gap: 20px; font-size: 13px; color: #666;">
                         <span>📄 模板: <strong style="color: #3498db;">${selectedTemplate ? selectedTemplate.name : '自定义'}</strong></span>
                         <span>📊 字段: <strong style="color: #28a745;">${foundFields}/${totalFields}</strong></span>
@@ -153,11 +173,11 @@ export class Step6Confirmation {
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-shrink: 0;">
                         <h4 style="margin: 0; color: #333; font-size: 15px;">
                             📊 关键词提取结果
-                            <span style="font-size: 12px; color: #666; font-weight: normal; margin-left: 8px;">(JSON 格式)</span>
+                            <span style="font-size: 12px; color: #666; font-weight: normal; margin-left: 8px;">(表格格式)</span>
                         </h4>
                         <div style="display: flex; gap: 8px;">
                             <button id="toggleViewBtn" style="background: #6c757d; color: white; border: none; padding: 4px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">
-                                📋 表格视图
+                                { } JSON视图
                             </button>
                             <button id="copyJsonBtn" style="background: #17a2b8; color: white; border: none; padding: 4px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">
                                 📋 复制JSON
@@ -165,10 +185,10 @@ export class Step6Confirmation {
                         </div>
                     </div>
                     <div id="extractedDataContainer" style="flex: 1; background: #f8f9fa; border: 1px solid #ddd; border-radius: 10px; overflow: hidden;">
-                        <div id="jsonView" style="height: 100%; overflow: auto;">
+                        <div id="jsonView" style="display: none; height: 100%; overflow: auto;">
                             <pre id="jsonDataDisplay" style="margin: 0; padding: 15px; font-family: 'Consolas', 'Monaco', 'Courier New', monospace; font-size: 13px; line-height: 1.6; color: #333;">${this.formatJsonWithHighlight(extractedData)}</pre>
                         </div>
-                        <div id="tableView" style="display: none; height: 100%; overflow: auto; padding: 15px;">
+                        <div id="tableView" style="height: 100%; overflow: auto; padding: 15px;">
                             ${this.renderExtractedDataTable(extractedData)}
                         </div>
                     </div>

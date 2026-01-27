@@ -8,6 +8,58 @@
 
 ---
 
+## [2026-01-28] - 界面优化与功能修复
+
+### 界面优化
+
+**修改文件**：
+- `frontend/src/index.html`
+- `frontend/src/styles/steps.css`
+- `frontend/src/utils/globalFunctions.js`
+- `frontend/src/components/steps/Step5DataExtract.js`
+- `frontend/src/components/steps/Step6Confirmation.js`
+
+**优化内容**：
+
+1. **历史缓存界面优化**
+   - 减小行高和内边距，使列表更紧凑
+   - 单据类型、时间、处理时间改为同一行显示
+   - 序号圆圈改为深灰色背景+白色数字（内联样式强制生效）
+   - 置信度百分比徽章增大尺寸，使用纯色背景提高对比度
+
+2. **步骤标题优化**
+   - 步骤5显示用户选择的单据类型名称（如"出差报告 - 数据提取"）
+   - 步骤6标题改为"财务确认"
+   - 步骤6左侧面板标题改为"📋 财务确认"
+   - 确认按钮文本改为"确认进入数据提取"
+
+3. **进度线修复**
+   - 修复步骤5→6进度线颜色不显示的问题
+   - `updateStepStatus` 函数在 completed 状态时也更新 `data-current-step` 属性
+
+### 功能修复
+
+1. **上传限制**
+   - 用户必须先选择单据类型才能上传PDF
+   - 未选择时显示提示并高亮下拉框
+
+2. **双击编辑功能恢复**
+   - 在 `globalFunctions.js` 中添加双击编辑相关函数
+   - `renderBlockList` 添加双击事件绑定
+   - 支持文本编辑弹窗和表格编辑弹窗
+
+**新增全局函数**：
+- `window.startEditRegion(idx, region)` - 开始编辑区域
+- `window.openTextEdit(idx, region)` - 打开文本编辑弹窗
+- `window.closeTextEdit()` - 关闭文本编辑弹窗
+- `window.saveTextEdit()` - 保存文本编辑
+- `window.openTableEdit(idx, region)` - 打开表格编辑弹窗
+- `window.closeTableEdit()` - 关闭表格编辑弹窗
+- `window.saveTableEdit()` - 保存表格编辑
+- `window.closeAllPopups()` - 关闭所有弹窗
+
+---
+
 ## [2026-01-27] - 前端短期重构：统一状态管理和函数入口
 
 ### 重构：统一状态管理

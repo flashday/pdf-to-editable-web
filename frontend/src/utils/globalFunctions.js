@@ -70,13 +70,15 @@ window.loadHistoryPanel = async function() {
                 var confidenceText = job.confidence_score ? Math.round(job.confidence_score * 100) + '%' : '-';
                 
                 return '<div class="history-panel-item" data-job-id="' + job.job_id + '" onclick="window.loadCachedJobAndClose(\'' + job.job_id + '\')">' +
-                    '<span class="item-seq">' + seq + '</span>' +
+                    '<span class="item-seq" style="background:#495057;color:#fff!important;">' + seq + '</span>' +
                     '<span class="item-icon">📄</span>' +
                     '<div class="item-info">' +
                         '<div class="item-name" title="' + job.filename + '">' + job.filename + '</div>' +
-                        '<div class="item-doctype">📋 ' + docTypeName + '</div>' +
-                        '<div class="item-time">🕐 ' + formatDateTime(job.created_at) + '</div>' +
-                        '<div class="item-meta">⏱ ' + Math.round(job.processing_time) + 's</div>' +
+                        '<div class="item-meta-row">' +
+                            '<span class="item-doctype">📋 ' + docTypeName + '</span>' +
+                            '<span class="item-time">🕐 ' + formatDateTime(job.created_at) + '</span>' +
+                            '<span class="item-meta">⏱ ' + Math.round(job.processing_time) + 's</span>' +
+                        '</div>' +
                     '</div>' +
                     '<span class="item-badge ' + confidenceLevel + '">' + confidenceText + '</span>' +
                     '<button class="item-delete" onclick="event.stopPropagation();window.deleteHistoryJob(\'' + job.job_id + '\')" title="删除">🗑</button>' +
@@ -318,9 +320,22 @@ window.updateStepStatus = function(stepNum, status, time) {
     }
     
     // 更新 workflow-steps 的 data-current-step 属性（用于进度线）
+    // 当步骤变为 active 或 completed 时，更新进度线到该步骤
     var workflowSteps = document.getElementById('workflowSteps');
-    if (workflowSteps && status === 'active') {
-        workflowSteps.setAttribute('data-current-step', stepNum);
+    if (workflowSteps) {
+        if (status === 'active') {
+            // 激活状态：进度线到当前步骤
+            workflowSteps.setAttribute('data-current-step', stepNum);
+            console.log('[DEBUG] Progress line updated to step', stepNum);
+        } else if (status === 'completed') {
+            // 完成状态：检查是否需要更新进度线
+            // 只有当完成的步骤大于等于当前进度时才更新
+            var currentStep = parseInt(workflowSteps.getAttribute('data-current-step') || '1');
+            if (stepNum >= currentStep) {
+                workflowSteps.setAttribute('data-current-step', stepNum);
+                console.log('[DEBUG] Progress line updated to completed step', stepNum);
+            }
+        }
     }
     
     console.log('[DEBUG] updateStepStatus DONE - step' + stepNum + ' is now', status);
@@ -670,6 +685,463 @@ window.switchToStep5UI = function() {
         console.error('switchToStep5UI: step5Component not found, please refresh the page');
         alert('步骤5组件未加载，请刷新页面');
     }
+};
+
+// ============================================================
+// OCR 区域处理 - 统一入口
+// ============================================================
+
+/**
+ * 从 blocks 数据中提取 OCR 区域信息
+ * @param {Array} blocks - OCR 识别的 blocks 数组
+ * @returns {Array} - 区域信息数组
+ */
+window.extractOCRRegions = function(blocks) {
+    console.log('[DEBUG] extractOCRRegions called, blocks:', blocks ? blocks.length : 0);
+    var regions = [];
+    if (!blocks || !Array.isArray(blocks)) return regions;
+    
+    blocks.forEach(function(block, i) {
+        var coords = block.metadata ? block.metadata.originalCoordinates : null;
+        var confidence = block.metadata ? block.metadata.confidence : null;
+        var originalStructType = block.metadata ? block.metadata.originalStructType : block.type;
+        var editType = block.metadata ? block.metadata.editType : (block.type === 'table' ? 'table' : 'text');
+        var text = '';
+        if (block.data && block.data.text) text = block.data.text;
+        else if (block.data && block.data.items) text = block.data.items.join(', ');
+        
+        regions.push({
+            index: i,
+            blockId: block.id,
+            type: block.type,
+            text: text,
+            coordinates: coords || {x:0, y:0, width:100, height:30},
+            hasCoordinates: !!coords,
+            tableHtml: block.data ? block.data.tableHtml : null,
+            confidence: confidence,
+            originalStructType: originalStructType,
+            editType: editType
+        });
+    });
+    return regions;
+};
+
+/**
+ * 绘制 OCR 区域框到图片上
+ * @param {Array} blocks - OCR 识别的 blocks 数组（可选，如果不传则从 stateManager 获取）
+ */
+window.drawOCRRegions = function(blocks) {
+    console.log('[DEBUG] drawOCRRegions called');
+    var wrapper = document.getElementById('imageWrapper');
+    var img = document.getElementById('documentImage');
+    
+    if (!wrapper || !img) {
+        console.error('[DEBUG] drawOCRRegions: wrapper or img not found');
+        return;
+    }
+    
+    // 等待图片加载完成
+    if (!img.naturalWidth) {
+        console.log('[DEBUG] drawOCRRegions: waiting for image to load...');
+        img.onload = function() {
+            window.drawOCRRegions(blocks);
+        };
+        return;
+    }
+    
+    // 清除旧的区域框
+    wrapper.querySelectorAll('.ocr-region').forEach(function(el) { el.remove(); });
+    
+    var scaleX = img.clientWidth / img.naturalWidth;
+    var scaleY = img.clientHeight / img.naturalHeight;
+    
+    // 获取区域数据：优先使用传入的 blocks，否则从 stateManager 获取
+    var regions;
+    if (blocks && Array.isArray(blocks)) {
+        regions = window.extractOCRRegions(blocks);
+    } else if (window.stateManager) {
+        regions = window.stateManager.get('ocrRegions') || [];
+    } else if (window.app && window.app.ocrRegions) {
+        regions = window.app.ocrRegions;
+    } else {
+        regions = [];
+    }
+    
+    console.log('[DEBUG] drawOCRRegions: Drawing', regions.length, 'regions, scale:', scaleX.toFixed(2), scaleY.toFixed(2));
+    
+    regions.forEach(function(region, idx) {
+        if (!region.hasCoordinates) return;
+        
+        var c = region.coordinates;
+        var div = document.createElement('div');
+        div.className = 'ocr-region';
+        div.setAttribute('data-region-index', idx);
+        div.setAttribute('data-region-type', region.type);
+        div.style.left = (c.x * scaleX) + 'px';
+        div.style.top = (c.y * scaleY) + 'px';
+        div.style.width = (c.width * scaleX) + 'px';
+        div.style.height = (c.height * scaleY) + 'px';
+        
+        // 索引标签
+        var indexLabel = document.createElement('span');
+        indexLabel.className = 'ocr-region-index';
+        indexLabel.textContent = '#' + (idx + 1);
+        div.appendChild(indexLabel);
+        
+        // 提示框
+        var tip = document.createElement('div');
+        tip.className = 'ocr-region-tooltip';
+        var txt = region.text || '';
+        tip.textContent = txt.length > 30 ? txt.substring(0, 30) + '...' : txt;
+        div.appendChild(tip);
+        
+        // 点击事件 - 选中对应的 block
+        div.addEventListener('click', function(e) {
+            e.stopPropagation();
+            // 移除其他选中状态
+            document.querySelectorAll('.ocr-region.active').forEach(function(el) { el.classList.remove('active'); });
+            document.querySelectorAll('.block-item.active').forEach(function(el) { el.classList.remove('active'); });
+            // 添加选中状态
+            div.classList.add('active');
+            var blockItem = document.querySelector('.block-item[data-region-index="' + idx + '"]');
+            if (blockItem) {
+                blockItem.classList.add('active');
+                blockItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        });
+        
+        wrapper.appendChild(div);
+    });
+    
+    console.log('[DEBUG] drawOCRRegions: Done');
+};
+
+/**
+ * 渲染 Block 列表
+ * @param {Array} blocks - OCR 识别的 blocks 数组
+ */
+window.renderBlockList = function(blocks) {
+    console.log('[DEBUG] renderBlockList called, blocks:', blocks ? blocks.length : 0);
+    
+    var list = document.getElementById('blockList');
+    if (!list) {
+        console.error('[DEBUG] blockList element NOT FOUND!');
+        return;
+    }
+    
+    list.innerHTML = '';
+    
+    if (!blocks || blocks.length === 0) {
+        list.innerHTML = '<div style="padding:20px;color:#666;text-align:center;">No blocks</div>';
+        return;
+    }
+    
+    var regions = window.extractOCRRegions(blocks);
+    console.log('[DEBUG] Rendering', regions.length, 'blocks');
+    
+    regions.forEach(function(region, idx) {
+        var item = document.createElement('div');
+        item.className = 'block-item';
+        item.setAttribute('data-region-index', idx);
+        
+        // Header
+        var hdr = document.createElement('div');
+        hdr.className = 'block-header';
+        
+        // Edit type badge
+        var editTypeBadge = document.createElement('span');
+        editTypeBadge.className = 'block-edit-type ' + region.editType;
+        editTypeBadge.textContent = region.editType.toUpperCase();
+        
+        // Struct type badge
+        var structTypeBadge = document.createElement('span');
+        structTypeBadge.className = 'block-struct-type';
+        structTypeBadge.textContent = region.originalStructType || region.type;
+        
+        // Index
+        var num = document.createElement('span');
+        num.className = 'block-index';
+        num.textContent = '#' + (idx + 1);
+        
+        hdr.appendChild(editTypeBadge);
+        hdr.appendChild(structTypeBadge);
+        hdr.appendChild(num);
+        
+        // Content
+        var cnt = document.createElement('div');
+        cnt.className = 'block-content';
+        if (region.type === 'table' && region.tableHtml) {
+            cnt.classList.add('table-preview');
+            cnt.innerHTML = region.tableHtml;
+        } else {
+            cnt.textContent = region.text || '(empty)';
+        }
+        
+        // Meta
+        var meta = document.createElement('div');
+        meta.className = 'block-meta';
+        var co = region.coordinates;
+        var metaText = 'Pos:(' + Math.round(co.x) + ',' + Math.round(co.y) + ') Size:' + Math.round(co.width) + 'x' + Math.round(co.height);
+        if (region.confidence !== null && region.confidence !== undefined) {
+            metaText += ' Conf:' + region.confidence;
+        } else {
+            metaText += ' Conf:-';
+        }
+        meta.textContent = metaText;
+        
+        item.appendChild(hdr);
+        item.appendChild(cnt);
+        item.appendChild(meta);
+        
+        // 点击事件 - 选中对应的区域框
+        item.addEventListener('click', function() {
+            // 移除其他选中状态
+            document.querySelectorAll('.ocr-region.active').forEach(function(el) { el.classList.remove('active'); });
+            document.querySelectorAll('.block-item.active').forEach(function(el) { el.classList.remove('active'); });
+            // 添加选中状态
+            item.classList.add('active');
+            var ocrRegion = document.querySelector('.ocr-region[data-region-index="' + idx + '"]');
+            if (ocrRegion) {
+                ocrRegion.classList.add('active');
+            }
+        });
+        
+        // 双击事件 - 打开编辑弹窗
+        item.addEventListener('dblclick', function() {
+            window.startEditRegion(idx, region);
+        });
+        
+        list.appendChild(item);
+    });
+    
+    console.log('[DEBUG] renderBlockList: Done, rendered', regions.length, 'items');
+};
+
+// ============================================================
+// 编辑弹窗相关函数
+// ============================================================
+
+window.editingRegionIndex = null;
+window.editingRegionData = null;
+
+/**
+ * 开始编辑区域
+ */
+window.startEditRegion = function(idx, region) {
+    console.log('[DEBUG] startEditRegion:', idx, region ? region.type : 'no region');
+    window.editingRegionIndex = idx;
+    window.editingRegionData = region;
+    
+    // 如果没有传入 region，尝试从 app 获取
+    if (!region && window.app && window.app.ocrRegions) {
+        region = window.app.ocrRegions[idx];
+        window.editingRegionData = region;
+    }
+    
+    if (!region) {
+        console.error('[DEBUG] startEditRegion: region not found');
+        return;
+    }
+    
+    if (region.type === 'table') {
+        window.openTableEdit(idx, region);
+    } else {
+        window.openTextEdit(idx, region);
+    }
+};
+
+/**
+ * 打开文本编辑弹窗
+ */
+window.openTextEdit = function(idx, region) {
+    var txt = region.text || '';
+    var input = document.getElementById('textEditInput');
+    if (input) input.value = txt;
+    var ov = document.getElementById('editOverlay');
+    if (ov) ov.classList.add('visible');
+    var pop = document.getElementById('textEditPopup');
+    if (pop) pop.style.display = 'block';
+    if (input) input.focus();
+};
+
+/**
+ * 关闭文本编辑弹窗
+ */
+window.closeTextEdit = function() {
+    var ov = document.getElementById('editOverlay');
+    if (ov) ov.classList.remove('visible');
+    var pop = document.getElementById('textEditPopup');
+    if (pop) pop.style.display = 'none';
+    window.editingRegionIndex = null;
+    window.editingRegionData = null;
+};
+
+/**
+ * 保存文本编辑
+ */
+window.saveTextEdit = function() {
+    var input = document.getElementById('textEditInput');
+    var txt = input ? input.value : '';
+    var idx = window.editingRegionIndex;
+    
+    if (idx !== null && window.app) {
+        // 更新 modifications
+        if (!window.app.modifications) {
+            window.app.modifications = new Map();
+        }
+        window.app.modifications.set(idx, {text: txt, tableHtml: null});
+        
+        // 更新显示
+        if (window.app.ocrRegions && window.app.ocrRegions[idx]) {
+            window.app.ocrRegions[idx].text = txt;
+        }
+        
+        // 更新 block-item 显示
+        var blockItem = document.querySelector('.block-item[data-region-index="' + idx + '"]');
+        if (blockItem) {
+            blockItem.classList.add('modified');
+            var cnt = blockItem.querySelector('.block-content');
+            if (cnt) cnt.textContent = txt;
+        }
+        
+        console.log('[DEBUG] Text saved for region', idx);
+    }
+    
+    window.closeTextEdit();
+};
+
+/**
+ * 打开表格编辑弹窗
+ */
+window.openTableEdit = function(idx, region) {
+    var html = region.tableHtml || '<table><tr><td>No data</td></tr></table>';
+    var cnt = document.getElementById('tableEditContent');
+    if (cnt) {
+        cnt.innerHTML = html;
+        cnt.querySelectorAll('td,th').forEach(function(c) { c.contentEditable = 'true'; });
+    }
+    var ov = document.getElementById('editOverlay');
+    if (ov) ov.classList.add('visible');
+    var pop = document.getElementById('tableEditPopup');
+    if (pop) pop.classList.add('visible');
+};
+
+/**
+ * 关闭表格编辑弹窗
+ */
+window.closeTableEdit = function() {
+    var ov = document.getElementById('editOverlay');
+    if (ov) ov.classList.remove('visible');
+    var pop = document.getElementById('tableEditPopup');
+    if (pop) pop.classList.remove('visible');
+    window.editingRegionIndex = null;
+    window.editingRegionData = null;
+};
+
+/**
+ * 保存表格编辑
+ */
+window.saveTableEdit = function() {
+    var cnt = document.getElementById('tableEditContent');
+    var idx = window.editingRegionIndex;
+    
+    if (idx !== null && cnt && window.app) {
+        cnt.querySelectorAll('td,th').forEach(function(c) { c.removeAttribute('contenteditable'); });
+        
+        // 更新 modifications
+        if (!window.app.modifications) {
+            window.app.modifications = new Map();
+        }
+        window.app.modifications.set(idx, {text: cnt.textContent.trim(), tableHtml: cnt.innerHTML});
+        
+        // 更新 ocrRegions
+        if (window.app.ocrRegions && window.app.ocrRegions[idx]) {
+            window.app.ocrRegions[idx].text = cnt.textContent.trim();
+            window.app.ocrRegions[idx].tableHtml = cnt.innerHTML;
+        }
+        
+        // 更新 block-item 显示
+        var blockItem = document.querySelector('.block-item[data-region-index="' + idx + '"]');
+        if (blockItem) {
+            blockItem.classList.add('modified');
+            var content = blockItem.querySelector('.block-content');
+            if (content) content.innerHTML = cnt.innerHTML;
+        }
+        
+        console.log('[DEBUG] Table saved for region', idx);
+    }
+    
+    window.closeTableEdit();
+};
+
+/**
+ * 关闭所有弹窗
+ */
+window.closeAllPopups = function() {
+    window.closeTextEdit();
+    window.closeTableEdit();
+};
+
+/**
+ * 显示置信度报告
+ * @param {Object} cr - 置信度报告对象
+ */
+window.showConfidenceReport = function(cr) {
+    if (!cr || !cr.confidence_breakdown) return;
+    
+    var div = document.getElementById('confidenceReport');
+    if (!div) return;
+    
+    var o = cr.confidence_breakdown.overall;
+    var scoreDisplay = String(o.score);
+    
+    var levelMap = {
+        'excellent': '优秀',
+        'good': '良好',
+        'fair': '一般',
+        'poor': '较差'
+    };
+    var descMap = {
+        'Excellent - Very high accuracy expected': '优秀 - 预期准确率非常高',
+        'Good - High accuracy with minimal errors': '良好 - 准确率高，错误极少',
+        'Fair - Moderate accuracy, review recommended': '一般 - 准确率中等，建议复核',
+        'Poor - Low accuracy, manual review required': '较差 - 准确率低，需人工复核'
+    };
+    
+    var levelCn = levelMap[o.level] || o.level;
+    var descCn = descMap[o.description] || o.description;
+    
+    div.innerHTML = '<div class="confidence-info"><h4>置信度: ' + scoreDisplay + ' (' + levelCn + ')</h4><p>' + descCn + '</p></div>';
+};
+
+/**
+ * 显示步骤4界面
+ */
+window.showStep4UI = function() {
+    console.log('[DEBUG] showStep4UI: Switching to Step 4 layout');
+    
+    // 隐藏上传区域
+    var uploadSection = document.querySelector('.upload-section');
+    if (uploadSection) uploadSection.style.display = 'none';
+    
+    // 显示主内容区域
+    var mainContent = document.getElementById('mainContent');
+    if (mainContent) {
+        mainContent.classList.add('visible');
+        mainContent.style.display = 'flex';
+    }
+    
+    // 显示图像面板
+    var imagePanel = document.querySelector('.image-panel');
+    if (imagePanel) imagePanel.style.display = 'flex';
+    
+    // 显示编辑器面板
+    var editorPanel = document.querySelector('.editor-panel');
+    if (editorPanel) editorPanel.style.display = 'flex';
+    
+    // 显示 blockList
+    var blockList = document.getElementById('blockList');
+    if (blockList) blockList.style.display = 'flex';
 };
 
 // ============================================================

@@ -20,7 +20,6 @@
         <!-- 头部 -->
         <div class="header">
             <h1>中心单据处理系统</h1>
-            <p>支撑业务单据非结构化信息向结构化业务数据转化的处理平台</p>
         </div>
         
         <!-- 流程进度条 -->
@@ -117,7 +116,7 @@
                 <span class="doc-type-hint">（选择后上传文件，将自动应用对应的提取模板）</span>
             </div>
             
-            <div class="upload-area" id="uploadArea" onclick="document.getElementById('fileInput').click()">
+            <div class="upload-area" id="uploadArea" onclick="window.handleUploadAreaClick()">
                 <p>📄 拖拽 PDF、JPG 或 PNG 文件到此处，或点击选择</p>
                 <p><small>最大文件: 50MB | 支持: PDF, JPG, PNG</small></p>
             </div>
@@ -159,9 +158,9 @@
                         <button class="smart-btn extract-btn" id="smartExtractBtn" onclick="window.openSmartExtract && window.openSmartExtract()" title="智能提取关键信息">🔮 智能提取</button>
                         <button class="smart-btn qa-btn" id="smartQaBtn" onclick="window.openDocumentQA && window.openDocumentQA()" title="文档问答">💬 问答</button>
                     </div>
-                    <!-- 确认进入步骤5按钮 - 放在智能按钮后面 -->
+                    <!-- 确认进入数据提取按钮 - 放在智能按钮后面 -->
                     <button class="confirm-step5-btn" id="confirmStep5Btn" title="确认预录入完成，进入数据提取步骤" style="display: none;">
-                        ✅ 确认进入步骤5
+                        ✅ 确认进入数据提取
                     </button>
                     <div class="download-buttons" id="downloadButtons" style="display: none;">
                         <button class="download-btn" style="background: #e74c3c;" onclick="window.downloadOriginalFile()" title="下载原始上传文件">📄 原始文件</button>
@@ -213,10 +212,10 @@
     </div>
     
     <!-- 全局函数 -->
-    <script src="utils/globalFunctions.js?v=27"></script>
+    <script src="utils/globalFunctions.js?v=28"></script>
     
     <!-- 主应用 - 添加时间戳强制刷新 -->
-    <script type="module" src="index.js?v=52&t=20260127k"></script>
+    <script type="module" src="index.js?v=52&t=20260128a"></script>
     
     <!-- 智能文档理解组件 -->
     <script src="components/SmartExtract.js?v=2"></script>
@@ -432,184 +431,84 @@
         }
     </script>
     
-    <!-- 方案B：内联上传脚本 - 绑过模块化复杂性 -->
+    <!-- 方案A：内联上传脚本 - 调用 globalFunctions.js 统一入口 -->
     <script>
     (function() {
-        console.log('=== INLINE UPLOAD SCRIPT v6 LOADED ===');
+        console.log('=== INLINE UPLOAD SCRIPT v7 LOADED (方案A: 统一入口) ===');
         
         // ============================================================
-        // 内联辅助函数 - 绕过可能被缓存的 index.js
+        // 内联辅助函数 - 调用 globalFunctions.js 中的统一函数
         // ============================================================
         
-        // 显示步骤4界面
+        // 显示步骤4界面 - 调用全局函数
         function showStep4UIInline() {
-            console.log('showStep4UIInline: Switching to Step 4 layout');
-            
-            // 隐藏上传区域
-            var uploadSection = document.querySelector('.upload-section');
-            if (uploadSection) uploadSection.style.display = 'none';
-            
-            // 显示主内容区域
-            var mainContent = document.getElementById('mainContent');
-            if (mainContent) {
-                mainContent.classList.add('visible');
-                mainContent.style.display = 'flex';
+            if (window.showStep4UI) {
+                window.showStep4UI();
+            } else {
+                console.error('showStep4UI not found in globalFunctions.js');
             }
-            
-            // 显示图像面板
-            var imagePanel = document.querySelector('.image-panel');
-            if (imagePanel) imagePanel.style.display = 'flex';
-            
-            // 显示编辑器面板
-            var editorPanel = document.querySelector('.editor-panel');
-            if (editorPanel) editorPanel.style.display = 'flex';
-            
-            // 显示 blockList
-            var blockList = document.getElementById('blockList');
-            if (blockList) blockList.style.display = 'flex';
         }
         
-        // 提取 OCR 区域
+        // 提取 OCR 区域 - 调用全局函数
         function extractOCRRegionsInline(blocks) {
-            var regions = [];
-            blocks.forEach(function(block, i) {
-                var coords = block.metadata ? block.metadata.originalCoordinates : null;
-                var confidence = block.metadata ? block.metadata.confidence : null;
-                var originalStructType = block.metadata ? block.metadata.originalStructType : block.type;
-                var editType = block.metadata ? block.metadata.editType : (block.type === 'table' ? 'table' : 'text');
-                var text = '';
-                if (block.data && block.data.text) text = block.data.text;
-                else if (block.data && block.data.items) text = block.data.items.join(', ');
-                
-                regions.push({
-                    index: i,
-                    blockId: block.id,
-                    type: block.type,
-                    text: text,
-                    coordinates: coords || {x:0, y:0, width:100, height:30},
-                    hasCoordinates: !!coords,
-                    tableHtml: block.data ? block.data.tableHtml : null,
-                    confidence: confidence,
-                    originalStructType: originalStructType,
-                    editType: editType
-                });
-            });
-            return regions;
+            if (window.extractOCRRegions) {
+                return window.extractOCRRegions(blocks);
+            }
+            console.error('extractOCRRegions not found in globalFunctions.js');
+            return [];
         }
         
-        // 渲染 Block 列表
+        // 渲染 Block 列表 - 调用全局函数
         function renderBlockListInline(blocks) {
-            console.log('=== renderBlockListInline CALLED ===');
-            console.log('blocks count:', blocks.length);
-            
-            var list = document.getElementById('blockList');
-            if (!list) {
-                console.error('blockList element NOT FOUND!');
-                return;
+            if (window.renderBlockList) {
+                window.renderBlockList(blocks);
+            } else {
+                console.error('renderBlockList not found in globalFunctions.js');
             }
-            
-            list.innerHTML = '';
-            
-            if (blocks.length === 0) {
-                list.innerHTML = '<div style="padding:20px;color:#666;text-align:center;">No blocks</div>';
-                return;
-            }
-            
-            var regions = extractOCRRegionsInline(blocks);
-            console.log('Rendering', regions.length, 'blocks');
-            
-            regions.forEach(function(region, idx) {
-                var item = document.createElement('div');
-                item.className = 'block-item';
-                item.setAttribute('data-region-index', idx);
-                
-                // Header
-                var hdr = document.createElement('div');
-                hdr.className = 'block-header';
-                
-                // Edit type badge
-                var editTypeBadge = document.createElement('span');
-                editTypeBadge.className = 'block-edit-type ' + region.editType;
-                editTypeBadge.textContent = region.editType.toUpperCase();
-                
-                // Struct type badge
-                var structTypeBadge = document.createElement('span');
-                structTypeBadge.className = 'block-struct-type';
-                structTypeBadge.textContent = region.originalStructType || region.type;
-                
-                // Index
-                var num = document.createElement('span');
-                num.className = 'block-index';
-                num.textContent = '#' + (idx + 1);
-                
-                hdr.appendChild(editTypeBadge);
-                hdr.appendChild(structTypeBadge);
-                hdr.appendChild(num);
-                
-                // Content
-                var cnt = document.createElement('div');
-                cnt.className = 'block-content';
-                if (region.type === 'table' && region.tableHtml) {
-                    cnt.classList.add('table-preview');
-                    cnt.innerHTML = region.tableHtml;
-                } else {
-                    cnt.textContent = region.text || '(empty)';
-                }
-                
-                // Meta
-                var meta = document.createElement('div');
-                meta.className = 'block-meta';
-                var co = region.coordinates;
-                var metaText = 'Pos:(' + Math.round(co.x) + ',' + Math.round(co.y) + ') Size:' + Math.round(co.width) + 'x' + Math.round(co.height);
-                if (region.confidence !== null && region.confidence !== undefined) {
-                    metaText += ' Conf:' + region.confidence;
-                } else {
-                    metaText += ' Conf:-';
-                }
-                meta.textContent = metaText;
-                
-                item.appendChild(hdr);
-                item.appendChild(cnt);
-                item.appendChild(meta);
-                
-                list.appendChild(item);
-            });
-            
-            console.log('renderBlockListInline: Done, rendered', regions.length, 'items');
         }
         
-        // 显示置信度报告
+        // 显示置信度报告 - 调用全局函数
         function showConfidenceReportInline(cr) {
-            if (!cr || !cr.confidence_breakdown) return;
-            
-            var div = document.getElementById('confidenceReport');
-            if (!div) return;
-            
-            var o = cr.confidence_breakdown.overall;
-            var scoreDisplay = String(o.score);
-            
-            var levelMap = {
-                'excellent': '优秀',
-                'good': '良好',
-                'fair': '一般',
-                'poor': '较差'
-            };
-            var descMap = {
-                'Excellent - Very high accuracy expected': '优秀 - 预期准确率非常高',
-                'Good - High accuracy with minimal errors': '良好 - 准确率高，错误极少',
-                'Fair - Moderate accuracy, review recommended': '一般 - 准确率中等，建议复核',
-                'Poor - Low accuracy, manual review required': '较差 - 准确率低，需人工复核'
-            };
-            
-            var levelCn = levelMap[o.level] || o.level;
-            var descCn = descMap[o.description] || o.description;
-            
-            div.innerHTML = '<div class="confidence-info"><h4>置信度: ' + scoreDisplay + ' (' + levelCn + ')</h4><p>' + descCn + '</p></div>';
+            if (window.showConfidenceReport) {
+                window.showConfidenceReport(cr);
+            } else {
+                console.error('showConfidenceReport not found in globalFunctions.js');
+            }
+        }
+        
+        // 绘制 OCR 区域框 - 调用全局函数
+        function drawOCRRegionsInline(blocks) {
+            if (window.drawOCRRegions) {
+                window.drawOCRRegions(blocks);
+            } else {
+                console.error('drawOCRRegions not found in globalFunctions.js');
+            }
         }
         
         // ============================================================
         // 原有上传处理逻辑
         // ============================================================
+        
+        // 上传区域点击处理 - 检查单据类型
+        window.handleUploadAreaClick = function() {
+            var docTypeSelect = document.getElementById('documentTypeSelect');
+            if (!docTypeSelect || !docTypeSelect.value || docTypeSelect.value.trim() === '') {
+                alert('⚠️ 请先选择单据类型，再上传文件！');
+                // 聚焦到单据类型下拉框
+                if (docTypeSelect) {
+                    docTypeSelect.focus();
+                    docTypeSelect.style.outline = '2px solid #dc3545';
+                    docTypeSelect.style.outlineOffset = '2px';
+                    setTimeout(function() {
+                        docTypeSelect.style.outline = '';
+                        docTypeSelect.style.outlineOffset = '';
+                    }, 2000);
+                }
+                return;
+            }
+            // 单据类型已选择，触发文件选择
+            document.getElementById('fileInput').click();
+        };
         
         // 等待 DOM 完全就绪
         function initUploadHandler() {
@@ -669,6 +568,23 @@
         // 内联上传处理函数
         async function handleFileUploadInline(file) {
             console.log('=== handleFileUploadInline START ===');
+            
+            // 检查是否已选择单据类型
+            var docTypeSelect = document.getElementById('documentTypeSelect');
+            if (!docTypeSelect || !docTypeSelect.value || docTypeSelect.value.trim() === '') {
+                alert('⚠️ 请先选择单据类型，再上传文件！');
+                // 聚焦到单据类型下拉框
+                if (docTypeSelect) {
+                    docTypeSelect.focus();
+                    docTypeSelect.style.outline = '2px solid #dc3545';
+                    docTypeSelect.style.outlineOffset = '2px';
+                    setTimeout(function() {
+                        docTypeSelect.style.outline = '';
+                        docTypeSelect.style.outlineOffset = '';
+                    }, 2000);
+                }
+                return;
+            }
             
             // 验证文件类型
             var allowedTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
@@ -865,6 +781,11 @@
                         // 渲染 Block 列表
                         renderBlockListInline(blocks);
                         
+                        // 绘制 OCR 区域框
+                        setTimeout(function() {
+                            drawOCRRegionsInline(blocks);
+                        }, 300);
+                        
                         // 显示置信度报告
                         if (resultData.confidence_report) {
                             showConfidenceReportInline(resultData.confidence_report);
@@ -908,9 +829,8 @@
                         
                     } else if (attempt < maxAttempts) {
                         // 继续轮询
-                        // 注意：后端返回的 progress 已经是百分比（0-100）
                         if (statusDiv) {
-                            statusDiv.textContent = 'OCR 识别处理中... (' + Math.round(progress) + '%)';
+                            statusDiv.textContent = 'OCR 识别处理中...';
                         }
                         setTimeout(poll, pollInterval);
                         
