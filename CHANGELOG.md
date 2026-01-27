@@ -8,6 +8,38 @@
 
 ---
 
+## [2026-01-27] - 前端短期重构：统一状态管理和函数入口
+
+### 重构：统一状态管理
+
+**修改文件**：
+- `frontend/src/index.js` (v47 → v48)
+- `frontend/src/utils/globalFunctions.js` (v26 → v27)
+- `frontend/src/index.html` (版本号更新)
+
+**重构内容**：
+
+1. **统一函数入口**
+   - `App.setStepStatus()` 现在转发到 `window.updateStepStatus()`
+   - 消除了 `index.js` 和 `globalFunctions.js` 中的重复实现
+   - 所有步骤状态更新统一通过 `window.updateStepStatus()` 入口
+
+2. **统一状态管理**
+   - `handleProcessingComplete()` 中数据同时存储到 `this` 属性和 `StateManager`
+   - `renderBlockList()` 和 `drawOCRRegions()` 优先从 `StateManager` 获取数据
+   - 保持向后兼容：旧代码仍可通过 `window.app.ocrRegions` 访问
+
+3. **标准化调试日志**
+   - 所有关键函数入口添加 `[DEBUG]` 前缀的日志
+   - 日志格式统一：`[DEBUG] functionName START/DONE`
+   - 便于在控制台过滤和追踪执行流程
+
+**版本号更新**：
+- `index.js?v=52&t=20260127k`
+- `globalFunctions.js?v=27`
+
+---
+
 ## [2026-01-27] - 前端代码架构分析与重构方案
 
 ### 文档：前端代码全面审查

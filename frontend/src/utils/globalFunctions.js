@@ -119,36 +119,19 @@ window.deleteHistoryJob = async function(jobId) {
 };
 
 window.loadCachedJob = async function(jobId) {
-    console.log('Loading cached job:', jobId);
-    
-    // 安全的步骤状态更新函数
-    var setStepStatus = function(step, status, time) {
-        if (window.app && typeof window.app.setStepStatus === 'function') {
-            window.app.setStepStatus(step, status, time);
-        } else {
-            // 直接操作 DOM 作为后备方案
-            var stepEl = document.getElementById('step' + step);
-            if (stepEl) {
-                stepEl.classList.remove('completed', 'active', 'waiting', 'error');
-                if (status) stepEl.classList.add(status);
-            }
-            var timeEl = document.getElementById('step' + step + 'Time');
-            if (timeEl && time !== undefined) timeEl.textContent = time;
-        }
-    };
+    console.log('[DEBUG] loadCachedJob START:', jobId);
     
     try {
         // 更新步骤状态：从缓存加载，跳过步骤1-3
-        setStepStatus(1, 'completed', '✓');
-        setStepStatus(2, 'completed', '缓存');
-        setStepStatus(3, 'completed', '缓存');
-        setStepStatus(4, 'active', '加载中...');
+        window.updateStepStatus(1, 'completed', '✓');
+        window.updateStepStatus(2, 'completed', '缓存');
+        window.updateStepStatus(3, 'completed', '缓存');
+        window.updateStepStatus(4, 'active', '加载中...');
         
         // 立即隐藏上传区域，显示主内容区域（左右分栏）
         var uploadSection = document.querySelector('.upload-section');
         if (uploadSection) {
             uploadSection.style.display = 'none';
-            console.log('loadCachedJob: upload-section hidden');
         }
         
         // 显示主内容区域（左边图片，右边编辑器）
@@ -160,7 +143,6 @@ window.loadCachedJob = async function(jobId) {
             mainContent.style.width = '100%';
             mainContent.style.height = 'calc(100vh - 200px)';
             mainContent.style.minHeight = '500px';
-            console.log('loadCachedJob: mainContent visible with flex row');
         }
         
         // 确保左侧图像面板可见
@@ -170,7 +152,6 @@ window.loadCachedJob = async function(jobId) {
             imagePanel.style.flex = '0 0 50%';
             imagePanel.style.width = '50%';
             imagePanel.style.maxWidth = '50%';
-            console.log('loadCachedJob: image-panel visible (50%)');
         }
         
         // 确保右侧编辑器面板可见
@@ -180,40 +161,23 @@ window.loadCachedJob = async function(jobId) {
             editorPanel.style.flex = '0 0 50%';
             editorPanel.style.width = '50%';
             editorPanel.style.maxWidth = '50%';
-            console.log('loadCachedJob: editor-panel visible (50%)');
         }
         
         var res = await fetch('/api/jobs/' + jobId + '/cached-result');
         var data = await res.json();
-        console.log('Cached result:', data);
-        console.log('loadCachedJob: document_type_id from API:', data.document_type_id);
+        console.log('[DEBUG] Cached result loaded, blocks:', data.result?.blocks?.length || 0);
         
         if (data.status === 'completed' && data.result) {
-            console.log('✅ 缓存加载成功！blocks: ' + data.result.blocks.length);
-            
             // 恢复单据类型选择（在 handleProcessingComplete 之前设置）
             if (data.document_type_id && window.stateManager) {
-                console.log('=== loadCachedJob: Setting document type ===');
-                console.log('loadCachedJob: document_type_id from API:', data.document_type_id);
-                console.log('loadCachedJob: typeof document_type_id:', typeof data.document_type_id);
-                console.log('loadCachedJob: window.stateManager exists:', !!window.stateManager);
-                console.log('loadCachedJob: Before set, stateManager.get =', window.stateManager.get('selectedDocumentTypeId'));
-                
+                console.log('[DEBUG] Setting document_type_id:', data.document_type_id);
                 window.stateManager.set('selectedDocumentTypeId', data.document_type_id);
-                
-                console.log('loadCachedJob: After set, stateManager.get =', window.stateManager.get('selectedDocumentTypeId'));
-                console.log('loadCachedJob: Full state after set:', JSON.stringify(window.stateManager.getState ? window.stateManager.getState() : {}, null, 2));
                 
                 // 更新下拉框选择
                 var typeSelect = document.getElementById('documentTypeSelect');
                 if (typeSelect) {
                     typeSelect.value = data.document_type_id;
-                    console.log('loadCachedJob: Updated documentTypeSelect to:', data.document_type_id);
                 }
-            } else {
-                console.log('loadCachedJob: ⚠️ No document_type_id or stateManager not available');
-                console.log('loadCachedJob: data.document_type_id =', data.document_type_id);
-                console.log('loadCachedJob: window.stateManager =', !!window.stateManager);
             }
             
             if (window.app && typeof window.app.handleProcessingComplete === 'function') {
@@ -225,34 +189,31 @@ window.loadCachedJob = async function(jobId) {
                     document_type_id: data.document_type_id
                 };
                 await window.app.handleProcessingComplete(processedData, jobId);
-                setStepStatus(4, 'completed', '✓');
+                window.updateStepStatus(4, 'completed', '✓');
                 
                 // 确保确认按钮被渲染
                 if (window.app && typeof window.app.renderStep4ConfirmButton === 'function') {
-                    console.log('loadCachedJob: Calling renderStep4ConfirmButton');
                     window.app.renderStep4ConfirmButton();
                 } else {
-                    console.log('loadCachedJob: renderStep4ConfirmButton not available, creating button directly');
                     window.createStep4ConfirmButton();
                 }
             } else {
-                console.error('window.app.handleProcessingComplete not available');
+                console.error('[DEBUG] window.app.handleProcessingComplete not available');
                 alert('❌ 应用未完全加载，请刷新页面后重试');
             }
         } else {
-            setStepStatus(4, 'error', '失败');
-            // 恢复上传区域显示
+            window.updateStepStatus(4, 'error', '失败');
             if (uploadSection) uploadSection.style.display = 'block';
             alert('❌ 加载失败: ' + (data.error || '未知错误'));
         }
     } catch(e) {
-        console.error('Error:', e);
-        setStepStatus(4, 'error', '失败');
-        // 恢复上传区域显示
+        console.error('[DEBUG] loadCachedJob error:', e);
+        window.updateStepStatus(4, 'error', '失败');
         var uploadSection = document.querySelector('.upload-section');
         if (uploadSection) uploadSection.style.display = 'block';
         alert('❌ 加载失败: ' + e.message);
     }
+    console.log('[DEBUG] loadCachedJob DONE');
 };
 
 // ============================================================
@@ -331,12 +292,12 @@ window.checkAllServicesStatus = async function() {
     }
 };
 
-// 更新步骤状态的全局函数
+// 更新步骤状态的全局函数 - 统一入口
 window.updateStepStatus = function(stepNum, status, time) {
-    console.log('updateStepStatus:', stepNum, status, time);
+    console.log('[DEBUG] updateStepStatus:', stepNum, status, time);
     var step = document.getElementById('step' + stepNum);
     if (!step) {
-        console.log('Step element not found: step' + stepNum);
+        console.warn('[DEBUG] Step element not found: step' + stepNum);
         return;
     }
     
@@ -346,7 +307,6 @@ window.updateStepStatus = function(stepNum, status, time) {
     // 添加新状态
     if (status) {
         step.classList.add(status);
-        console.log('Added class:', status, 'to step' + stepNum);
     }
     
     // 更新时间显示
@@ -362,6 +322,8 @@ window.updateStepStatus = function(stepNum, status, time) {
     if (workflowSteps && status === 'active') {
         workflowSteps.setAttribute('data-current-step', stepNum);
     }
+    
+    console.log('[DEBUG] updateStepStatus DONE - step' + stepNum + ' is now', status);
 };
 
 window.checkAllServicesStatusFallback = async function() {
@@ -646,19 +608,18 @@ window.createStep4ConfirmButton = function() {
 };
 
 window.confirmStep4AndProceed = function() {
-    console.log('confirmStep4AndProceed: Proceeding to Step 5');
+    console.log('[DEBUG] confirmStep4AndProceed START');
     
     // 确保 finalText 已经计算并保存到全局 stateManager
     if (window.stateManager) {
-        // 先从 window.app 同步数据到 stateManager
+        // 先从 window.app 同步数据到 stateManager（兼容旧代码）
         if (window.app) {
             if (window.app.ocrRegions && window.app.ocrRegions.length > 0) {
                 window.stateManager.set('ocrRegions', window.app.ocrRegions);
-                console.log('confirmStep4AndProceed: synced ocrRegions, count:', window.app.ocrRegions.length);
+                console.log('[DEBUG] synced ocrRegions, count:', window.app.ocrRegions.length);
             }
             if (window.app.ocrData) {
                 window.stateManager.set('ocrData', window.app.ocrData);
-                console.log('confirmStep4AndProceed: synced ocrData');
             }
             if (window.app.currentJobId) {
                 window.stateManager.set('jobId', window.app.currentJobId);
@@ -667,29 +628,16 @@ window.confirmStep4AndProceed = function() {
         
         var finalText = window.stateManager.getFinalText();
         window.stateManager.set('finalText', finalText);
-        console.log('confirmStep4AndProceed: finalText saved, length:', finalText ? finalText.length : 0);
+        console.log('[DEBUG] finalText saved, length:', finalText ? finalText.length : 0);
     }
     
-    // 更新步骤状态
-    if (window.app && typeof window.app.setStepStatus === 'function') {
-        window.app.setStepStatus(4, 'completed', '✓');
-        window.app.setStepStatus(5, 'active');
-    } else {
-        // 直接操作 DOM
-        var step4 = document.getElementById('step4');
-        var step5 = document.getElementById('step5');
-        if (step4) {
-            step4.classList.remove('active');
-            step4.classList.add('completed');
-        }
-        if (step5) {
-            step5.classList.remove('waiting');
-            step5.classList.add('active');
-        }
-    }
+    // 更新步骤状态 - 使用统一入口
+    window.updateStepStatus(4, 'completed', '✓');
+    window.updateStepStatus(5, 'active');
     
     // 切换到步骤5界面
     window.switchToStep5UI();
+    console.log('[DEBUG] confirmStep4AndProceed DONE');
 };
 
 window.switchToStep5UI = function() {
