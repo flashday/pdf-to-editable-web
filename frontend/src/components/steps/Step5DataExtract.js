@@ -49,6 +49,69 @@ export class Step5DataExtract {
         this.checkpointResults = [];
         this.isExtracting = false;
         this.isCheckingPoints = false;
+        // 状态跟踪
+        this.extractionCompleted = false;
+        this.checkpointCompleted = false;
+    }
+    
+    /**
+     * 更新提交按钮状态
+     */
+    updateSubmitButtonState() {
+        const submitBtn = document.getElementById('submitToStep6Btn');
+        const extractStatusIcon = document.getElementById('extractStatusIcon');
+        const extractStatusText = document.getElementById('extractStatusText');
+        const checkpointStatusIcon = document.getElementById('checkpointStatusIcon');
+        const checkpointStatusText = document.getElementById('checkpointStatusText');
+        
+        // 更新提取状态显示
+        if (extractStatusIcon && extractStatusText) {
+            if (this.extractionCompleted) {
+                extractStatusIcon.textContent = '✅';
+                extractStatusText.textContent = '已完成';
+                extractStatusText.style.color = '#28a745';
+            } else if (this.isExtracting) {
+                extractStatusIcon.textContent = '⏳';
+                extractStatusText.textContent = '执行中...';
+                extractStatusText.style.color = '#ffc107';
+            } else {
+                extractStatusIcon.textContent = '⏳';
+                extractStatusText.textContent = '待执行';
+                extractStatusText.style.color = '#586069';
+            }
+        }
+        
+        // 更新检查点状态显示
+        if (checkpointStatusIcon && checkpointStatusText) {
+            if (this.checkpointCompleted) {
+                checkpointStatusIcon.textContent = '✅';
+                checkpointStatusText.textContent = '已完成';
+                checkpointStatusText.style.color = '#28a745';
+            } else if (this.isCheckingPoints) {
+                checkpointStatusIcon.textContent = '⏳';
+                checkpointStatusText.textContent = '执行中...';
+                checkpointStatusText.style.color = '#ffc107';
+            } else {
+                checkpointStatusIcon.textContent = '⏳';
+                checkpointStatusText.textContent = '待执行';
+                checkpointStatusText.style.color = '#586069';
+            }
+        }
+        
+        // 更新提交按钮状态
+        if (submitBtn) {
+            const canSubmit = this.extractionCompleted && this.checkpointCompleted;
+            submitBtn.disabled = !canSubmit;
+            if (canSubmit) {
+                submitBtn.style.background = '#28a745';
+                submitBtn.style.cursor = 'pointer';
+                submitBtn.style.opacity = '1';
+            } else {
+                submitBtn.style.background = '#6c757d';
+                submitBtn.style.cursor = 'not-allowed';
+                submitBtn.style.opacity = '0.6';
+            }
+        }
     }
 
     /**
@@ -60,19 +123,31 @@ export class Step5DataExtract {
         // 隐藏步骤4相关界面
         const blockList = document.getElementById('blockList');
         const confirmArea = document.getElementById('preEntryConfirmArea');
+        const step4ConfirmArea = document.getElementById('step4ConfirmArea');
         const imagePanel = document.querySelector('.image-panel');
         const downloadButtons = document.getElementById('downloadButtons');
         const confidenceReport = document.getElementById('confidenceReport');
         const editModeToggle = document.getElementById('editModeToggle');
         const markdownView = document.getElementById('markdownView');
+        const confirmStep5Btn = document.getElementById('confirmStep5Btn');
+        const editorPanel = document.querySelector('.editor-panel');
         
         if (blockList) blockList.style.display = 'none';
         if (confirmArea) confirmArea.style.display = 'none';
+        if (step4ConfirmArea) step4ConfirmArea.style.display = 'none';
         if (imagePanel) imagePanel.style.display = 'none';
         if (downloadButtons) downloadButtons.style.display = 'none';
         if (confidenceReport) confidenceReport.style.display = 'none';
         if (editModeToggle) editModeToggle.style.display = 'none';
         if (markdownView) markdownView.style.display = 'none';
+        if (confirmStep5Btn) confirmStep5Btn.style.display = 'none';
+        
+        // 让编辑器面板占满整个宽度（因为图像面板已隐藏）
+        if (editorPanel) {
+            editorPanel.style.flex = '1';
+            editorPanel.style.width = '100%';
+            editorPanel.style.maxWidth = '100%';
+        }
         
         // 隐藏步骤6容器（如果存在）
         const step6Container = document.getElementById('step6Container');
@@ -116,6 +191,20 @@ export class Step5DataExtract {
                 // 等待一小段时间让UI更新
                 await new Promise(resolve => setTimeout(resolve, 500));
                 await this.runCheckpoints();
+            } else {
+                // 没有检查点时，自动标记为完成
+                console.log('Step5DataExtract: No checkpoints defined, marking as completed');
+                this.checkpointCompleted = true;
+                this.updateSubmitButtonState();
+                
+                // 更新UI显示
+                const checkpointStatusIcon = document.getElementById('checkpointStatusIcon');
+                const checkpointStatusText = document.getElementById('checkpointStatusText');
+                if (checkpointStatusIcon) checkpointStatusIcon.textContent = '⏭️';
+                if (checkpointStatusText) {
+                    checkpointStatusText.textContent = '无需验证';
+                    checkpointStatusText.style.color = '#17a2b8';
+                }
             }
             
             console.log('Step5DataExtract: Auto-execution completed');
@@ -200,14 +289,23 @@ export class Step5DataExtract {
         const editorContainer = document.querySelector('.editor-container');
         if (!editorContainer) return;
         
+        // 隐藏步骤4的智能按钮
+        const smartButtons = document.getElementById('smartButtons');
+        if (smartButtons) smartButtons.style.display = 'none';
+        
+        // 修改标题为"数据提取"
+        const editorPanelHeader = document.querySelector('.editor-panel-header > span');
+        if (editorPanelHeader) editorPanelHeader.textContent = '📊 数据提取';
+        
         // 创建步骤5专用容器
         let step5Container = document.getElementById('step5Container');
         if (!step5Container) {
             step5Container = document.createElement('div');
             step5Container.id = 'step5Container';
-            step5Container.style.cssText = 'display: none; padding: 15px;';
             editorContainer.appendChild(step5Container);
         }
+        // 设置容器样式 - 使用绝对定位确保占满整个编辑区域
+        step5Container.style.cssText = 'display: none; position: absolute; top: 0; left: 0; right: 0; bottom: 0; padding: 15px; box-sizing: border-box; background: white; z-index: 10;';
         
         // 获取当前文档文本用于预览
         const globalStateManager = window.stateManager || stateManager;
@@ -215,86 +313,101 @@ export class Step5DataExtract {
         if (!previewText && window.app && window.app.ocrRegions) {
             previewText = window.app.ocrRegions.map(r => r.text || '').filter(t => t).join('\n');
         }
-        const textPreview = previewText ? previewText.substring(0, 500) + (previewText.length > 500 ? '...' : '') : '(无文本内容)';
         
         // 使用从后端加载的单据类型，如果没有则使用预设模板
         const templates = this.documentTypes.length > 0 ? this.documentTypes : PRESET_TEMPLATES;
         
         step5Container.innerHTML = `
-            <div class="step5-content">
-                <!-- 文档内容预览区 - 暂时隐藏 -->
-                <!--
-                <div class="document-preview-section" style="margin-bottom: 20px;">
-                    <h4 style="margin: 0 0 10px 0; color: #333;">📄 识别文本预览 <span style="font-size: 12px; color: #666; font-weight: normal;">(共 ${previewText.length} 字符)</span></h4>
-                    <div id="documentTextPreview" style="background: #f8f9fa; border: 1px solid #ddd; border-radius: 6px; padding: 12px; max-height: 150px; overflow: auto; font-size: 13px; line-height: 1.5; white-space: pre-wrap; word-break: break-all;">
-                        ${textPreview.replace(/</g, '&lt;').replace(/>/g, '&gt;')}
+            <!-- 顶部操作栏 -->
+            <div class="step5-header" style="display: flex; justify-content: flex-end; align-items: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #e1e4e8;">
+                <div id="step5StatusHint" style="flex: 1; font-size: 13px; color: #586069;">
+                    <span id="extractStatusIcon">⏳</span> 数据提取: <span id="extractStatusText">待执行</span> &nbsp;|&nbsp;
+                    <span id="checkpointStatusIcon">⏳</span> 检查点验证: <span id="checkpointStatusText">待执行</span>
+                </div>
+                <button id="submitToStep6Btn" disabled style="background: #6c757d; color: white; border: none; padding: 10px 24px; border-radius: 6px; cursor: not-allowed; font-size: 14px; font-weight: 600; opacity: 0.6;">
+                    ➡️ 提交到财务确认
+                </button>
+            </div>
+            
+            <div class="step5-content" style="position: absolute; top: 50px; left: 0; right: 0; bottom: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; box-sizing: border-box;">
+                <!-- 左侧：提取模板与结果 -->
+                <div class="step5-left-panel" style="display: flex; flex-direction: column; background: #fafbfc; border-radius: 8px; padding: 15px; border: 1px solid #e1e4e8; box-sizing: border-box; overflow: hidden;">
+                    <h4 style="margin: 0 0 15px 0; color: #24292e; font-size: 15px; border-bottom: 1px solid #e1e4e8; padding-bottom: 10px; flex-shrink: 0;">📋 数据提取</h4>
+                    
+                    <!-- 模板选择区 -->
+                    <div class="template-section" style="margin-bottom: 15px; flex-shrink: 0;">
+                        <div style="font-size: 13px; color: #586069; margin-bottom: 8px;">选择提取模板：</div>
+                        <div class="template-list" id="templateList" style="display: flex; flex-wrap: wrap; gap: 8px;">
+                            ${templates.map(t => `
+                                <button class="template-btn" data-template-id="${t.id}" 
+                                    style="padding: 6px 14px; border: 1px solid ${this.selectedTemplate && this.selectedTemplate.id === t.id ? '#3498db' : '#d1d5da'}; border-radius: 6px; background: ${this.selectedTemplate && this.selectedTemplate.id === t.id ? '#3498db' : 'white'}; color: ${this.selectedTemplate && this.selectedTemplate.id === t.id ? 'white' : '#24292e'}; cursor: pointer; transition: all 0.2s; font-size: 13px;">
+                                    ${t.name}
+                                </button>
+                            `).join('')}
+                        </div>
                     </div>
-                </div>
-                -->
-                
-                <!-- 模板选择区 -->
-                <div class="template-section" style="margin-bottom: 20px;">
-                    <h4 style="margin: 0 0 10px 0; color: #333;">📋 选择提取模板</h4>
-                    <div class="template-list" id="templateList" style="display: flex; flex-wrap: wrap; gap: 8px;">
-                        ${templates.map(t => `
-                            <button class="template-btn" data-template-id="${t.id}" 
-                                style="padding: 8px 16px; border: 1px solid #ddd; border-radius: 6px; background: ${this.selectedTemplate && this.selectedTemplate.id === t.id ? '#3498db' : 'white'}; color: ${this.selectedTemplate && this.selectedTemplate.id === t.id ? 'white' : '#333'}; cursor: pointer; transition: all 0.2s;">
-                                ${t.name}
-                            </button>
-                        `).join('')}
+                    
+                    <!-- 自定义字段区（仅自定义模板显示） -->
+                    <div class="custom-fields-section" id="customFieldsSection" style="display: none; margin-bottom: 15px; flex-shrink: 0;">
+                        <div style="font-size: 13px; color: #586069; margin-bottom: 8px;">自定义提取字段：</div>
+                        <textarea id="customFieldsInput" placeholder="每行一个字段名"
+                            style="width: 100%; height: 80px; padding: 10px; border: 1px solid #d1d5da; border-radius: 6px; resize: vertical; font-size: 13px; box-sizing: border-box;"></textarea>
                     </div>
-                </div>
-                
-                <!-- 自定义字段区（仅自定义模板显示） -->
-                <div class="custom-fields-section" id="customFieldsSection" style="display: none; margin-bottom: 20px;">
-                    <h4 style="margin: 0 0 10px 0; color: #333;">✏️ 自定义提取字段</h4>
-                    <textarea id="customFieldsInput" placeholder="每行一个字段名，例如：&#10;发票号码&#10;金额&#10;日期"
-                        style="width: 100%; height: 100px; padding: 10px; border: 1px solid #ddd; border-radius: 6px; resize: vertical;"></textarea>
-                </div>
-                
-                <!-- 提取按钮 -->
-                <div style="margin-bottom: 20px;">
-                    <button id="extractBtn" style="background: #3498db; color: white; border: none; padding: 10px 24px; border-radius: 6px; cursor: pointer; font-size: 14px;">
-                        🔍 开始提取
-                    </button>
-                    <span id="extractStatus" style="margin-left: 10px; color: #666;"></span>
-                </div>
-                
-                <!-- 提取结果区 -->
-                <div class="extract-result-section" id="extractResultSection" style="display: none; margin-bottom: 20px;">
-                    <h4 style="margin: 0 0 10px 0; color: #333;">📊 提取结果</h4>
-                    <div id="extractedDataDisplay" style="background: #f8f9fa; border: 1px solid #ddd; border-radius: 6px; padding: 15px; max-height: 300px; overflow: auto;">
+                    
+                    <!-- 提取按钮 -->
+                    <div style="margin-bottom: 15px; flex-shrink: 0;">
+                        <button id="extractBtn" style="background: #3498db; color: white; border: none; padding: 8px 20px; border-radius: 6px; cursor: pointer; font-size: 13px;">
+                            🔍 开始提取
+                        </button>
+                        <span id="extractStatus" style="margin-left: 10px; color: #586069; font-size: 13px;"></span>
                     </div>
-                </div>
-                
-                <!-- 检查点区 -->
-                <div class="checkpoint-section" style="margin-bottom: 20px;">
-                    <h4 style="margin: 0 0 10px 0; color: #333;">✅ 检查点验证</h4>
-                    <p style="color: #666; font-size: 13px; margin-bottom: 10px;">输入要验证的问题，系统将基于文档内容回答</p>
-                    <textarea id="checkpointQuestionsInput" placeholder="每行一个检查点问题，例如：&#10;文档中的金额是多少？&#10;开票日期是什么？&#10;购买方名称是什么？"
-                        style="width: 100%; height: 100px; padding: 10px; border: 1px solid #ddd; border-radius: 6px; resize: vertical; margin-bottom: 10px;">${this.selectedTemplate && this.selectedTemplate.checkpoints ? this.selectedTemplate.checkpoints.join('\n') : ''}</textarea>
-                    <button id="runCheckpointsBtn" style="background: #27ae60; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer;">
-                        ▶ 执行检查点
-                    </button>
-                    <span id="checkpointStatus" style="margin-left: 10px; color: #666;"></span>
-                </div>
-                
-                <!-- 检查点结果区 -->
-                <div class="checkpoint-result-section" id="checkpointResultSection" style="display: none; margin-bottom: 20px;">
-                    <h4 style="margin: 0 0 10px 0; color: #333;">📝 检查点结果</h4>
-                    <div id="checkpointResultsDisplay" style="background: #f0f9ff; border: 1px solid #b8daff; border-radius: 6px; padding: 15px;">
+                    
+                    <!-- 提取结果区 - 占据剩余空间 -->
+                    <div class="extract-result-section" id="extractResultSection" style="flex: 1; overflow: auto; min-height: 100px; display: flex; flex-direction: column;">
+                        <div style="font-size: 13px; color: #586069; margin-bottom: 8px;">提取结果：</div>
+                        <div id="extractedDataDisplay" style="background: white; border: 1px solid #d1d5da; border-radius: 6px; padding: 12px; flex: 1; overflow: auto;">
+                            <div style="color: #999; font-style: italic;">点击"开始提取"按钮提取数据...</div>
+                        </div>
+                    </div>
+                    
+                    <!-- 确认按钮 - 放在左侧底部 -->
+                    <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #e1e4e8; flex-shrink: 0;">
+                        <button id="step5ConfirmBtn" style="background: #28a745; color: white; border: none; padding: 10px 24px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600; display: none; width: 100%;">
+                            ✓ 确认并进入步骤6（财务确认）
+                        </button>
                     </div>
                 </div>
                 
-                <!-- 确认按钮 -->
-                <div style="text-align: center; padding-top: 15px; border-top: 1px solid #ddd;">
-                    <button id="step5ConfirmBtn" style="background: #28a745; color: white; border: none; padding: 10px 24px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600; display: none;">
-                        ✓ 确认并进入下一步
-                    </button>
+                <!-- 右侧：检查点验证 -->
+                <div class="step5-right-panel" style="display: flex; flex-direction: column; background: #f0f9ff; border-radius: 8px; padding: 15px; border: 1px solid #b8daff; box-sizing: border-box; overflow: hidden;">
+                    <h4 style="margin: 0 0 15px 0; color: #24292e; font-size: 15px; border-bottom: 1px solid #b8daff; padding-bottom: 10px; flex-shrink: 0;">✅ 检查点验证</h4>
+                    
+                    <!-- 检查点输入区 -->
+                    <div class="checkpoint-section" style="margin-bottom: 15px; flex-shrink: 0;">
+                        <div style="font-size: 13px; color: #586069; margin-bottom: 8px;">输入验证问题（每行一个）：</div>
+                        <textarea id="checkpointQuestionsInput" placeholder="例如：&#10;发票号码是多少？&#10;开票日期是什么？&#10;金额合计是多少？"
+                            style="width: 100%; height: 120px; padding: 10px; border: 1px solid #b8daff; border-radius: 6px; resize: vertical; font-size: 13px; background: white; box-sizing: border-box;">${this.selectedTemplate && this.selectedTemplate.checkpoints ? this.selectedTemplate.checkpoints.join('\n') : ''}</textarea>
+                    </div>
+                    
+                    <div style="margin-bottom: 15px; flex-shrink: 0;">
+                        <button id="runCheckpointsBtn" style="background: #27ae60; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 13px;">
+                            ▶ 执行检查点
+                        </button>
+                        <span id="checkpointStatus" style="margin-left: 10px; color: #586069; font-size: 13px;"></span>
+                    </div>
+                    
+                    <!-- 检查点结果区 - 占据剩余空间 -->
+                    <div class="checkpoint-result-section" id="checkpointResultSection" style="flex: 1; overflow: auto; min-height: 100px; display: flex; flex-direction: column;">
+                        <div style="font-size: 13px; color: #586069; margin-bottom: 8px;">验证结果：</div>
+                        <div id="checkpointResultsDisplay" style="background: white; border: 1px solid #b8daff; border-radius: 6px; padding: 12px; flex: 1; overflow: auto;">
+                            <div style="color: #999; font-style: italic;">点击"执行检查点"按钮验证数据...</div>
+                        </div>
+                    </div>
                 </div>
             </div>
         `;
         
+        // 显示容器 - 保持绝对定位样式
         step5Container.style.display = 'block';
     }
 
@@ -322,11 +435,28 @@ export class Step5DataExtract {
             runCheckpointsBtn.addEventListener('click', () => this.runCheckpoints());
         }
         
-        // 确认按钮
+        // 确认按钮（旧的，保留兼容）
         const confirmBtn = document.getElementById('step5ConfirmBtn');
         if (confirmBtn) {
             confirmBtn.addEventListener('click', () => this.confirmAndProceed());
         }
+        
+        // 提交到步骤6按钮（新的）
+        const submitBtn = document.getElementById('submitToStep6Btn');
+        if (submitBtn) {
+            submitBtn.addEventListener('click', () => this.submitToStep6());
+        }
+    }
+    
+    /**
+     * 提交到步骤6
+     */
+    submitToStep6() {
+        if (!this.extractionCompleted || !this.checkpointCompleted) {
+            alert('请先完成数据提取和检查点验证');
+            return;
+        }
+        this.confirmAndProceed();
     }
 
     /**
@@ -497,6 +627,10 @@ export class Step5DataExtract {
                 
                 if (statusEl) statusEl.textContent = '✓ 提取完成';
                 
+                // 标记提取完成
+                this.extractionCompleted = true;
+                this.updateSubmitButtonState();
+                
                 // 显示检查点按钮
                 const runCheckpointsBtn = document.getElementById('runCheckpointsBtn');
                 if (runCheckpointsBtn) runCheckpointsBtn.style.display = 'inline-block';
@@ -512,8 +646,11 @@ export class Step5DataExtract {
         } catch (error) {
             console.error('Extraction error:', error);
             if (statusEl) statusEl.textContent = '❌ ' + error.message;
+            this.extractionCompleted = false;
+            this.updateSubmitButtonState();
         } finally {
             this.isExtracting = false;
+            this.updateSubmitButtonState();
             if (extractBtn) extractBtn.disabled = false;
         }
     }
@@ -640,6 +777,10 @@ export class Step5DataExtract {
             
             if (statusEl) statusEl.textContent = '✓ 检查点执行完成';
             
+            // 标记检查点完成
+            this.checkpointCompleted = true;
+            this.updateSubmitButtonState();
+            
             // 显示确认按钮
             const confirmBtn = document.getElementById('step5ConfirmBtn');
             if (confirmBtn) confirmBtn.style.display = 'inline-block';
@@ -648,9 +789,12 @@ export class Step5DataExtract {
         } catch (error) {
             console.error('Checkpoint error:', error);
             if (statusEl) statusEl.textContent = '❌ ' + error.message;
+            this.checkpointCompleted = false;
+            this.updateSubmitButtonState();
             alert('检查点执行失败: ' + error.message);
         } finally {
             this.isCheckingPoints = false;
+            this.updateSubmitButtonState();
             if (runBtn) {
                 runBtn.disabled = false;
                 runBtn.textContent = '▶ 执行检查点';
