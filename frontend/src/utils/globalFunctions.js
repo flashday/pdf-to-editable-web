@@ -191,10 +191,16 @@ window.checkAllServicesStatus = async function() {
             if (data.ocr.loaded) {
                 var timeStr = data.ocr.time > 0 ? ' (' + data.ocr.time.toFixed(1) + 's)' : '';
                 window.updateStatusItem('llmOcrStatus', 'llmOcrText', 'online', '就绪' + timeStr);
+                
+                // OCR 就绪后，更新步骤1为完成，步骤2为激活
+                window.updateStepStatus(1, 'completed', '✓');
+                window.updateStepStatus(2, 'active');
             } else if (data.ocr.loading) {
                 window.updateStatusItem('llmOcrStatus', 'llmOcrText', 'checking', '加载中...');
+                window.updateStepStatus(1, 'active', '加载中...');
             } else {
                 window.updateStatusItem('llmOcrStatus', 'llmOcrText', 'offline', data.ocr.error || '未就绪');
+                window.updateStepStatus(1, 'waiting', '等待中...');
             }
         }
         
@@ -231,12 +237,48 @@ window.checkAllServicesStatus = async function() {
     }
 };
 
+// 更新步骤状态的全局函数
+window.updateStepStatus = function(stepNum, status, time) {
+    console.log('updateStepStatus:', stepNum, status, time);
+    var step = document.getElementById('step' + stepNum);
+    if (!step) {
+        console.log('Step element not found: step' + stepNum);
+        return;
+    }
+    
+    // 移除所有状态类
+    step.classList.remove('completed', 'active', 'waiting', 'error');
+    
+    // 添加新状态
+    if (status) {
+        step.classList.add(status);
+        console.log('Added class:', status, 'to step' + stepNum);
+    }
+    
+    // 更新时间显示
+    if (time !== undefined) {
+        var timeEl = document.getElementById('step' + stepNum + 'Time');
+        if (timeEl) {
+            timeEl.textContent = time;
+        }
+    }
+    
+    // 更新 workflow-steps 的 data-current-step 属性（用于进度线）
+    var workflowSteps = document.getElementById('workflowSteps');
+    if (workflowSteps && status === 'active') {
+        workflowSteps.setAttribute('data-current-step', stepNum);
+    }
+};
+
 window.checkAllServicesStatusFallback = async function() {
+    var ocrReady = false;
+    
     try {
         var healthRes = await fetch('/api/health');
         var healthData = await healthRes.json();
         if (healthData.status === 'healthy') {
             window.updateStatusItem('llmOcrStatus', 'llmOcrText', 'online', '就绪');
+            ocrReady = true;
         } else {
             window.updateStatusItem('llmOcrStatus', 'llmOcrText', 'warning', '加载中');
         }
@@ -267,6 +309,14 @@ window.checkAllServicesStatusFallback = async function() {
     } catch (e) {
         window.updateStatusItem('llmLlmStatus', 'llmLlmText', 'offline', '检测失败');
         window.updateStatusItem('llmRagStatus', 'llmRagText', 'offline', '检测失败');
+    }
+    
+    // 更新步骤状态
+    if (ocrReady) {
+        window.updateStepStatus(1, 'completed', '✓');
+        window.updateStepStatus(2, 'active');
+    } else {
+        window.updateStepStatus(1, 'active', '检测中...');
     }
 };
 

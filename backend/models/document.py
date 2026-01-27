@@ -92,3 +92,4 @@ class Document:
     error_message: Optional[str] = None
     confidence_metrics: Optional[ConfidenceMetrics] = None
     processing_duration: Optional[float] = None
+    document_type_id: Optional[str] = None  # 单据类型ID

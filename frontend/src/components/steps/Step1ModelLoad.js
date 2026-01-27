@@ -11,6 +11,7 @@ export class Step1ModelLoad {
         this.container = container;
         this.checkInterval = null;
         this.isChecking = false;
+        this.hasCompletedOnce = false; // 防止重复触发完成事件
         this.services = {
             ocr: { status: 'checking', text: '检测中...' },
             llm: { status: 'checking', text: '检测中...' },
@@ -63,31 +64,83 @@ export class Step1ModelLoad {
      * 检查所有服务状态
      */
     async checkAllServices() {
-        await Promise.all([
-            this.checkOcrService(),
-            this.checkLlmService()
-        ]);
-        
-        // 判断是否全部就绪
-        const allReady = this.services.ocr.status === 'online';
-        
-        if (allReady) {
-            stateManager.set('modelsReady', true);
-            eventBus.emit(EVENTS.MODELS_READY);
-            eventBus.emit(EVENTS.STEP_COMPLETED, { step: 1 });
+        try {
+            // 使用统一的 /api/services/status 端点
+            const res = await fetch('/api/services/status');
+            const data = await res.json();
+            
+            // OCR 状态
+            if (data.ocr) {
+                const ocr = data.ocr;
+                if (ocr.loaded) {
+                    const timeText = ocr.time ? `就绪 (${ocr.time.toFixed(1)}s)` : '就绪';
+                    this.updateServiceStatus('ocr', 'online', timeText);
+                } else if (ocr.loading) {
+                    this.updateServiceStatus('ocr', 'checking', '加载中...');
+                } else {
+                    this.updateServiceStatus('ocr', 'offline', '未就绪');
+                }
+            }
+            
+            // LLM 状态
+            if (data.llm) {
+                const llm = data.llm;
+                if (llm.loaded) {
+                    this.updateServiceStatus('llm', 'online', 'Ollama');
+                } else if (llm.loading) {
+                    this.updateServiceStatus('llm', 'checking', '加载中...');
+                } else {
+                    this.updateServiceStatus('llm', 'offline', '未连接');
+                }
+            }
+            
+            // RAG 状态
+            if (data.rag) {
+                const rag = data.rag;
+                if (rag.loaded) {
+                    const timeText = rag.time ? `就绪 (${rag.time.toFixed(1)}s)` : '就绪';
+                    this.updateServiceStatus('rag', 'online', timeText);
+                } else if (rag.loading) {
+                    this.updateServiceStatus('rag', 'checking', '加载中...');
+                } else {
+                    this.updateServiceStatus('rag', 'warning', '未启用');
+                }
+            }
+            
+            // 判断是否全部就绪（只需要 OCR 就绪即可）
+            const allReady = this.services.ocr.status === 'online';
+            
+            if (allReady) {
+                stateManager.set('modelsReady', true);
+                eventBus.emit(EVENTS.MODELS_READY);
+                eventBus.emit(EVENTS.STEP_COMPLETED, { step: 1 });
+            }
+        } catch (e) {
+            console.error('Service status check failed:', e);
+            // 回退到单独检查
+            await this.checkOcrService();
+            await this.checkLlmService();
+            
+            const allReady = this.services.ocr.status === 'online';
+            if (allReady && !this.hasCompletedOnce) {
+                this.hasCompletedOnce = true;
+                console.log('Step1ModelLoad (fallback): OCR ready, emitting events');
+                stateManager.set('modelsReady', true);
+                eventBus.emit(EVENTS.MODELS_READY);
+                eventBus.emit(EVENTS.STEP_COMPLETED, { step: 1, timeDisplay: '✓' });
+            }
         }
     }
 
     /**
-     * 检查 OCR 服务
+     * 检查 OCR 服务（回退方法）
      */
     async checkOcrService() {
         try {
             const res = await fetch('/api/health');
             const data = await res.json();
-            
             if (data.status === 'healthy') {
-                this.updateServiceStatus('ocr', 'online', 'PaddleOCR');
+                this.updateServiceStatus('ocr', 'online', '就绪');
             } else {
                 this.updateServiceStatus('ocr', 'offline', '未就绪');
             }
@@ -97,7 +150,7 @@ export class Step1ModelLoad {
     }
 
     /**
-     * 检查 LLM 服务
+     * 检查 LLM 服务（回退方法）
      */
     async checkLlmService() {
         try {
@@ -107,15 +160,12 @@ export class Step1ModelLoad {
             if (data.success && data.data) {
                 const llmData = data.data;
                 
-                // LLM 状态
                 if (llmData.llm_available) {
-                    const modelName = llmData.model || 'Ollama';
-                    this.updateServiceStatus('llm', 'online', modelName);
+                    this.updateServiceStatus('llm', 'online', 'Ollama');
                 } else {
                     this.updateServiceStatus('llm', 'offline', '未连接');
                 }
                 
-                // RAG 状态
                 if (llmData.rag_available) {
                     this.updateServiceStatus('rag', 'online', '就绪');
                 } else {

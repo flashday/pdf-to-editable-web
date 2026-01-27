@@ -86,6 +86,43 @@ export class Step5DataExtract {
         
         this.render();
         this.bindEvents();
+        
+        // 自动执行提取和检查点
+        await this.autoExecute();
+    }
+    
+    /**
+     * 自动执行提取和检查点
+     */
+    async autoExecute() {
+        console.log('Step5DataExtract: Auto-executing extraction and checkpoints');
+        
+        // 确保有选中的模板
+        if (!this.selectedTemplate) {
+            console.log('Step5DataExtract: No template selected, skipping auto-execute');
+            return;
+        }
+        
+        // 显示自动执行状态
+        const statusEl = document.getElementById('extractStatus');
+        if (statusEl) statusEl.textContent = '🤖 自动提取中...';
+        
+        try {
+            // 1. 自动执行提取
+            await this.startExtraction();
+            
+            // 2. 如果有检查点，自动执行检查点
+            if (this.selectedTemplate.checkpoints && this.selectedTemplate.checkpoints.length > 0) {
+                // 等待一小段时间让UI更新
+                await new Promise(resolve => setTimeout(resolve, 500));
+                await this.runCheckpoints();
+            }
+            
+            console.log('Step5DataExtract: Auto-execution completed');
+        } catch (error) {
+            console.error('Step5DataExtract: Auto-execution failed:', error);
+            if (statusEl) statusEl.textContent = '❌ 自动提取失败: ' + error.message;
+        }
     }
     
     /**

@@ -255,7 +255,8 @@ class DocumentProcessor(DocumentProcessorInterface):
                         confidence_score=conf_score,
                         block_count=len(editor_data.blocks),
                         has_tables=has_tables,
-                        status='completed'
+                        status='completed',
+                        document_type_id=document.document_type_id
                     )
             except Exception as cache_error:
                 logger.warning(f"Failed to save job to cache: {cache_error}")

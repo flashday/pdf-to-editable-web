@@ -9,11 +9,11 @@
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     
     <!-- CSS 模块 -->
-    <link rel="stylesheet" href="styles/base.css">
-    <link rel="stylesheet" href="styles/layout.css">
-    <link rel="stylesheet" href="styles/steps.css">
-    <link rel="stylesheet" href="styles/panels.css">
-    <link rel="stylesheet" href="styles/components.css">
+    <link rel="stylesheet" href="styles/base.css?v=15">
+    <link rel="stylesheet" href="styles/layout.css?v=15">
+    <link rel="stylesheet" href="styles/steps.css?v=15">
+    <link rel="stylesheet" href="styles/panels.css?v=15">
+    <link rel="stylesheet" href="styles/components.css?v=16">
 </head>
 <body>
     <div class="container">
@@ -140,6 +140,15 @@
                         <button id="blockModeBtn" class="mode-btn active" onclick="window.switchViewMode('block')" title="Block 视图">📦 Block</button>
                         <button id="markdownModeBtn" class="mode-btn" onclick="window.switchViewMode('markdown')" title="Markdown 视图">📝 Markdown</button>
                     </div>
+                    <!-- 智能提取和问答按钮 -->
+                    <div class="smart-buttons" id="smartButtons">
+                        <button class="smart-btn extract-btn" id="smartExtractBtn" onclick="window.openSmartExtract && window.openSmartExtract()" title="智能提取关键信息">🔮 智能提取</button>
+                        <button class="smart-btn qa-btn" id="smartQaBtn" onclick="window.openDocumentQA && window.openDocumentQA()" title="文档问答">💬 问答</button>
+                    </div>
+                    <!-- 确认进入步骤5按钮 - 放在智能按钮后面 -->
+                    <button class="confirm-step5-btn" id="confirmStep5Btn" title="确认预录入完成，进入数据提取步骤" style="display: none;">
+                        ✅ 确认进入步骤5
+                    </button>
                     <div class="download-buttons" id="downloadButtons" style="display: none;">
                         <button class="download-btn" style="background: #e74c3c;" onclick="window.downloadOriginalFile()" title="下载原始上传文件">📄 原始文件</button>
                         <button class="download-btn" style="background: #17a2b8;" onclick="window.downloadConfidenceLog()" title="置信度计算详细日志">📊 置信度LOG</button>
@@ -190,22 +199,22 @@
     </div>
     
     <!-- 全局函数 -->
-    <script src="utils/globalFunctions.js?v=17"></script>
+    <script src="utils/globalFunctions.js?v=18"></script>
     
     <!-- 主应用 -->
-    <script type="module" src="index.js?v=17"></script>
+    <script type="module" src="index.js?v=28"></script>
     
     <!-- 智能文档理解组件 -->
-    <script src="components/SmartExtract.js"></script>
-    <script src="components/DocumentQA.js"></script>
-    <script src="components/ChatOCRIntegration.js"></script>
-    <script src="components/DocumentTypeConfig.js"></script>
+    <script src="components/SmartExtract.js?v=2"></script>
+    <script src="components/DocumentQA.js?v=2"></script>
+    <script src="components/ChatOCRIntegration.js?v=2"></script>
+    <script src="components/DocumentTypeConfig.js?v=2"></script>
     
     <!-- 步骤组件 -->
     <script type="module">
-        import { Step4PreEntry } from './components/steps/Step4PreEntry.js?v=14';
-        import { Step5DataExtract } from './components/steps/Step5DataExtract.js?v=14';
-        import { Step6Confirmation } from './components/steps/Step6Confirmation.js?v=14';
+        import { Step4PreEntry } from './components/steps/Step4PreEntry.js?v=16';
+        import { Step5DataExtract } from './components/steps/Step5DataExtract.js?v=16';
+        import { Step6Confirmation } from './components/steps/Step6Confirmation.js?v=16';
         
         // 注册到全局
         window.Step4PreEntry = Step4PreEntry;
@@ -254,6 +263,61 @@
                 });
             }
             
+            // 监听识别完成事件，显示确认按钮
+            if (window.eventBus && window.EVENTS) {
+                window.eventBus.on(window.EVENTS.RECOGNITION_COMPLETED, function(data) {
+                    console.log('=== RECOGNITION_COMPLETED in init script ===');
+                    var confirmBtn = document.getElementById('confirmStep5Btn');
+                    if (confirmBtn) {
+                        confirmBtn.style.display = 'inline-block';
+                        console.log('Confirm button shown via init script');
+                    }
+                });
+            }
+            
+            // 绑定确认按钮点击事件
+            var confirmBtn = document.getElementById('confirmStep5Btn');
+            if (confirmBtn) {
+                confirmBtn.addEventListener('click', function() {
+                    console.log('Confirm button clicked');
+                    
+                    // 更新步骤状态
+                    if (window.updateStepStatus) {
+                        window.updateStepStatus(4, 'completed', '✓');
+                        window.updateStepStatus(5, 'active');
+                    }
+                    
+                    // 隐藏按钮
+                    confirmBtn.style.display = 'none';
+                    
+                    // 隐藏步骤4界面元素
+                    var blockList = document.getElementById('blockList');
+                    var imagePanel = document.querySelector('.image-panel');
+                    var downloadButtons = document.getElementById('downloadButtons');
+                    var confidenceReport = document.getElementById('confidenceReport');
+                    var editModeToggle = document.getElementById('editModeToggle');
+                    
+                    if (blockList) blockList.style.display = 'none';
+                    if (imagePanel) imagePanel.style.display = 'none';
+                    if (downloadButtons) downloadButtons.style.display = 'none';
+                    if (confidenceReport) confidenceReport.style.display = 'none';
+                    if (editModeToggle) editModeToggle.style.display = 'none';
+                    
+                    // 隐藏 OCR 区域标记
+                    document.querySelectorAll('.ocr-region').forEach(function(el) { el.style.display = 'none'; });
+                    
+                    // 显示步骤5界面
+                    if (window.step5Component) {
+                        window.step5Component.show();
+                        console.log('Step 5 component shown');
+                    } else {
+                        console.error('Step5 component not found');
+                        alert('步骤5组件未加载，请刷新页面');
+                    }
+                });
+                console.log('Confirm button click handler bound');
+            }
+            
             setTimeout(function() {
                 // 初始化智能功能
                 if (typeof initChatOCRIntegration === 'function' && window.app) {
@@ -266,6 +330,12 @@
                         await originalHandleComplete(data, jobId);
                         if (window.chatOCR) {
                             window.chatOCR.setJobId(jobId);
+                        }
+                        // 确保确认按钮显示
+                        var confirmBtn = document.getElementById('confirmStep5Btn');
+                        if (confirmBtn) {
+                            confirmBtn.style.display = 'inline-block';
+                            console.log('Confirm button shown via wrapper');
                         }
                     };
                     

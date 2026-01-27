@@ -32,12 +32,16 @@ class CachedJob:
     confidence_score: Optional[float] = None
     block_count: int = 0
     has_tables: bool = False
+    document_type_id: Optional[str] = None  # 单据类型ID
     
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
     
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'CachedJob':
+        # 兼容旧数据，添加默认值
+        if 'document_type_id' not in data:
+            data['document_type_id'] = None
         return cls(**data)
 
 
@@ -91,7 +95,8 @@ class JobCacheService:
     
     def save_job(self, job_id: str, filename: str, processing_time: float,
                  confidence_score: Optional[float] = None, block_count: int = 0,
-                 has_tables: bool = False, status: str = 'completed') -> None:
+                 has_tables: bool = False, status: str = 'completed',
+                 document_type_id: Optional[str] = None) -> None:
         """保存任务到缓存"""
         with self._lock:
             job = CachedJob(
@@ -102,11 +107,12 @@ class JobCacheService:
                 status=status,
                 confidence_score=confidence_score,
                 block_count=block_count,
-                has_tables=has_tables
+                has_tables=has_tables,
+                document_type_id=document_type_id
             )
             self._cache[job_id] = job
             self._save_cache()
-            logger.info(f"Cached job: {job_id} ({filename})")
+            logger.info(f"Cached job: {job_id} ({filename}) [doc_type: {document_type_id}]")
     
     def get_job(self, job_id: str) -> Optional[CachedJob]:
         """获取缓存的任务"""
@@ -211,7 +217,8 @@ class JobCacheService:
                 },
                 'markdown': markdown_content,
                 'cached': True,
-                'cached_at': job.created_at
+                'cached_at': job.created_at,
+                'document_type_id': job.document_type_id
             }
         except Exception as e:
             logger.error(f"Failed to load cached result for {job_id}: {e}")

@@ -36,10 +36,14 @@ export class Step3Recognition {
      * 绑定事件
      */
     bindEvents() {
+        console.log('=== Step3Recognition.bindEvents called ===');
         // 监听上传完成事件，开始轮询
         eventBus.on(EVENTS.UPLOAD_COMPLETED, (data) => {
+            console.log('=== Step3Recognition received UPLOAD_COMPLETED ===');
+            console.log('data:', data);
             this.startPolling(data.jobId);
         });
+        console.log('Step3Recognition: UPLOAD_COMPLETED listener registered');
     }
 
     /**
@@ -86,10 +90,13 @@ export class Step3Recognition {
         }
         
         try {
+            console.log('Polling status for jobId:', jobId);
             const res = await fetch(`/api/convert/${jobId}/status`);
             const data = await res.json();
+            console.log('Poll response:', data.status, 'progress:', data.progress);
             
             if (data.status === 'completed') {
+                console.log('=== Poll detected completed status ===');
                 await this.handleComplete(jobId, data);
             } else if (data.status === 'error') {
                 this.handleError(data.error || '处理失败');
@@ -113,20 +120,28 @@ export class Step3Recognition {
      * 处理完成
      */
     async handleComplete(jobId, statusData) {
+        console.log('=== Step3Recognition.handleComplete called ===');
+        console.log('jobId:', jobId);
         this.stopPolling();
         
         const processTime = ((Date.now() - this.startTime) / 1000).toFixed(1);
+        console.log('processTime:', processTime);
         
         // 记录步骤结束时间
         stateManager.recordStepTime(3, 'end');
         
         try {
             // 获取完整结果
+            console.log('Fetching result for jobId:', jobId);
             const result = await this.fetchResult(jobId);
+            console.log('fetchResult returned:', result.success, 'error:', result.error);
             
             if (result.success) {
                 // 保存结果到状态
                 this.saveResultToState(result.data, jobId);
+                
+                console.log('=== Emitting RECOGNITION_COMPLETED event ===');
+                console.log('Event data:', { jobId, dataBlocks: result.data?.blocks?.length || result.data?.result?.blocks?.length || 0 });
                 
                 // 发布识别完成事件
                 eventBus.emit(EVENTS.RECOGNITION_COMPLETED, {
@@ -135,15 +150,21 @@ export class Step3Recognition {
                     duration: processTime
                 });
                 
+                console.log('=== Emitting STEP_COMPLETED event for step 3 ===');
+                
                 // 通知步骤完成
                 eventBus.emit(EVENTS.STEP_COMPLETED, {
                     step: 3,
                     timeDisplay: processTime + 's'
                 });
+                
+                console.log('=== Events emitted successfully ===');
             } else {
+                console.error('fetchResult failed:', result.error);
                 this.handleError(result.error || '获取结果失败');
             }
         } catch (error) {
+            console.error('handleComplete error:', error);
             this.handleError('获取结果失败: ' + error.message);
         }
     }

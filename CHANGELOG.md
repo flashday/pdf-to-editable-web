@@ -8,6 +8,52 @@
 
 ---
 
+## [2026-01-27] - 步骤5自动数据提取 + Job缓存增加单据类型
+
+### 功能：步骤5自动执行提取和检查点
+
+**功能描述**：
+用户在步骤2上传文件时选择的单据类型会保存到 Job 缓存中，步骤5进入时自动加载对应的模板和检查点，并自动执行提取和检查点验证，无需人工操作。
+
+**后端修改**：
+
+1. `backend/services/job_cache.py`
+   - `CachedJob` dataclass 添加 `document_type_id` 字段
+   - `save_job()` 方法接收 `document_type_id` 参数
+   - `load_cached_result()` 返回 `document_type_id`
+   - `from_dict()` 添加旧数据兼容处理
+
+2. `backend/api/routes.py`
+   - `/api/convert` 上传接口从 form data 获取 `document_type_id`
+   - `/api/jobs/history` 返回 `document_type_id`
+   - `/api/jobs/latest` 返回 `document_type_id`
+
+3. `backend/services/document_processor.py`
+   - `save_job()` 调用传递 `document.document_type_id`
+
+4. `backend/models/document.py`
+   - `Document` 模型添加 `document_type_id: Optional[str]` 字段
+
+**前端修改**：
+
+1. `frontend/src/components/steps/Step2FileUpload.js`
+   - 上传时从下拉框获取选中的单据类型 ID
+   - 将 `document_type_id` 添加到 FormData 发送到后端
+   - 保存到 stateManager
+
+2. `frontend/src/components/steps/Step5DataExtract.js`
+   - 添加 `autoExecute()` 方法
+   - `show()` 时自动执行提取和检查点验证
+   - 根据步骤2选中的单据类型自动加载模板
+
+3. `frontend/src/components/panels/HistoryPanel.js`
+   - 加载历史缓存时恢复单据类型选择到下拉框
+
+4. `frontend/src/index.html`
+   - 步骤组件版本号更新到 v=16
+
+---
+
 ## [2026-01-27] - 单据设定功能开发
 
 ### 新增：单据类型配置功能

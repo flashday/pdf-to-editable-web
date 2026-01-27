@@ -169,6 +169,17 @@ export class HistoryPanel {
                     stateManager.set('markdown', data.markdown);
                 }
                 
+                // 恢复单据类型选择
+                if (data.document_type_id) {
+                    stateManager.set('selectedDocumentTypeId', data.document_type_id);
+                    // 更新下拉框选择
+                    const typeSelect = document.getElementById('documentTypeSelect');
+                    if (typeSelect) {
+                        typeSelect.value = data.document_type_id;
+                        console.log('HistoryPanel: Restored document type:', data.document_type_id);
+                    }
+                }
+                
                 // 发布加载完成事件
                 eventBus.emit(EVENTS.HISTORY_JOB_LOADED, {
                     jobId,

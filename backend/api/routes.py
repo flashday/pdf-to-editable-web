@@ -114,13 +114,18 @@ def convert_document():
         # Get file information
         file_info = FileValidator.get_file_info(file)
         
+        # Get document type ID from form data
+        document_type_id = request.form.get('document_type_id', None)
+        logger.info(f"Document type ID: {document_type_id}")
+        
         # Create document record
         document = Document(
             id=str(uuid.uuid4()),
             original_filename=file_info['original_filename'],
             file_type=file_info['file_type'],
             file_size=file_info['file_size'],
-            processing_status=ProcessingStatus.PENDING
+            processing_status=ProcessingStatus.PENDING,
+            document_type_id=document_type_id
         )
         
         # Create job tracking
@@ -1063,7 +1068,8 @@ def get_job_history():
                     'status': job.status,
                     'confidence_score': job.confidence_score,
                     'block_count': job.block_count,
-                    'has_tables': job.has_tables
+                    'has_tables': job.has_tables,
+                    'document_type_id': job.document_type_id
                 }
                 for job in jobs
             ],
@@ -1115,7 +1121,8 @@ def get_latest_job():
                 'status': job.status,
                 'confidence_score': job.confidence_score,
                 'block_count': job.block_count,
-                'has_tables': job.has_tables
+                'has_tables': job.has_tables,
+                'document_type_id': job.document_type_id
             }
         })
     except Exception as e:

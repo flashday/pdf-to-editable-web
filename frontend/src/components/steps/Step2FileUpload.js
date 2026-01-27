@@ -127,6 +127,9 @@ export class Step2FileUpload {
      * 处理文件
      */
     async processFile(file) {
+        console.log('=== Step2FileUpload.processFile called ===');
+        console.log('file:', file.name, file.size, file.type);
+        
         // 验证文件
         const validation = this.validateFile(file);
         if (!validation.valid) {
@@ -199,6 +202,14 @@ export class Step2FileUpload {
             const formData = new FormData();
             formData.append('file', file);
             
+            // 获取选中的单据类型ID
+            const documentTypeSelect = document.getElementById('documentTypeSelect');
+            const documentTypeId = documentTypeSelect ? documentTypeSelect.value : null;
+            if (documentTypeId) {
+                formData.append('document_type_id', documentTypeId);
+                console.log('Step2FileUpload: Uploading with document_type_id:', documentTypeId);
+            }
+            
             // 使用 XMLHttpRequest 以支持进度
             const result = await this.uploadWithProgress(formData);
             
@@ -208,14 +219,25 @@ export class Step2FileUpload {
                 // 保存 jobId
                 stateManager.set('jobId', result.jobId);
                 
+                // 保存单据类型ID到状态
+                if (documentTypeId) {
+                    stateManager.set('selectedDocumentTypeId', documentTypeId);
+                }
+                
                 // 记录步骤结束时间
                 stateManager.recordStepTime(2, 'end');
+                
+                console.log('=== Step2FileUpload: Emitting UPLOAD_COMPLETED ===');
+                console.log('jobId:', result.jobId, 'duration:', uploadTime, 'documentTypeId:', documentTypeId);
                 
                 // 发布上传完成事件
                 eventBus.emit(EVENTS.UPLOAD_COMPLETED, {
                     jobId: result.jobId,
-                    duration: uploadTime
+                    duration: uploadTime,
+                    documentTypeId: documentTypeId
                 });
+                
+                console.log('=== Step2FileUpload: UPLOAD_COMPLETED emitted ===');
                 
                 // 通知步骤完成
                 eventBus.emit(EVENTS.STEP_COMPLETED, { 

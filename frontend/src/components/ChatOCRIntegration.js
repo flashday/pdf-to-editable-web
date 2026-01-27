@@ -64,7 +64,25 @@ class ChatOCRIntegration {
             return;
         }
         
-        // 检查是否已存在
+        // 检查是否已存在 - 如果 HTML 中已有按钮，直接使用它们
+        const existingSmartButtons = document.getElementById('smartButtons');
+        if (existingSmartButtons) {
+            console.log('ChatOCRIntegration: Using existing smart buttons from HTML');
+            // 只添加 LLM 状态指示器
+            if (!document.getElementById('llmStatusIndicator')) {
+                const indicator = document.createElement('span');
+                indicator.id = 'llmStatusIndicator';
+                indicator.className = 'llm-status-indicator';
+                indicator.title = 'LLM 服务状态';
+                indicator.innerHTML = '<span class="status-dot offline"></span>';
+                existingSmartButtons.appendChild(indicator);
+            }
+            this.addToolbarStyles();
+            this.updateButtonStates();
+            return;
+        }
+        
+        // 检查是否已存在动态创建的工具栏
         if (document.getElementById('smartFeaturesToolbar')) return;
         
         // 创建智能功能工具栏
@@ -229,7 +247,9 @@ class ChatOCRIntegration {
             if (e.target.id === 'smartExtractBtn' || e.target.closest('#smartExtractBtn')) {
                 this.toggleSmartExtract();
             }
-            if (e.target.id === 'documentQABtn' || e.target.closest('#documentQABtn')) {
+            // 兼容两种 ID：HTML 中的 smartQaBtn 和动态创建的 documentQABtn
+            if (e.target.id === 'smartQaBtn' || e.target.id === 'documentQABtn' || 
+                e.target.closest('#smartQaBtn') || e.target.closest('#documentQABtn')) {
                 this.toggleDocumentQA();
             }
         });
@@ -250,8 +270,9 @@ class ChatOCRIntegration {
     
     updateButtonStates() {
         const extractBtn = document.getElementById('smartExtractBtn');
-        const qaBtn = document.getElementById('documentQABtn');
-        const statusDot = document.querySelector('.status-dot');
+        // 兼容两种 ID：HTML 中的 smartQaBtn 和动态创建的 documentQABtn
+        const qaBtn = document.getElementById('smartQaBtn') || document.getElementById('documentQABtn');
+        const statusDot = document.querySelector('#llmStatusIndicator .status-dot');
         
         const canUse = this.llmAvailable && this.currentJobId;
         

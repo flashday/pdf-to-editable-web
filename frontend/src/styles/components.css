@@ -182,6 +182,39 @@
     opacity: 0.85;
 }
 
+/* 确认进入步骤5按钮 */
+.confirm-step5-btn {
+    background: linear-gradient(135deg, #28a745, #20c997);
+    color: white;
+    border: none;
+    padding: 8px 20px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.9em;
+    font-weight: 600;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 8px rgba(40, 167, 69, 0.4);
+    white-space: nowrap;
+    margin-left: 10px;
+    animation: pulse-green 2s infinite;
+}
+
+@keyframes pulse-green {
+    0%, 100% { box-shadow: 0 2px 8px rgba(40, 167, 69, 0.4); }
+    50% { box-shadow: 0 4px 16px rgba(40, 167, 69, 0.6); }
+}
+
+.confirm-step5-btn:hover {
+    background: linear-gradient(135deg, #218838, #1abc9c);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(40, 167, 69, 0.4);
+}
+
+.confirm-step5-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 4px rgba(40, 167, 69, 0.3);
+}
+
 /* 编辑模式切换按钮 */
 .edit-mode-toggle {
     display: flex;
