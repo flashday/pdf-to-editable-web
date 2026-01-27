@@ -10,10 +10,10 @@
     
     <!-- CSS 模块 -->
     <link rel="stylesheet" href="styles/base.css?v=15">
-    <link rel="stylesheet" href="styles/layout.css?v=15">
-    <link rel="stylesheet" href="styles/steps.css?v=15">
+    <link rel="stylesheet" href="styles/layout.css?v=16">
+    <link rel="stylesheet" href="styles/steps.css?v=16">
     <link rel="stylesheet" href="styles/panels.css?v=15">
-    <link rel="stylesheet" href="styles/components.css?v=16">
+    <link rel="stylesheet" href="styles/components.css?v=17">
 </head>
 <body>
     <div class="container">
@@ -23,11 +23,15 @@
             <p>业务单据非结构化视觉信息到结构化业务数据的精准转化平台</p>
         </div>
         
-        <!-- 流程进度条 + 历史缓存面板 -->
+        <!-- 流程进度条 -->
         <div class="workflow-container">
-            <!-- 左侧：流程步骤 -->
             <div class="workflow-progress">
                 <div class="workflow-steps" id="workflowSteps">
+                    <!-- 单据设定按钮 -->
+                    <button class="toolbar-btn toolbar-btn-config" id="toolbarDocTypeBtn" title="单据设定">
+                        ⚙️ 单据设定
+                    </button>
+                    
                     <div class="workflow-step" id="step1" data-step="1">
                         <div class="step-icon">1</div>
                         <div class="step-label">模型加载</div>
@@ -48,6 +52,12 @@
                         <div class="step-label">预录入</div>
                         <div class="step-time" id="step4Time"></div>
                     </div>
+                    
+                    <!-- 历史缓存按钮 -->
+                    <button class="toolbar-btn toolbar-btn-history" id="toolbarHistoryBtn" title="历史缓存">
+                        📂 历史缓存
+                    </button>
+                    
                     <div class="workflow-step" id="step5" data-step="5">
                         <div class="step-icon">5</div>
                         <div class="step-label">数据提取</div>
@@ -79,30 +89,25 @@
                     </div>
                 </div>
             </div>
-            
-            <!-- 右侧：历史缓存记录 -->
-            <div class="history-panel" id="historyPanel">
-                <div class="history-panel-header">
-                    <h4>📂 历史缓存</h4>
+        </div>
+        
+        <!-- 历史缓存弹窗 -->
+        <div class="history-modal-overlay" id="historyModalOverlay"></div>
+        <div class="history-modal" id="historyModal">
+            <div class="history-modal-header">
+                <h3>📂 历史缓存</h3>
+                <div class="history-modal-actions">
                     <button class="refresh-btn" onclick="window.loadHistoryPanel()" title="刷新">🔄</button>
+                    <button class="close-btn" id="historyModalClose">✕</button>
                 </div>
-                <div class="history-panel-list" id="historyPanelList">
-                    <div class="history-panel-empty">加载中...</div>
-                </div>
+            </div>
+            <div class="history-modal-body" id="historyPanelList">
+                <div class="history-panel-empty">加载中...</div>
             </div>
         </div>
         
-        <!-- 上传区域 -->
-        <div class="upload-section">
-            <!-- 单据类型选择 -->
-            <div class="document-type-selector" id="documentTypeSelector">
-                <label for="documentTypeSelect">📋 单据类型：</label>
-                <select id="documentTypeSelect" class="doc-type-select">
-                    <option value="">加载中...</option>
-                </select>
-                <button id="docTypeConfigBtn" class="doc-type-config-btn" title="单据设定">⚙️ 设定</button>
-            </div>
-            
+        <!-- 上传区域 - 仅在步骤2显示 -->
+        <div class="upload-section" id="uploadSection">
             <div class="upload-area" id="uploadArea">
                 <p>📄 拖拽 PDF、JPG 或 PNG 文件到此处，或点击选择</p>
                 <p><small>最大文件: 50MB | 支持: PDF, JPG, PNG</small></p>
@@ -199,10 +204,10 @@
     </div>
     
     <!-- 全局函数 -->
-    <script src="utils/globalFunctions.js?v=20"></script>
+    <script src="utils/globalFunctions.js?v=21"></script>
     
     <!-- 主应用 -->
-    <script type="module" src="index.js?v=32"></script>
+    <script type="module" src="index.js?v=33"></script>
     
     <!-- 智能文档理解组件 -->
     <script src="components/SmartExtract.js?v=2"></script>
@@ -236,32 +241,57 @@
             if (typeof initDocumentTypeConfig === 'function') {
                 window.docTypeConfig = initDocumentTypeConfig({ apiBaseUrl: '' });
                 console.log('DocumentTypeConfig initialized');
-                
-                // 加载单据类型到下拉框
-                loadDocumentTypeSelect();
             }
             
-            // 单据设定按钮点击事件
-            var configBtn = document.getElementById('docTypeConfigBtn');
-            if (configBtn) {
-                configBtn.addEventListener('click', function() {
+            // 工具栏 - 单据设定按钮点击事件
+            var toolbarDocTypeBtn = document.getElementById('toolbarDocTypeBtn');
+            if (toolbarDocTypeBtn) {
+                toolbarDocTypeBtn.addEventListener('click', function() {
                     if (window.docTypeConfig) {
                         window.docTypeConfig.show();
                     }
                 });
             }
             
-            // 单据类型选择变化事件
-            var typeSelect = document.getElementById('documentTypeSelect');
-            if (typeSelect) {
-                typeSelect.addEventListener('change', function() {
-                    var selectedTypeId = this.value;
-                    if (window.stateManager) {
-                        window.stateManager.set('selectedDocumentTypeId', selectedTypeId);
+            // 工具栏 - 历史缓存按钮点击事件
+            var toolbarHistoryBtn = document.getElementById('toolbarHistoryBtn');
+            var historyModal = document.getElementById('historyModal');
+            var historyModalOverlay = document.getElementById('historyModalOverlay');
+            var historyModalClose = document.getElementById('historyModalClose');
+            
+            function showHistoryModal() {
+                if (historyModal && historyModalOverlay) {
+                    historyModalOverlay.classList.add('visible');
+                    historyModal.classList.add('visible');
+                    // 加载历史数据
+                    if (window.loadHistoryPanel) {
+                        window.loadHistoryPanel();
                     }
-                    console.log('Selected document type:', selectedTypeId);
-                });
+                }
             }
+            
+            function hideHistoryModal() {
+                if (historyModal && historyModalOverlay) {
+                    historyModalOverlay.classList.remove('visible');
+                    historyModal.classList.remove('visible');
+                }
+            }
+            
+            if (toolbarHistoryBtn) {
+                toolbarHistoryBtn.addEventListener('click', showHistoryModal);
+            }
+            
+            if (historyModalClose) {
+                historyModalClose.addEventListener('click', hideHistoryModal);
+            }
+            
+            if (historyModalOverlay) {
+                historyModalOverlay.addEventListener('click', hideHistoryModal);
+            }
+            
+            // 暴露到全局供其他地方调用
+            window.showHistoryModal = showHistoryModal;
+            window.hideHistoryModal = hideHistoryModal;
             
             // 监听识别完成事件，显示确认按钮
             if (window.eventBus && window.EVENTS) {
@@ -337,6 +367,11 @@
                             confirmBtn.style.display = 'inline-block';
                             console.log('Confirm button shown via wrapper');
                         }
+                        // 隐藏上传区域（进入步骤3后）
+                        var uploadSection = document.getElementById('uploadSection');
+                        if (uploadSection) {
+                            uploadSection.style.display = 'none';
+                        }
                     };
                     
                     if (window.app && window.app.currentJobId) {
@@ -346,33 +381,10 @@
             }, 800);
         });
         
-        // 加载单据类型到下拉框
-        async function loadDocumentTypeSelect() {
-            var select = document.getElementById('documentTypeSelect');
-            if (!select) return;
-            
-            try {
-                var response = await fetch('/api/document-types');
-                var data = await response.json();
-                
-                if (data.success && data.data) {
-                    select.innerHTML = data.data.map(function(type) {
-                        return '<option value="' + type.id + '">' + type.name + '</option>';
-                    }).join('');
-                    
-                    // 默认选中第一个
-                    if (data.data.length > 0 && window.stateManager) {
-                        window.stateManager.set('selectedDocumentTypeId', data.data[0].id);
-                    }
-                }
-            } catch (error) {
-                console.error('Failed to load document types:', error);
-                select.innerHTML = '<option value="">加载失败</option>';
-            }
-        }
-        
-        // 刷新单据类型下拉框（供外部调用）
-        window.refreshDocumentTypeSelect = loadDocumentTypeSelect;
+        // 刷新单据类型下拉框（供外部调用）- 已移除，使用弹窗方式
+        window.refreshDocumentTypeSelect = function() {
+            console.log('Document type select refreshed (modal mode)');
+        };
     </script>
 </body>
 </html>

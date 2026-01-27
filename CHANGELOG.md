@@ -8,6 +8,40 @@
 
 ---
 
+## [2026-01-27] - 界面布局优化：工具栏按钮和弹窗模式
+
+### 新增：工具栏按钮（单据设定 & 历史缓存）
+
+**需求**：将「单据设定」和「历史缓存」按钮移到顶部流程工具栏，点击后弹出子窗口
+
+**实现内容**：
+
+1. `frontend/src/index.html`
+   - 在 workflow-steps 中添加两个工具栏按钮：`toolbarDocTypeBtn`（单据设定）和 `toolbarHistoryBtn`（历史缓存）
+   - 移除右侧的 history-panel，改为弹窗模式（history-modal）
+   - 添加历史缓存弹窗的 HTML 结构
+   - 更新初始化脚本，添加弹窗显示/隐藏的事件处理
+   - 更新版本号：`globalFunctions.js?v=21`
+
+2. `frontend/src/styles/steps.css`
+   - 添加工具栏按钮样式（.toolbar-btn, .toolbar-btn-config, .toolbar-btn-history）
+   - 添加历史缓存弹窗样式（.history-modal, .history-modal-overlay 等）
+   - 添加历史记录项样式（.history-panel-item, .history-item-header 等）
+
+3. `frontend/src/utils/globalFunctions.js`
+   - 更新 `loadHistoryPanel` 函数：
+     - 同时获取历史记录和单据类型配置
+     - 在历史记录项中显示「单据类型」标签
+     - 使用新的 HTML 结构渲染历史列表
+   - 新增 `loadCachedJobAndClose` 函数：点击历史记录后先关闭弹窗再加载缓存
+
+### 优化：上传区域仅在步骤2显示
+
+- 上传区域（uploadSection）在进入步骤3后自动隐藏
+- 从历史缓存加载时也会隐藏上传区域
+
+---
+
 ## [2026-01-27] - 步骤5/6状态管理修复 & 历史缓存单据类型恢复
 
 ### 修复：步骤6财务确认未显示步骤5提取的数据

@@ -19,9 +19,22 @@ window.loadHistoryPanel = async function() {
     list.innerHTML = '<div class="history-panel-empty">加载中...</div>';
     
     try {
-        var res = await fetch('/api/jobs/history?limit=10');
-        var data = await res.json();
+        // 同时获取历史记录和单据类型配置
+        var [historyRes, docTypesRes] = await Promise.all([
+            fetch('/api/jobs/history?limit=10'),
+            fetch('/api/document-types')
+        ]);
+        var data = await historyRes.json();
+        var docTypesData = await docTypesRes.json();
         console.log('History data:', data);
+        
+        // 构建单据类型ID到名称的映射
+        var docTypeMap = {};
+        if (docTypesData.success && docTypesData.document_types) {
+            docTypesData.document_types.forEach(function(dt) {
+                docTypeMap[dt.id] = dt.name;
+            });
+        }
         
         if (data.success && data.jobs && data.jobs.length > 0) {
             var sortedJobs = data.jobs.slice().sort(function(a, b) {
@@ -29,15 +42,23 @@ window.loadHistoryPanel = async function() {
             });
             list.innerHTML = sortedJobs.map(function(job, idx) {
                 var seq = idx + 1;
-                return '<div class="history-panel-item" data-job-id="' + job.job_id + '">' +
-                    '<span class="item-seq">' + seq + '</span>' +
-                    '<span class="item-icon" onclick="window.loadCachedJob(\'' + job.job_id + '\')">📄</span>' +
-                    '<div class="item-info" onclick="window.loadCachedJob(\'' + job.job_id + '\')">' +
-                        '<div class="item-name" title="' + job.filename + '">' + job.filename + '</div>' +
-                        '<div class="item-meta">' + Math.round(job.processing_time) + 's</div>' +
+                var docTypeName = job.document_type_id && docTypeMap[job.document_type_id] 
+                    ? docTypeMap[job.document_type_id] 
+                    : '';
+                var docTypeHtml = docTypeName 
+                    ? '<span class="history-item-doctype">' + docTypeName + '</span>' 
+                    : '';
+                
+                return '<div class="history-panel-item" data-job-id="' + job.job_id + '" onclick="window.loadCachedJobAndClose(\'' + job.job_id + '\')">' +
+                    '<div class="history-item-header">' +
+                        '<span class="history-item-filename" title="' + job.filename + '">' + seq + '. ' + job.filename + '</span>' +
+                        docTypeHtml +
                     '</div>' +
-                    '<span class="item-badge">' + (job.confidence_score ? Math.round(job.confidence_score * 100) + '%' : '-') + '</span>' +
-                    '<button class="item-delete" onclick="event.stopPropagation();window.deleteHistoryJob(\'' + job.job_id + '\')" title="删除">🗑</button>' +
+                    '<div class="history-item-meta">' +
+                        '<span>⏱ ' + Math.round(job.processing_time) + 's</span>' +
+                        '<span style="margin-left:12px;">📊 ' + (job.confidence_score ? Math.round(job.confidence_score * 100) + '%' : '-') + '</span>' +
+                        '<button class="item-delete" onclick="event.stopPropagation();window.deleteHistoryJob(\'' + job.job_id + '\')" title="删除" style="float:right;background:none;border:none;cursor:pointer;font-size:14px;">🗑</button>' +
+                    '</div>' +
                 '</div>';
             }).join('');
         } else {
@@ -47,6 +68,16 @@ window.loadHistoryPanel = async function() {
         console.error('loadHistoryPanel error:', e);
         list.innerHTML = '<div class="history-panel-empty">加载失败</div>';
     }
+};
+
+// 加载缓存并关闭弹窗
+window.loadCachedJobAndClose = async function(jobId) {
+    // 先关闭弹窗
+    if (window.hideHistoryModal) {
+        window.hideHistoryModal();
+    }
+    // 然后加载缓存
+    await window.loadCachedJob(jobId);
 };
 
 window.deleteHistoryJob = async function(jobId) {
