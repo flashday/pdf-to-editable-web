@@ -14,6 +14,7 @@ export class StateManager {
             
             // 步骤 3 输出：OCR 结果
             ocrResult: null,
+            ocrData: null,  // 原始 OCR 数据（包含 blocks）
             ocrRegions: [],
             documentImageUrl: null,
             confidenceReport: null,
@@ -119,6 +120,7 @@ export class StateManager {
             jobId: null,
             filename: null,
             ocrResult: null,
+            ocrData: null,
             ocrRegions: [],
             documentImageUrl: null,
             confidenceReport: null,
@@ -168,6 +170,9 @@ export class StateManager {
         const regions = this.state.ocrRegions || [];
         const corrections = this.state.corrections || [];
         
+        console.log('getFinalText: regions count:', regions.length);
+        console.log('getFinalText: corrections count:', corrections.length);
+        
         const correctionMap = new Map();
         corrections.forEach(c => correctionMap.set(c.blockIndex, c.correctedText));
         
@@ -178,7 +183,22 @@ export class StateManager {
             return region.text || '';
         });
         
-        return texts.join('\n\n');
+        const result = texts.join('\n\n').trim();
+        console.log('getFinalText: result length:', result.length);
+        
+        // 如果 regions 中没有文本，尝试从 ocrData 获取
+        if (!result && this.state.ocrData) {
+            console.log('getFinalText: trying to get text from ocrData');
+            const blocks = this.state.ocrData.blocks || [];
+            const blockTexts = blocks.map(block => {
+                if (block.data && block.data.text) return block.data.text;
+                if (block.data && block.data.items) return block.data.items.join(', ');
+                return '';
+            }).filter(t => t);
+            return blockTexts.join('\n\n');
+        }
+        
+        return result;
     }
 
     /**

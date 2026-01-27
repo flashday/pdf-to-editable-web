@@ -102,8 +102,26 @@ export class Step5DataExtract {
             editorContainer.appendChild(step5Container);
         }
         
+        // 获取当前文档文本用于预览
+        const globalStateManager = window.stateManager || stateManager;
+        let previewText = globalStateManager.get('finalText') || globalStateManager.getFinalText() || '';
+        if (!previewText && window.app && window.app.ocrRegions) {
+            previewText = window.app.ocrRegions.map(r => r.text || '').filter(t => t).join('\n');
+        }
+        const textPreview = previewText ? previewText.substring(0, 500) + (previewText.length > 500 ? '...' : '') : '(无文本内容)';
+        
         step5Container.innerHTML = `
             <div class="step5-content">
+                <!-- 文档内容预览区 - 暂时隐藏 -->
+                <!--
+                <div class="document-preview-section" style="margin-bottom: 20px;">
+                    <h4 style="margin: 0 0 10px 0; color: #333;">📄 识别文本预览 <span style="font-size: 12px; color: #666; font-weight: normal;">(共 ${previewText.length} 字符)</span></h4>
+                    <div id="documentTextPreview" style="background: #f8f9fa; border: 1px solid #ddd; border-radius: 6px; padding: 12px; max-height: 150px; overflow: auto; font-size: 13px; line-height: 1.5; white-space: pre-wrap; word-break: break-all;">
+                        ${textPreview.replace(/</g, '&lt;').replace(/>/g, '&gt;')}
+                    </div>
+                </div>
+                -->
+                
                 <!-- 模板选择区 -->
                 <div class="template-section" style="margin-bottom: 20px;">
                     <h4 style="margin: 0 0 10px 0; color: #333;">📋 选择提取模板</h4>
@@ -142,12 +160,13 @@ export class Step5DataExtract {
                 <!-- 检查点区 -->
                 <div class="checkpoint-section" style="margin-bottom: 20px;">
                     <h4 style="margin: 0 0 10px 0; color: #333;">✅ 检查点验证</h4>
-                    <div id="checkpointList" style="margin-bottom: 10px;">
-                        <div style="color: #666; font-size: 14px;">请先完成数据提取</div>
-                    </div>
-                    <button id="runCheckpointsBtn" style="background: #27ae60; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; display: none;">
+                    <p style="color: #666; font-size: 13px; margin-bottom: 10px;">输入要验证的问题，系统将基于文档内容回答</p>
+                    <textarea id="checkpointQuestionsInput" placeholder="每行一个检查点问题，例如：&#10;文档中的金额是多少？&#10;开票日期是什么？&#10;购买方名称是什么？"
+                        style="width: 100%; height: 100px; padding: 10px; border: 1px solid #ddd; border-radius: 6px; resize: vertical; margin-bottom: 10px;"></textarea>
+                    <button id="runCheckpointsBtn" style="background: #27ae60; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer;">
                         ▶ 执行检查点
                     </button>
+                    <span id="checkpointStatus" style="margin-left: 10px; color: #666;"></span>
                 </div>
                 
                 <!-- 检查点结果区 -->
@@ -249,7 +268,48 @@ export class Step5DataExtract {
         eventBus.emit(EVENTS.EXTRACTION_STARTED);
         
         try {
-            const finalText = stateManager.get('finalText') || stateManager.getFinalText();
+            let finalText = '';
+            
+            // 优先从 window.stateManager 获取（确保使用全局单例）
+            const globalStateManager = window.stateManager || stateManager;
+            
+            finalText = globalStateManager.get('finalText');
+            if (!finalText) {
+                finalText = globalStateManager.getFinalText();
+            }
+            
+            console.log('Step5DataExtract: finalText from stateManager, length:', finalText ? finalText.length : 0);
+            
+            // 如果 stateManager 中没有数据，尝试从 window.app 获取
+            if (!finalText || finalText.trim() === '') {
+                console.log('Step5DataExtract: trying to get data from window.app');
+                if (window.app && window.app.ocrRegions && window.app.ocrRegions.length > 0) {
+                    const texts = window.app.ocrRegions.map(region => region.text || '').filter(t => t);
+                    finalText = texts.join('\n\n');
+                    console.log('Step5DataExtract: extracted from window.app.ocrRegions, length:', finalText.length);
+                }
+            }
+            
+            // 如果还是没有，尝试从 window.app.ocrData 获取
+            if (!finalText || finalText.trim() === '') {
+                console.log('Step5DataExtract: trying to get data from window.app.ocrData');
+                if (window.app && window.app.ocrData && window.app.ocrData.blocks) {
+                    const texts = window.app.ocrData.blocks.map(block => {
+                        if (block.data && block.data.text) return block.data.text;
+                        if (block.data && block.data.items) return block.data.items.join(', ');
+                        return '';
+                    }).filter(t => t);
+                    finalText = texts.join('\n\n');
+                    console.log('Step5DataExtract: extracted from window.app.ocrData, length:', finalText.length);
+                }
+            }
+            
+            console.log('Step5DataExtract: finalText preview:', finalText ? finalText.substring(0, 200) : '(empty)');
+            
+            if (!finalText || finalText.trim() === '') {
+                throw new Error('text 不能为空，请确保已完成 OCR 识别');
+            }
+            
             let fields = this.selectedTemplate.fields;
             
             // 自定义模板从输入框获取字段
@@ -264,21 +324,51 @@ export class Step5DataExtract {
                 throw new Error('请输入至少一个提取字段');
             }
             
-            // 调用 LLM 提取
-            const response = await fetch('/api/llm/extract', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    text: finalText,
-                    fields: fields,
-                    template: this.selectedTemplate.name
-                })
-            });
+            // 调用 LLM 提取 - 使用正确的 extract-info API（支持 RAG）
+            console.log('Step5DataExtract: Calling /api/extract-info with text length:', finalText.length);
+            console.log('Step5DataExtract: Text content (first 500 chars):', finalText.substring(0, 500));
+            
+            // 获取 jobId（使用已声明的 globalStateManager）
+            const jobId = globalStateManager.get('jobId') || (window.app ? window.app.currentJobId : null);
+            
+            let response;
+            if (jobId) {
+                // 如果有 jobId，使用 extract-info API（支持 RAG 检索）
+                console.log('Step5DataExtract: Using /api/extract-info with jobId:', jobId);
+                response = await fetch('/api/extract-info', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        job_id: jobId,
+                        fields: fields,
+                        template: this.selectedTemplate.id !== 'custom' ? this.selectedTemplate.id : null
+                    })
+                });
+            } else {
+                // 如果没有 jobId，使用简单的 llm/extract API
+                console.log('Step5DataExtract: Using /api/llm/extract (no jobId)');
+                response = await fetch('/api/llm/extract', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        text: finalText,
+                        fields: fields,
+                        template: this.selectedTemplate.name
+                    })
+                });
+            }
             
             const result = await response.json();
+            console.log('Step5DataExtract: Extract result:', result);
+            console.log('Step5DataExtract: Extract result.data:', result.data);
+            console.log('Step5DataExtract: Extract result.success:', result.success);
             
             if (result.success) {
-                this.extractedData = result.data;
+                // result.data 包含提取的字段数据
+                // /api/extract-info 返回 { fields: {...}, confidence: 0.x, ... }
+                // /api/llm/extract 返回直接的字段对象
+                this.extractedData = result.data.fields || result.data;
+                console.log('Step5DataExtract: Extracted data:', this.extractedData);
                 stateManager.set('extractedData', this.extractedData);
                 this.renderExtractedData();
                 
@@ -287,6 +377,10 @@ export class Step5DataExtract {
                 // 显示检查点按钮
                 const runCheckpointsBtn = document.getElementById('runCheckpointsBtn');
                 if (runCheckpointsBtn) runCheckpointsBtn.style.display = 'inline-block';
+                
+                // 显示确认按钮
+                const confirmBtn = document.getElementById('step5ConfirmBtn');
+                if (confirmBtn) confirmBtn.style.display = 'inline-block';
                 
                 eventBus.emit(EVENTS.EXTRACTION_COMPLETED, this.extractedData);
             } else {
@@ -315,7 +409,12 @@ export class Step5DataExtract {
             html += '<tr style="background: #e9ecef;"><th style="padding: 8px; border: 1px solid #ddd; text-align: left;">字段</th><th style="padding: 8px; border: 1px solid #ddd; text-align: left;">值</th></tr>';
             
             Object.entries(this.extractedData).forEach(([key, value]) => {
-                html += `<tr><td style="padding: 8px; border: 1px solid #ddd; font-weight: 500;">${key}</td><td style="padding: 8px; border: 1px solid #ddd;">${value || '-'}</td></tr>`;
+                // 判断是否找到值
+                const isEmpty = value === null || value === undefined || value === '' || value === '-' || value === '未找到' || value === 'null';
+                const displayValue = isEmpty ? '<span style="color: #999; font-style: italic;">未找到</span>' : value;
+                const rowStyle = isEmpty ? 'background: #fff8e1;' : '';
+                
+                html += `<tr style="${rowStyle}"><td style="padding: 8px; border: 1px solid #ddd; font-weight: 500;">${key}</td><td style="padding: 8px; border: 1px solid #ddd;">${displayValue}</td></tr>`;
             });
             
             html += '</table>';
@@ -328,52 +427,95 @@ export class Step5DataExtract {
      */
     async runCheckpoints() {
         if (this.isCheckingPoints) return;
-        if (!this.extractedData) {
-            alert('请先完成数据提取');
+        
+        // 从输入框获取检查点问题
+        const questionsInput = document.getElementById('checkpointQuestionsInput');
+        const questionsText = questionsInput ? questionsInput.value.trim() : '';
+        
+        if (!questionsText) {
+            alert('请输入至少一个检查点问题');
+            return;
+        }
+        
+        // 解析问题列表
+        const questions = questionsText.split('\n').map(q => q.trim()).filter(q => q);
+        if (questions.length === 0) {
+            alert('请输入至少一个检查点问题');
             return;
         }
         
         this.isCheckingPoints = true;
         const runBtn = document.getElementById('runCheckpointsBtn');
+        const statusEl = document.getElementById('checkpointStatus');
+        
         if (runBtn) {
             runBtn.disabled = true;
             runBtn.textContent = '执行中...';
         }
+        if (statusEl) statusEl.textContent = '';
         
         eventBus.emit(EVENTS.CHECKPOINT_STARTED);
         
         try {
-            // 获取检查点配置
-            const checkpoints = await this.loadCheckpoints();
-            const finalText = stateManager.get('finalText') || stateManager.getFinalText();
+            // 获取文本内容
+            const globalStateManager = window.stateManager || stateManager;
+            let finalText = globalStateManager.get('finalText') || globalStateManager.getFinalText();
+            
+            // 如果没有，从 window.app 获取
+            if (!finalText && window.app && window.app.ocrRegions) {
+                finalText = window.app.ocrRegions.map(r => r.text || '').filter(t => t).join('\n\n');
+            }
             
             this.checkpointResults = [];
             
-            for (const checkpoint of checkpoints) {
-                const response = await fetch('/api/llm/qa', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        question: checkpoint.question,
-                        context: finalText,
-                        job_id: stateManager.get('jobId')
-                    })
-                });
+            // 获取 jobId 用于 RAG 检索
+            const jobId = globalStateManager.get('jobId') || (window.app ? window.app.currentJobId : null);
+            
+            for (let i = 0; i < questions.length; i++) {
+                const question = questions[i];
+                if (statusEl) statusEl.textContent = `执行中 (${i + 1}/${questions.length})...`;
+                
+                let response;
+                if (jobId) {
+                    // 如果有 jobId，使用 document-qa API（支持 RAG 检索）
+                    console.log('Checkpoint: Using /api/document-qa with jobId:', jobId);
+                    response = await fetch('/api/document-qa', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            job_id: jobId,
+                            question: question
+                        })
+                    });
+                } else {
+                    // 如果没有 jobId，回退到简单的 llm/qa API
+                    console.log('Checkpoint: Using /api/llm/qa (no jobId)');
+                    response = await fetch('/api/llm/qa', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            question: question,
+                            context: finalText
+                        })
+                    });
+                }
                 
                 const result = await response.json();
                 
                 this.checkpointResults.push({
-                    question: checkpoint.question,
+                    question: question,
                     answer: result.success ? result.data.answer : '无法回答',
                     confidence: result.success ? result.data.confidence : 0
                 });
             }
             
-            stateManager.set('checkpointResults', this.checkpointResults);
+            globalStateManager.set('checkpointResults', this.checkpointResults);
             this.renderCheckpointResults();
             
             // 保存到后端
             await this.saveCheckpointsToBackend();
+            
+            if (statusEl) statusEl.textContent = '✓ 检查点执行完成';
             
             // 显示确认按钮
             const confirmBtn = document.getElementById('step5ConfirmBtn');
@@ -382,6 +524,7 @@ export class Step5DataExtract {
             eventBus.emit(EVENTS.CHECKPOINT_COMPLETED, this.checkpointResults);
         } catch (error) {
             console.error('Checkpoint error:', error);
+            if (statusEl) statusEl.textContent = '❌ ' + error.message;
             alert('检查点执行失败: ' + error.message);
         } finally {
             this.isCheckingPoints = false;

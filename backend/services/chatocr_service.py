@@ -405,43 +405,76 @@ class ChatOCRService:
         
         # 从缓存获取完整内容
         try:
-            cache = get_job_cache()
-            if cache:
-                job_data = cache.get_job(job_id)
-                if job_data:
-                    # 尝试从 raw_ocr.json 获取文本
-                    import os
-                    from pathlib import Path
-                    temp_folder = Path(os.environ.get('TEMP_FOLDER', 'temp'))
+            import os
+            from pathlib import Path
+            temp_folder = Path(os.environ.get('TEMP_FOLDER', 'temp'))
+            
+            # 方法1: 尝试从 ppstructure.json 获取文本
+            ppstructure_path = temp_folder / f"{job_id}_ppstructure.json"
+            if ppstructure_path.exists():
+                with open(ppstructure_path, 'r', encoding='utf-8') as f:
+                    ppstructure_data = json.load(f)
+                    items = ppstructure_data.get('items', [])
+                    texts = []
+                    for item in items:
+                        res = item.get('res', {})
+                        text = self._extract_text_from_res(res)
+                        if text:
+                            texts.append(text)
+                    if texts:
+                        content = '\n\n'.join(texts)
+                        logger.info(f"Extracted {len(texts)} text blocks from ppstructure.json for job {job_id}")
+                        return content
+            
+            # 方法2: 尝试读取 raw_ocr.json
+            raw_ocr_path = temp_folder / f"{job_id}_raw_ocr.json"
+            if raw_ocr_path.exists():
+                with open(raw_ocr_path, 'r', encoding='utf-8') as f:
+                    ocr_data = json.load(f)
+                    if isinstance(ocr_data, dict) and 'text' in ocr_data:
+                        return ocr_data['text']
+                    elif isinstance(ocr_data, list):
+                        # 从 OCR 结果列表提取文本
+                        texts = []
+                        for item in ocr_data:
+                            if isinstance(item, dict) and 'text' in item:
+                                texts.append(item['text'])
+                            elif isinstance(item, str):
+                                texts.append(item)
+                        if texts:
+                            return '\n'.join(texts)
+            
+            # 方法3: 尝试读取 raw_ocr.html 并提取文本
+            raw_html_path = temp_folder / f"{job_id}_raw_ocr.html"
+            if raw_html_path.exists():
+                with open(raw_html_path, 'r', encoding='utf-8') as f:
+                    html_content = f.read()
+                    return self._extract_text_from_html(html_content)
                     
-                    # 尝试读取 raw_ocr.json
-                    raw_ocr_path = temp_folder / f"{job_id}_raw_ocr.json"
-                    if raw_ocr_path.exists():
-                        with open(raw_ocr_path, 'r', encoding='utf-8') as f:
-                            ocr_data = json.load(f)
-                            if isinstance(ocr_data, dict) and 'text' in ocr_data:
-                                return ocr_data['text']
-                            elif isinstance(ocr_data, list):
-                                # 从 OCR 结果列表提取文本
-                                texts = []
-                                for item in ocr_data:
-                                    if isinstance(item, dict) and 'text' in item:
-                                        texts.append(item['text'])
-                                    elif isinstance(item, str):
-                                        texts.append(item)
-                                return '\n'.join(texts)
-                    
-                    # 尝试读取 raw_ocr.html 并提取文本
-                    raw_html_path = temp_folder / f"{job_id}_raw_ocr.html"
-                    if raw_html_path.exists():
-                        with open(raw_html_path, 'r', encoding='utf-8') as f:
-                            html_content = f.read()
-                            return self._extract_text_from_html(html_content)
-                            
         except Exception as e:
             logger.error(f"Failed to get document content for job {job_id}: {e}")
         
         return None
+    
+    def _extract_text_from_res(self, res: Any) -> str:
+        """从 ppstructure res 字段提取文本"""
+        if isinstance(res, str):
+            return res
+        if isinstance(res, list):
+            texts = []
+            for item in res:
+                if isinstance(item, dict) and 'text' in item:
+                    texts.append(item['text'])
+                elif isinstance(item, str):
+                    texts.append(item)
+            return ' '.join(texts)
+        if isinstance(res, dict):
+            if 'text' in res:
+                return res['text']
+            # 对于表格，尝试从 html 提取文本
+            if 'html' in res:
+                return self._extract_text_from_html(res['html'])
+        return ''
     
     def _extract_text_from_html(self, html: str) -> str:
         """从 HTML 中提取纯文本"""

@@ -544,6 +544,28 @@ window.createStep4ConfirmButton = function() {
 window.confirmStep4AndProceed = function() {
     console.log('confirmStep4AndProceed: Proceeding to Step 5');
     
+    // 确保 finalText 已经计算并保存到全局 stateManager
+    if (window.stateManager) {
+        // 先从 window.app 同步数据到 stateManager
+        if (window.app) {
+            if (window.app.ocrRegions && window.app.ocrRegions.length > 0) {
+                window.stateManager.set('ocrRegions', window.app.ocrRegions);
+                console.log('confirmStep4AndProceed: synced ocrRegions, count:', window.app.ocrRegions.length);
+            }
+            if (window.app.ocrData) {
+                window.stateManager.set('ocrData', window.app.ocrData);
+                console.log('confirmStep4AndProceed: synced ocrData');
+            }
+            if (window.app.currentJobId) {
+                window.stateManager.set('jobId', window.app.currentJobId);
+            }
+        }
+        
+        var finalText = window.stateManager.getFinalText();
+        window.stateManager.set('finalText', finalText);
+        console.log('confirmStep4AndProceed: finalText saved, length:', finalText ? finalText.length : 0);
+    }
+    
     // 更新步骤状态
     if (window.app && typeof window.app.setStepStatus === 'function') {
         window.app.setStepStatus(4, 'completed', '✓');
@@ -593,7 +615,7 @@ window.switchToStep5UI = function() {
     if (window.step5Component && typeof window.step5Component.show === 'function') {
         window.step5Component.show();
     } else {
-        console.error('switchToStep5UI: step5Component not found');
+        console.error('switchToStep5UI: step5Component not found, please refresh the page');
         alert('步骤5组件未加载，请刷新页面');
     }
 };

@@ -8,6 +8,77 @@
 
 ---
 
+## [2026-01-27] - 步骤5/6界面优化 & RAG集成修复
+
+### 步骤5数据提取RAG集成修复
+
+**问题**：步骤5的智能提取和检查点验证没有使用RAG检索，直接发送全文给LLM
+
+**修复内容**：
+- 智能提取：从 `/api/llm/extract` 改为 `/api/extract-info`（支持RAG检索）
+- 检查点验证：从 `/api/llm/qa` 改为 `/api/document-qa`（支持RAG检索）
+- 修复 `Step5DataExtract.js` 中的重复变量声明错误（`globalStateManager`）
+
+**修改文件**：
+- `frontend/src/components/steps/Step5DataExtract.js`
+
+---
+
+### 步骤6财务确认界面重新设计
+
+**问题**：步骤6界面过于简单，信息展示不够清晰
+
+**修复内容**：
+- 顶部：标题栏 + 统计信息（模板、字段数、检查点数、平均置信度）
+- 上半部：检查点问答结果（带置信度颜色标识）
+- 下半部：关键词提取的JSON数据（支持JSON/表格视图切换）
+- 新增功能：
+  - `formatJsonWithHighlight()` - JSON语法高亮
+  - `renderExtractedDataTable()` - 表格视图渲染
+  - 视图切换按钮、复制JSON按钮
+- 底部操作按钮暂时隐藏（确认提交、驳回修改、返回上一步）
+
+**修改文件**：
+- `frontend/src/components/steps/Step6Confirmation.js`
+
+---
+
+### 步骤6进度条状态修复
+
+**问题**：进入步骤6时，顶部进度条的第6步按钮没有变成激活状态（蓝色）
+
+**修复内容**：
+- 添加 `updateStepStatus()` 方法
+- 支持通过 `window.app.setStepStatus` 或直接操作DOM更新状态
+- 步骤5标记为完成（绿色勾），步骤6标记为激活（蓝色高亮）
+
+**修改文件**：
+- `frontend/src/components/steps/Step6Confirmation.js`
+
+---
+
+### 步骤5界面简化
+
+**修改内容**：
+- 隐藏"识别文本预览"区域（暂时不需要显示OCR原文预览）
+
+**修改文件**：
+- `frontend/src/components/steps/Step5DataExtract.js`
+
+---
+
+### README.md更新
+
+**修改内容**：
+- 在"PP-ChatOCRv4 智能文档理解架构"部分添加详细的核心流程说明
+- 阶段一（文档索引）：文档文本 → 分块 → 向量化 → 存入向量数据库
+- 阶段二（智能问答）：用户输入 → 向量化 → 检索相关片段 → 发给LLM → 得到答案
+
+**修改文件**：
+- `README.md`
+
+---
+
 ## [2026-01-27] - 步骤界面独立化 & 数据提取 API 修复
 
 ### 步骤界面独立显示修复

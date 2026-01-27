@@ -18,6 +18,9 @@ export class Step6Confirmation {
     show() {
         console.log('Step6Confirmation: Showing Step 6 UI');
         
+        // 更新步骤状态 - 将步骤6设为激活状态
+        this.updateStepStatus();
+        
         // 隐藏步骤5界面
         const step5Container = document.getElementById('step5Container');
         if (step5Container) step5Container.style.display = 'none';
@@ -39,6 +42,38 @@ export class Step6Confirmation {
         
         this.render();
         this.bindEvents();
+    }
+    
+    /**
+     * 更新步骤状态
+     */
+    updateStepStatus() {
+        // 方法1: 通过 window.app
+        if (window.app && typeof window.app.setStepStatus === 'function') {
+            window.app.setStepStatus(5, 'completed', '✓');
+            window.app.setStepStatus(6, 'active');
+            console.log('Step6: Updated status via window.app');
+            return;
+        }
+        
+        // 方法2: 直接操作 DOM
+        console.log('Step6: Updating status via DOM');
+        
+        // 更新步骤5为完成
+        const step5 = document.getElementById('step5');
+        if (step5) {
+            step5.classList.remove('active', 'waiting', 'error');
+            step5.classList.add('completed');
+            const step5Time = document.getElementById('step5Time');
+            if (step5Time) step5Time.textContent = '✓';
+        }
+        
+        // 更新步骤6为激活
+        const step6 = document.getElementById('step6');
+        if (step6) {
+            step6.classList.remove('completed', 'waiting', 'error');
+            step6.classList.add('active');
+        }
     }
 
     /**
@@ -63,82 +98,152 @@ export class Step6Confirmation {
         if (!step6Container) {
             step6Container = document.createElement('div');
             step6Container.id = 'step6Container';
-            step6Container.style.cssText = 'display: none; padding: 15px;';
+            step6Container.style.cssText = 'display: none; padding: 15px; height: 100%; overflow: auto;';
             editorContainer.appendChild(step6Container);
         }
         
         const checkpointResults = stateManager.get('checkpointResults') || [];
         const extractedData = stateManager.get('extractedData') || {};
         const corrections = stateManager.get('corrections') || [];
+        const selectedTemplate = stateManager.get('selectedTemplate');
+        
+        // 计算统计信息
+        const totalFields = Object.keys(extractedData).length;
+        const foundFields = Object.values(extractedData).filter(v => v && v !== '未找到' && v !== 'null' && v !== null).length;
+        const avgConfidence = checkpointResults.length > 0 
+            ? (checkpointResults.reduce((sum, r) => sum + (r.confidence || 0), 0) / checkpointResults.length * 100).toFixed(0)
+            : 0;
         
         step6Container.innerHTML = `
-            <div class="step6-content">
-                <h3 style="margin: 0 0 20px 0; color: #333; text-align: center;">📋 财务确认</h3>
+            <div class="step6-content" style="display: flex; flex-direction: column; height: 100%; gap: 15px;">
+                <!-- 标题栏 -->
+                <div class="step6-header" style="flex-shrink: 0; text-align: center; padding-bottom: 10px; border-bottom: 2px solid #e9ecef;">
+                    <h3 style="margin: 0 0 8px 0; color: #333; font-size: 18px;">📋 财务确认 - 数据核验</h3>
+                    <div style="display: flex; justify-content: center; gap: 20px; font-size: 13px; color: #666;">
+                        <span>📄 模板: <strong style="color: #3498db;">${selectedTemplate ? selectedTemplate.name : '自定义'}</strong></span>
+                        <span>📊 字段: <strong style="color: #28a745;">${foundFields}/${totalFields}</strong></span>
+                        <span>✅ 检查点: <strong style="color: #17a2b8;">${checkpointResults.length}</strong></span>
+                        <span>📈 平均置信度: <strong style="color: ${avgConfidence >= 80 ? '#28a745' : avgConfidence >= 50 ? '#ffc107' : '#dc3545'};">${avgConfidence}%</strong></span>
+                    </div>
+                </div>
                 
-                <!-- 检查点答案区 -->
-                <div class="checkpoint-answers-section" style="margin-bottom: 20px;">
-                    <h4 style="margin: 0 0 10px 0; color: #333; display: flex; align-items: center; gap: 8px;">
-                        <span>✅ 检查点验证结果</span>
-                        <span style="font-size: 12px; color: #666; font-weight: normal;">(${checkpointResults.length} 项)</span>
-                    </h4>
-                    <div id="checkpointAnswersList" style="background: #f0f9ff; border: 1px solid #b8daff; border-radius: 8px; padding: 15px;">
+                <!-- 上半部：检查点问答结果 -->
+                <div class="checkpoint-section" style="flex: 1; min-height: 200px; display: flex; flex-direction: column; overflow: hidden;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-shrink: 0;">
+                        <h4 style="margin: 0; color: #333; font-size: 15px;">
+                            ✅ 检查点验证结果
+                            <span style="font-size: 12px; color: #666; font-weight: normal; margin-left: 8px;">(${checkpointResults.length} 项问答)</span>
+                        </h4>
+                    </div>
+                    <div id="checkpointAnswersList" style="flex: 1; background: linear-gradient(135deg, #f0f9ff 0%, #e8f4fd 100%); border: 1px solid #b8daff; border-radius: 10px; padding: 12px; overflow-y: auto;">
                         ${this.renderCheckpointAnswers(checkpointResults)}
                     </div>
                 </div>
                 
-                <!-- 提取数据区 -->
-                <div class="extracted-data-section" style="margin-bottom: 20px;">
-                    <h4 style="margin: 0 0 10px 0; color: #333; display: flex; align-items: center; justify-content: space-between;">
-                        <span>📊 提取数据 (JSON)</span>
+                <!-- 下半部：提取数据 JSON -->
+                <div class="extracted-data-section" style="flex: 1; min-height: 200px; display: flex; flex-direction: column; overflow: hidden;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-shrink: 0;">
+                        <h4 style="margin: 0; color: #333; font-size: 15px;">
+                            📊 关键词提取结果
+                            <span style="font-size: 12px; color: #666; font-weight: normal; margin-left: 8px;">(JSON 格式)</span>
+                        </h4>
                         <div style="display: flex; gap: 8px;">
-                            <button id="toggleJsonBtn" style="background: #6c757d; color: white; border: none; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px;">
-                                ${this.isJsonExpanded ? '收起' : '展开'}
+                            <button id="toggleViewBtn" style="background: #6c757d; color: white; border: none; padding: 4px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">
+                                📋 表格视图
                             </button>
-                            <button id="copyJsonBtn" style="background: #17a2b8; color: white; border: none; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px;">
-                                📋 复制
+                            <button id="copyJsonBtn" style="background: #17a2b8; color: white; border: none; padding: 4px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">
+                                📋 复制JSON
                             </button>
                         </div>
-                    </h4>
-                    <div id="jsonDataContainer" style="background: #f8f9fa; border: 1px solid #ddd; border-radius: 8px; overflow: hidden; ${this.isJsonExpanded ? '' : 'max-height: 100px;'}">
-                        <pre id="jsonDataDisplay" style="margin: 0; padding: 15px; font-family: 'Consolas', 'Monaco', monospace; font-size: 13px; overflow: auto; max-height: 400px;">${JSON.stringify(extractedData, null, 2)}</pre>
+                    </div>
+                    <div id="extractedDataContainer" style="flex: 1; background: #f8f9fa; border: 1px solid #ddd; border-radius: 10px; overflow: hidden;">
+                        <div id="jsonView" style="height: 100%; overflow: auto;">
+                            <pre id="jsonDataDisplay" style="margin: 0; padding: 15px; font-family: 'Consolas', 'Monaco', 'Courier New', monospace; font-size: 13px; line-height: 1.6; color: #333;">${this.formatJsonWithHighlight(extractedData)}</pre>
+                        </div>
+                        <div id="tableView" style="display: none; height: 100%; overflow: auto; padding: 15px;">
+                            ${this.renderExtractedDataTable(extractedData)}
+                        </div>
                     </div>
                 </div>
                 
-                <!-- 修正记录摘要 -->
+                <!-- 修正记录（如果有） -->
                 ${corrections.length > 0 ? `
-                <div class="corrections-summary" style="margin-bottom: 20px;">
-                    <h4 style="margin: 0 0 10px 0; color: #333;">
-                        ✏️ 用户修正记录 <span style="font-size: 12px; color: #666; font-weight: normal;">(${corrections.length} 处)</span>
+                <div class="corrections-summary" style="flex-shrink: 0; background: #fff3cd; border: 1px solid #ffc107; border-radius: 10px; padding: 12px;">
+                    <h4 style="margin: 0 0 8px 0; color: #856404; font-size: 14px;">
+                        ✏️ 用户修正记录 <span style="font-size: 12px; font-weight: normal;">(${corrections.length} 处)</span>
                     </h4>
-                    <div style="background: #fff3cd; border: 1px solid #ffc107; border-radius: 8px; padding: 15px;">
-                        ${corrections.map((c, idx) => `
-                            <div style="margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid #ffeeba;">
-                                <span style="font-weight: 600;">Block #${c.blockIndex + 1}:</span>
-                                <span style="color: #856404;">${c.correctedText.substring(0, 50)}${c.correctedText.length > 50 ? '...' : ''}</span>
-                            </div>
+                    <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                        ${corrections.slice(0, 5).map((c, idx) => `
+                            <span style="background: #ffeeba; padding: 4px 10px; border-radius: 4px; font-size: 12px;">
+                                Block #${c.blockIndex + 1}: ${c.correctedText.substring(0, 20)}${c.correctedText.length > 20 ? '...' : ''}
+                            </span>
                         `).join('')}
+                        ${corrections.length > 5 ? `<span style="color: #856404; font-size: 12px;">+${corrections.length - 5} 更多</span>` : ''}
                     </div>
                 </div>
                 ` : ''}
                 
-                <!-- 操作按钮 -->
-                <div class="action-buttons" style="text-align: center; padding-top: 20px; border-top: 2px solid #ddd;">
-                    <button id="confirmFinalBtn" style="background: #28a745; color: white; border: none; padding: 12px 32px; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: 600; margin-right: 15px;">
+                <!-- 操作按钮 - 暂时隐藏 -->
+                <!-- 
+                <div class="action-buttons" style="flex-shrink: 0; display: flex; justify-content: center; gap: 20px; padding: 15px 0; border-top: 2px solid #e9ecef;">
+                    <button id="confirmFinalBtn" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%); color: white; border: none; padding: 12px 40px; border-radius: 8px; cursor: pointer; font-size: 15px; font-weight: 600; box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3); transition: all 0.2s;">
                         ✓ 确认提交
                     </button>
-                    <button id="rejectFinalBtn" style="background: #dc3545; color: white; border: none; padding: 12px 32px; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: 600;">
+                    <button id="rejectFinalBtn" style="background: linear-gradient(135deg, #dc3545 0%, #e74c3c 100%); color: white; border: none; padding: 12px 40px; border-radius: 8px; cursor: pointer; font-size: 15px; font-weight: 600; box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3); transition: all 0.2s;">
                         ✗ 驳回修改
                     </button>
+                    <button id="backToStep5Btn" style="background: #6c757d; color: white; border: none; padding: 12px 30px; border-radius: 8px; cursor: pointer; font-size: 14px;">
+                        ← 返回上一步
+                    </button>
                 </div>
-                
-                <!-- 提示信息 -->
-                <div style="margin-top: 15px; text-align: center; color: #666; font-size: 13px;">
-                    <p>确认后将保存最终结果，驳回后将返回预录入步骤重新编辑</p>
-                </div>
+                -->
             </div>
         `;
         
         step6Container.style.display = 'block';
+    }
+    
+    /**
+     * 格式化 JSON 并高亮显示
+     */
+    formatJsonWithHighlight(data) {
+        const jsonStr = JSON.stringify(data, null, 2);
+        // 高亮 key 和 value
+        return jsonStr
+            .replace(/"([^"]+)":/g, '<span style="color: #881391;">"$1"</span>:')
+            .replace(/: "([^"]+)"/g, ': <span style="color: #1a1aa6;">"$1"</span>')
+            .replace(/: (null)/g, ': <span style="color: #999; font-style: italic;">$1</span>')
+            .replace(/: (\d+\.?\d*)/g, ': <span style="color: #098658;">$1</span>');
+    }
+    
+    /**
+     * 渲染提取数据表格视图
+     */
+    renderExtractedDataTable(data) {
+        if (!data || Object.keys(data).length === 0) {
+            return '<div style="color: #666; text-align: center; padding: 20px;">暂无提取数据</div>';
+        }
+        
+        let html = '<table style="width: 100%; border-collapse: collapse; font-size: 13px;">';
+        html += '<thead><tr style="background: #e9ecef;"><th style="padding: 10px; border: 1px solid #ddd; text-align: left; width: 35%;">字段名</th><th style="padding: 10px; border: 1px solid #ddd; text-align: left;">提取值</th><th style="padding: 10px; border: 1px solid #ddd; text-align: center; width: 80px;">状态</th></tr></thead>';
+        html += '<tbody>';
+        
+        Object.entries(data).forEach(([key, value]) => {
+            const isEmpty = value === null || value === undefined || value === '' || value === '未找到' || value === 'null';
+            const statusIcon = isEmpty ? '⚠️' : '✅';
+            const statusColor = isEmpty ? '#ffc107' : '#28a745';
+            const rowBg = isEmpty ? '#fff8e1' : '#ffffff';
+            const displayValue = isEmpty ? '<span style="color: #999; font-style: italic;">未找到</span>' : value;
+            
+            html += `<tr style="background: ${rowBg};">
+                <td style="padding: 10px; border: 1px solid #ddd; font-weight: 500; color: #333;">${key}</td>
+                <td style="padding: 10px; border: 1px solid #ddd; color: #495057;">${displayValue}</td>
+                <td style="padding: 10px; border: 1px solid #ddd; text-align: center; color: ${statusColor};">${statusIcon}</td>
+            </tr>`;
+        });
+        
+        html += '</tbody></table>';
+        return html;
     }
 
     /**
@@ -179,10 +284,10 @@ export class Step6Confirmation {
      * 绑定事件
      */
     bindEvents() {
-        // 展开/收起 JSON
-        const toggleBtn = document.getElementById('toggleJsonBtn');
-        if (toggleBtn) {
-            toggleBtn.addEventListener('click', () => this.toggleJson());
+        // 切换视图（JSON/表格）
+        const toggleViewBtn = document.getElementById('toggleViewBtn');
+        if (toggleViewBtn) {
+            toggleViewBtn.addEventListener('click', () => this.toggleView());
         }
         
         // 复制 JSON
@@ -202,22 +307,54 @@ export class Step6Confirmation {
         if (rejectBtn) {
             rejectBtn.addEventListener('click', () => this.reject());
         }
-    }
-
-    /**
-     * 展开/收起 JSON
-     */
-    toggleJson() {
-        this.isJsonExpanded = !this.isJsonExpanded;
         
-        const container = document.getElementById('jsonDataContainer');
-        const btn = document.getElementById('toggleJsonBtn');
-        
-        if (container) {
-            container.style.maxHeight = this.isJsonExpanded ? 'none' : '100px';
+        // 返回上一步按钮
+        const backBtn = document.getElementById('backToStep5Btn');
+        if (backBtn) {
+            backBtn.addEventListener('click', () => this.backToStep5());
         }
-        if (btn) {
-            btn.textContent = this.isJsonExpanded ? '收起' : '展开';
+    }
+    
+    /**
+     * 切换 JSON/表格视图
+     */
+    toggleView() {
+        const jsonView = document.getElementById('jsonView');
+        const tableView = document.getElementById('tableView');
+        const toggleBtn = document.getElementById('toggleViewBtn');
+        
+        if (jsonView && tableView && toggleBtn) {
+            if (jsonView.style.display !== 'none') {
+                jsonView.style.display = 'none';
+                tableView.style.display = 'block';
+                toggleBtn.textContent = '{ } JSON视图';
+            } else {
+                jsonView.style.display = 'block';
+                tableView.style.display = 'none';
+                toggleBtn.textContent = '📋 表格视图';
+            }
+        }
+    }
+    
+    /**
+     * 返回步骤5
+     */
+    backToStep5() {
+        console.log('Step6Confirmation: Returning to Step 5');
+        
+        // 隐藏步骤6界面
+        const step6Container = document.getElementById('step6Container');
+        if (step6Container) step6Container.style.display = 'none';
+        
+        // 显示步骤5界面
+        if (window.step5Component) {
+            window.step5Component.show();
+        }
+        
+        // 更新步骤状态
+        if (window.app) {
+            window.app.setStepStatus(5, 'active');
+            window.app.setStepStatus(6, 'waiting');
         }
     }
 

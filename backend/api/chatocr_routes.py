@@ -140,28 +140,36 @@ def llm_extract():
         
         # 构建提取 prompt
         fields_str = '\n'.join([f"- {field}" for field in fields])
-        prompt = f"""请从以下文档内容中提取指定字段的值。
+        prompt = f"""你是一个专业的文档信息提取助手。请仔细阅读以下文档内容，并提取指定字段的值。
 
-文档内容：
+【文档内容】
 {text[:8000]}
 
-需要提取的字段：
+【需要提取的字段】
 {fields_str}
 
-请以 JSON 格式返回提取结果，格式如下：
+【提取规则】
+1. 仔细阅读文档，找出与每个字段相关的信息
+2. 如果文档中明确包含某字段的值，请准确提取
+3. 如果文档中没有某字段的信息，请将该字段的值设为 "未找到"
+4. 对于金额类字段，请保留原始格式（包括货币符号和小数）
+5. 对于日期类字段，请保留原始格式
+
+【输出格式】
+请严格按照以下 JSON 格式返回，不要添加任何其他内容：
 {{
-  "字段名1": "提取的值1",
-  "字段名2": "提取的值2"
+{', '.join([f'  "{field}": "提取的值或未找到"' for field in fields])}
 }}
 
-如果某个字段在文档中找不到对应的值，请将该字段的值设为 null。
-只返回 JSON，不要有其他内容。"""
+请直接输出 JSON，不要有任何解释或前缀。"""
 
         # 调用 LLM
+        logger.info(f"Calling LLM for extraction with {len(fields)} fields, text length: {len(text)}")
         result = service.llm_service.generate(prompt)
         
         # LLMResponse 是对象，不是字典
         if not result or not result.success:
+            logger.error(f"LLM call failed: {result.error_message if result else 'No result'}")
             return _error_response(
                 result.error_message if result else 'LLM 调用失败',
                 500,
@@ -175,7 +183,7 @@ def llm_extract():
         import json
         import re
         
-        logger.info(f"LLM response for extraction: {response_text[:500]}...")
+        logger.info(f"LLM response for extraction (first 1000 chars): {response_text[:1000]}")
         
         extracted_data = None
         
@@ -211,6 +219,7 @@ def llm_extract():
             logger.warning(f"Failed to parse JSON from LLM response, returning raw text")
             extracted_data = {fields[0]: response_text} if fields else {"raw_response": response_text}
         
+        logger.info(f"Extraction result: {extracted_data}")
         return _success_response(extracted_data)
         
     except Exception as e:
@@ -274,14 +283,21 @@ def llm_qa():
             return _error_response("context 不能为空", 400, "MISSING_CONTEXT")
         
         # 构建问答 prompt
-        prompt = f"""请根据以下文档内容回答问题。
+        prompt = f"""你是一个专业的文档分析助手。请根据以下文档内容回答用户的问题。
 
-文档内容：
+【文档内容】
 {context[:8000]}
 
-问题：{question}
+【用户问题】
+{question}
 
-请直接回答问题，如果文档中没有相关信息，请说明"文档中未找到相关信息"。"""
+【回答要求】
+1. 请直接、准确地回答问题
+2. 如果文档中包含相关信息，请引用具体内容
+3. 如果文档中没有相关信息，请明确说明"文档中未找到相关信息"
+4. 回答要简洁明了，不要添加不必要的解释
+
+请直接回答："""
 
         # 调用 LLM
         result = service.llm_service.generate(prompt)
