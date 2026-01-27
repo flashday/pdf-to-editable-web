@@ -11,6 +11,7 @@ export class HistoryPanel {
         this.container = container || document.getElementById('historyPanel');
         this.jobs = [];
         this.isExpanded = true;
+        this.documentTypes = {}; // 单据类型映射 { id: name }
     }
 
     /**
@@ -18,6 +19,7 @@ export class HistoryPanel {
      */
     init() {
         this.bindEvents();
+        this.loadDocumentTypes();
         this.loadHistory();
     }
 
@@ -39,6 +41,25 @@ export class HistoryPanel {
         eventBus.on(EVENTS.FINAL_CONFIRMED, () => {
             this.loadHistory();
         });
+    }
+
+    /**
+     * 加载单据类型列表
+     */
+    async loadDocumentTypes() {
+        try {
+            const res = await fetch('/api/document-types');
+            const data = await res.json();
+            
+            if (data.success && data.data) {
+                this.documentTypes = {};
+                data.data.forEach(type => {
+                    this.documentTypes[type.id] = type.name;
+                });
+            }
+        } catch (error) {
+            console.error('Load document types error:', error);
+        }
     }
 
     /**
@@ -115,11 +136,24 @@ export class HistoryPanel {
         name.textContent = job.filename || '未知文件';
         name.title = job.filename;
         
+        // 单据类型
+        const docType = document.createElement('div');
+        docType.className = 'item-doctype';
+        const typeName = this.documentTypes[job.document_type_id] || job.document_type_name || '未分类';
+        docType.textContent = '📋 ' + typeName;
+        
+        // 创建时间
+        const createTime = document.createElement('div');
+        createTime.className = 'item-time';
+        createTime.textContent = '🕐 ' + this.formatDateTime(job.created_at);
+        
         const meta = document.createElement('div');
         meta.className = 'item-meta';
-        meta.textContent = this.formatTimeAgo(job.created_at) + ' · ' + Math.round(job.processing_time) + 's';
+        meta.textContent = '⏱ ' + Math.round(job.processing_time) + 's';
         
         info.appendChild(name);
+        info.appendChild(docType);
+        info.appendChild(createTime);
         info.appendChild(meta);
         
         // 置信度徽章
@@ -238,6 +272,20 @@ export class HistoryPanel {
         
         const date = new Date(timestamp * 1000);
         return (date.getMonth() + 1) + '/' + date.getDate();
+    }
+
+    /**
+     * 格式化日期时间
+     */
+    formatDateTime(timestamp) {
+        if (!timestamp) return '-';
+        const date = new Date(timestamp * 1000);
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const hour = String(date.getHours()).padStart(2, '0');
+        const minute = String(date.getMinutes()).padStart(2, '0');
+        return `${year}-${month}-${day} ${hour}:${minute}`;
     }
 
     /**

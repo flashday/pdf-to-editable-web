@@ -384,9 +384,9 @@
     border-radius: 12px;
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
     z-index: 1001;
-    width: 500px;
-    max-width: 90vw;
-    max-height: 70vh;
+    width: 720px;
+    max-width: 95vw;
+    max-height: 80vh;
     display: flex;
     flex-direction: column;
     opacity: 0;
@@ -447,6 +447,9 @@
 
 /* 历史记录项样式 */
 .history-panel-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
     padding: 12px 15px;
     border: 1px solid #e0e0e0;
     border-radius: 8px;
@@ -464,6 +467,117 @@
 
 .history-panel-item:last-child {
     margin-bottom: 0;
+}
+
+/* 序号 */
+.history-panel-item .item-seq {
+    width: 24px;
+    height: 24px;
+    background: linear-gradient(135deg, #6c757d, #495057);
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 600;
+    flex-shrink: 0;
+}
+
+/* 图标 */
+.history-panel-item .item-icon {
+    font-size: 20px;
+    flex-shrink: 0;
+    cursor: pointer;
+}
+
+/* 信息区 - 占据剩余空间 */
+.history-panel-item .item-info {
+    flex: 1;
+    min-width: 0;
+    cursor: pointer;
+}
+
+.history-panel-item .item-name {
+    font-weight: 600;
+    color: #333;
+    font-size: 13px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    margin-bottom: 4px;
+}
+
+/* 单据类型 */
+.history-panel-item .item-doctype {
+    font-size: 11px;
+    color: #28a745;
+    font-weight: 500;
+    margin-bottom: 2px;
+}
+
+/* 创建时间 */
+.history-panel-item .item-time {
+    font-size: 11px;
+    color: #888;
+    margin-bottom: 2px;
+}
+
+/* 处理时间 */
+.history-panel-item .item-meta {
+    font-size: 10px;
+    color: #999;
+}
+
+/* 置信度徽章 */
+.history-panel-item .item-badge {
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    flex-shrink: 0;
+}
+
+.history-panel-item .item-badge.excellent {
+    background: linear-gradient(135deg, #28a745, #20c997);
+    color: white;
+}
+
+.history-panel-item .item-badge.good {
+    background: linear-gradient(135deg, #17a2b8, #6dd5ed);
+    color: white;
+}
+
+.history-panel-item .item-badge.fair {
+    background: linear-gradient(135deg, #ffc107, #ffdb4d);
+    color: #333;
+}
+
+.history-panel-item .item-badge.poor {
+    background: linear-gradient(135deg, #dc3545, #ff6b6b);
+    color: white;
+}
+
+.history-panel-item .item-badge.unknown {
+    background: #e0e0e0;
+    color: #666;
+}
+
+/* 删除按钮 */
+.history-panel-item .item-delete {
+    background: none;
+    border: none;
+    font-size: 16px;
+    cursor: pointer;
+    opacity: 0.5;
+    transition: opacity 0.2s, transform 0.2s;
+    flex-shrink: 0;
+    padding: 4px;
+}
+
+.history-panel-item .item-delete:hover {
+    opacity: 1;
+    transform: scale(1.2);
 }
 
 .history-item-header {

@@ -8,6 +8,36 @@
 
 ---
 
+## [2026-01-27] - 历史缓存弹窗优化
+
+### 优化：历史缓存弹窗显示更多信息
+
+**需求**：历史缓存弹窗需要显示单据类型、创建日期时间，并放大弹窗界面
+
+**实现内容**：
+
+1. `frontend/src/components/panels/HistoryPanel.js`
+   - 添加 `documentTypes` 属性缓存单据类型映射
+   - 添加 `loadDocumentTypes()` 方法获取单据类型列表
+   - 修改 `createJobItem()` 方法，添加单据类型和创建时间显示
+   - 添加 `formatDateTime()` 方法格式化日期时间
+
+2. `frontend/src/styles/steps.css`
+   - 弹窗宽度从 500px 放大到 720px
+   - 添加 `.item-seq` 序号样式
+   - 添加 `.item-doctype` 单据类型样式
+   - 添加 `.item-time` 创建时间样式
+   - 添加 `.item-badge` 置信度徽章样式（excellent/good/fair/poor）
+   - 添加 `.item-delete` 删除按钮样式
+   - 版本号：`steps.css?v=22`
+
+**修改的文件**：
+- `frontend/src/components/panels/HistoryPanel.js`
+- `frontend/src/styles/steps.css`
+- `frontend/src/index.html`（版本号更新）
+
+---
+
 ## [2026-01-27] - 工作流容器布局优化与UI调整
 
 ### 优化：工作流容器三栏布局
