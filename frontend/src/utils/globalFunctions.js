@@ -30,10 +30,31 @@ window.loadHistoryPanel = async function() {
         
         // 构建单据类型ID到名称的映射
         var docTypeMap = {};
-        if (docTypesData.success && docTypesData.document_types) {
-            docTypesData.document_types.forEach(function(dt) {
+        if (docTypesData.success && docTypesData.data) {
+            docTypesData.data.forEach(function(dt) {
                 docTypeMap[dt.id] = dt.name;
             });
+        }
+        
+        // 格式化日期时间
+        function formatDateTime(timestamp) {
+            if (!timestamp) return '-';
+            var date = new Date(timestamp * 1000);
+            var year = date.getFullYear();
+            var month = String(date.getMonth() + 1).padStart(2, '0');
+            var day = String(date.getDate()).padStart(2, '0');
+            var hour = String(date.getHours()).padStart(2, '0');
+            var minute = String(date.getMinutes()).padStart(2, '0');
+            return year + '-' + month + '-' + day + ' ' + hour + ':' + minute;
+        }
+        
+        // 获取置信度等级
+        function getConfidenceLevel(score) {
+            if (!score) return 'unknown';
+            if (score >= 0.95) return 'excellent';
+            if (score >= 0.85) return 'good';
+            if (score >= 0.70) return 'fair';
+            return 'poor';
         }
         
         if (data.success && data.jobs && data.jobs.length > 0) {
@@ -44,21 +65,21 @@ window.loadHistoryPanel = async function() {
                 var seq = idx + 1;
                 var docTypeName = job.document_type_id && docTypeMap[job.document_type_id] 
                     ? docTypeMap[job.document_type_id] 
-                    : '';
-                var docTypeHtml = docTypeName 
-                    ? '<span class="history-item-doctype">' + docTypeName + '</span>' 
-                    : '';
+                    : '未分类';
+                var confidenceLevel = getConfidenceLevel(job.confidence_score);
+                var confidenceText = job.confidence_score ? Math.round(job.confidence_score * 100) + '%' : '-';
                 
                 return '<div class="history-panel-item" data-job-id="' + job.job_id + '" onclick="window.loadCachedJobAndClose(\'' + job.job_id + '\')">' +
-                    '<div class="history-item-header">' +
-                        '<span class="history-item-filename" title="' + job.filename + '">' + seq + '. ' + job.filename + '</span>' +
-                        docTypeHtml +
+                    '<span class="item-seq">' + seq + '</span>' +
+                    '<span class="item-icon">📄</span>' +
+                    '<div class="item-info">' +
+                        '<div class="item-name" title="' + job.filename + '">' + job.filename + '</div>' +
+                        '<div class="item-doctype">📋 ' + docTypeName + '</div>' +
+                        '<div class="item-time">🕐 ' + formatDateTime(job.created_at) + '</div>' +
+                        '<div class="item-meta">⏱ ' + Math.round(job.processing_time) + 's</div>' +
                     '</div>' +
-                    '<div class="history-item-meta">' +
-                        '<span>⏱ ' + Math.round(job.processing_time) + 's</span>' +
-                        '<span style="margin-left:12px;">📊 ' + (job.confidence_score ? Math.round(job.confidence_score * 100) + '%' : '-') + '</span>' +
-                        '<button class="item-delete" onclick="event.stopPropagation();window.deleteHistoryJob(\'' + job.job_id + '\')" title="删除" style="float:right;background:none;border:none;cursor:pointer;font-size:14px;">🗑</button>' +
-                    '</div>' +
+                    '<span class="item-badge ' + confidenceLevel + '">' + confidenceText + '</span>' +
+                    '<button class="item-delete" onclick="event.stopPropagation();window.deleteHistoryJob(\'' + job.job_id + '\')" title="删除">🗑</button>' +
                 '</div>';
             }).join('');
         } else {

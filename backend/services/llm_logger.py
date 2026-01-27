@@ -11,8 +11,10 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-# 默认临时目录
-TEMP_DIR = Path(__file__).parent.parent / 'temp'
+# 默认临时目录 - 使用项目根目录的 temp 文件夹
+# Path(__file__) = backend/services/llm_logger.py
+# .parent.parent.parent = 项目根目录
+TEMP_DIR = Path(__file__).parent.parent.parent / 'temp'
 
 
 class LLMLogger:

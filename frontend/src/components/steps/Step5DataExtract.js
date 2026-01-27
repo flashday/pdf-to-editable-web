@@ -378,13 +378,6 @@ export class Step5DataExtract {
                             <div style="color: #999; font-style: italic;">点击"开始提取"按钮提取数据...</div>
                         </div>
                     </div>
-                    
-                    <!-- 确认按钮 - 放在左侧底部 -->
-                    <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #e1e4e8; flex-shrink: 0;">
-                        <button id="step5ConfirmBtn" style="background: #28a745; color: white; border: none; padding: 10px 24px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600; display: none; width: 100%;">
-                            ✓ 确认并进入步骤6（财务确认）
-                        </button>
-                    </div>
                 </div>
                 
                 <!-- 右侧：检查点验证 -->
@@ -477,6 +470,16 @@ export class Step5DataExtract {
         
         try {
             const response = await fetch(`/api/llm-log/${jobId}`);
+            
+            // 检查响应状态
+            if (!response.ok) {
+                if (response.status === 404) {
+                    alert('暂无 LLM 调用日志（尚未执行数据提取或检查点验证）');
+                    return;
+                }
+                throw new Error(`HTTP ${response.status}`);
+            }
+            
             const data = await response.json();
             
             if (data.success && data.data) {

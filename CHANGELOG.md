@@ -8,7 +8,7 @@
 
 ---
 
-## [2026-01-27] - 历史缓存弹窗优化
+## [2026-01-27] - UI优化与Bug修复
 
 ### 优化：历史缓存弹窗显示更多信息
 
@@ -16,29 +16,57 @@
 
 **实现内容**：
 
-1. `frontend/src/components/panels/HistoryPanel.js`
-   - 添加 `documentTypes` 属性缓存单据类型映射
-   - 添加 `loadDocumentTypes()` 方法获取单据类型列表
-   - 修改 `createJobItem()` 方法，添加单据类型和创建时间显示
-   - 添加 `formatDateTime()` 方法格式化日期时间
+1. `frontend/src/utils/globalFunctions.js`
+   - 修改 `loadHistoryPanel()` 函数，使用新的 HTML 结构
+   - 显示：序号、文件名、单据类型（📋）、创建时间（🕐）、处理时间、置信度徽章、删除按钮
+   - 修复单据类型映射字段名（`docTypesData.data` 而不是 `docTypesData.document_types`）
+   - 版本号：`globalFunctions.js?v=24`
 
 2. `frontend/src/styles/steps.css`
    - 弹窗宽度从 500px 放大到 720px
-   - 添加 `.item-seq` 序号样式
-   - 添加 `.item-doctype` 单据类型样式
-   - 添加 `.item-time` 创建时间样式
-   - 添加 `.item-badge` 置信度徽章样式（excellent/good/fair/poor）
-   - 添加 `.item-delete` 删除按钮样式
+   - 添加 `.item-seq`、`.item-doctype`、`.item-time`、`.item-badge`、`.item-delete` 样式
    - 版本号：`steps.css?v=22`
 
+### 优化：删除步骤5重复的确认按钮
+
+**需求**：步骤5左下角的"确认并进入步骤6"按钮与右上角重复
+
+**实现内容**：
+
+1. `frontend/src/components/steps/Step5DataExtract.js`
+   - 删除底部的 `step5ConfirmBtn` 按钮
+   - 只保留顶部的"提交到财务确认"按钮
+   - 版本号：`Step5DataExtract.js?v=37`
+
+### 修复：LLM日志下载失败
+
+**问题**：点击"LLM日志"按钮报错 `Unexpected token '<'`
+
+**根因**：
+1. 前端没有正确处理 404 响应
+2. `llm_logger.py` 的 `TEMP_DIR` 指向 `backend/temp` 而不是项目根目录的 `temp`
+
+**修复内容**：
+
+1. `frontend/src/components/steps/Step5DataExtract.js`
+   - 添加 HTTP 状态码检查
+   - 404 时显示友好提示"暂无 LLM 调用日志（尚未执行数据提取或检查点验证）"
+
+2. `backend/services/llm_logger.py`
+   - 修改 `TEMP_DIR` 路径从 `backend/temp` 改为项目根目录的 `temp`
+   - 确保 LLM 日志文件保存到正确位置
+
 **修改的文件**：
-- `frontend/src/components/panels/HistoryPanel.js`
+- `frontend/src/utils/globalFunctions.js`
 - `frontend/src/styles/steps.css`
-- `frontend/src/index.html`（版本号更新）
+- `frontend/src/components/steps/Step5DataExtract.js`
+- `frontend/src/index.html`
+- `backend/services/llm_logger.py`
+- `README.md`（更新界面布局说明）
 
 ---
 
-## [2026-01-27] - 工作流容器布局优化与UI调整
+## [2026-01-27] - 历史缓存弹窗优化
 
 ### 优化：工作流容器三栏布局
 
