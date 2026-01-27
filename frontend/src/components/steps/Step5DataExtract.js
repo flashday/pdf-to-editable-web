@@ -33,6 +33,12 @@ const PRESET_TEMPLATES = [
         checkpoints: ['收据编号是多少？', '金额是多少？']
     },
     {
+        id: 'trip_report',
+        name: '出差报告',
+        fields: ['报告日期', '申请人', '出差目的地', '出差事由', '出差时间', '费用合计'],
+        checkpoints: ['出差人是谁？', '出差目的地是哪里？', '费用合计是多少？']
+    },
+    {
         id: 'custom',
         name: '自定义',
         fields: [],

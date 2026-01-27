@@ -72,7 +72,7 @@ class ChatOCRConfig:
     # Ollama LLM 配置
     OLLAMA_BASE_URL = os.environ.get('OLLAMA_BASE_URL', 'http://localhost:11434')
     OLLAMA_MODEL = os.environ.get('OLLAMA_MODEL', 'gpt-oss:20b')
-    OLLAMA_TIMEOUT = int(os.environ.get('OLLAMA_TIMEOUT', '60'))
+    OLLAMA_TIMEOUT = int(os.environ.get('OLLAMA_TIMEOUT', '180'))  # 增加到180秒，复杂提取任务需要更长时间
     
     # LLM 生成参数
     LLM_MAX_TOKENS = int(os.environ.get('LLM_MAX_TOKENS', '4096'))
