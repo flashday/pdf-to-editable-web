@@ -8,6 +8,33 @@
 
 ---
 
+## [2026-01-27] - 步骤5提交按钮及界面优化
+
+### 新增：步骤5"提交到财务确认"按钮
+
+**需求**：在步骤5顶部添加提交按钮，需数据提取和检查点都完成后才能点击
+
+**实现内容**：
+
+1. `frontend/src/components/steps/Step5DataExtract.js`
+   - 添加状态变量：`extractionCompleted`、`checkpointCompleted`
+   - 新增 `updateSubmitButtonState()` 方法：根据两个状态更新按钮样式
+   - 新增 `submitToStep6()` 方法：双重检查后调用 `confirmAndProceed()`
+   - 在 `startExtraction()` 和 `runCheckpoints()` 完成后更新状态
+   - 修复：无检查点时自动标记 `checkpointCompleted = true`，显示"无需验证"
+   - 顶部操作栏显示实时状态：数据提取状态 + 检查点验证状态
+
+2. `frontend/src/index.html`
+   - 修改首页副标题为："支撑业务单据非结构化信息向结构化业务数据转化的处理平台"
+   - 版本号更新：`Step5DataExtract.js?v=34`
+
+**按钮状态逻辑**：
+- 初始：灰色禁用（`#6c757d`，`opacity: 0.6`）
+- 可点击：绿色启用（`#28a745`，`opacity: 1`）
+- 条件：`extractionCompleted && checkpointCompleted` 都为 `true`
+
+---
+
 ## [2026-01-27] - 界面布局优化：工具栏按钮和弹窗模式
 
 ### 新增：工具栏按钮（单据设定 & 历史缓存）
