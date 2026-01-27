@@ -8,6 +8,38 @@
 
 ---
 
+## [2026-01-27] - Block 列表渲染修复
+
+### 修复：OCR 完成后右侧 Block 列表不显示
+
+**问题**：上传文件 OCR 识别完成后，右侧 Block 列表区域为空，没有显示识别结果
+
+**根因**：
+- 浏览器缓存了旧版本的 `index.js` 模块
+- 内联脚本调用 `window.app.handleProcessingComplete()` 时，执行的是旧版本代码
+- 旧版本代码中 `renderBlockList()` 方法没有被正确调用
+
+**修复方案**：
+在内联脚本中直接实现 Block 渲染逻辑，绕过可能被缓存的 `index.js`
+
+**实现内容**：
+
+1. `frontend/src/index.html`
+   - 内联脚本版本从 v5 升级到 v6
+   - 新增内联辅助函数：
+     - `showStep4UIInline()` - 显示步骤4界面
+     - `extractOCRRegionsInline()` - 提取 OCR 区域数据
+     - `renderBlockListInline()` - 渲染 Block 列表
+     - `showConfidenceReportInline()` - 显示置信度报告
+   - OCR 完成后直接在内联脚本中处理结果
+   - 同步数据到 `window.app` 和 `window.stateManager`
+   - 版本号更新：`index.js?v=51`、`globalFunctions.js?v=26`
+
+**修改的文件**：
+- `frontend/src/index.html`
+
+---
+
 ## [2026-01-27] - UI优化与Bug修复
 
 ### 优化：历史缓存弹窗显示更多信息

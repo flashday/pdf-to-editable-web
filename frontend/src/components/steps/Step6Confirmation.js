@@ -136,7 +136,7 @@ export class Step6Confirmation {
                 </div>
                 
                 <!-- 上半部：检查点问答结果 -->
-                <div class="checkpoint-section" style="flex: 1; min-height: 200px; display: flex; flex-direction: column; overflow: hidden;">
+                <div class="checkpoint-section" style="flex: 0.8; min-height: 180px; display: flex; flex-direction: column; overflow: hidden;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-shrink: 0;">
                         <h4 style="margin: 0; color: #333; font-size: 15px;">
                             ✅ 检查点验证结果
@@ -149,7 +149,7 @@ export class Step6Confirmation {
                 </div>
                 
                 <!-- 下半部：提取数据 JSON -->
-                <div class="extracted-data-section" style="flex: 1; min-height: 200px; display: flex; flex-direction: column; overflow: hidden;">
+                <div class="extracted-data-section" style="flex: 1.2; min-height: 280px; display: flex; flex-direction: column; overflow: hidden;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-shrink: 0;">
                         <h4 style="margin: 0; color: #333; font-size: 15px;">
                             📊 关键词提取结果

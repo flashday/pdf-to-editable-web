@@ -10,8 +10,8 @@
     
     <!-- CSS 模块 -->
     <link rel="stylesheet" href="styles/base.css?v=15">
-    <link rel="stylesheet" href="styles/layout.css?v=18">
-    <link rel="stylesheet" href="styles/steps.css?v=22">
+    <link rel="stylesheet" href="styles/layout.css?v=19">
+    <link rel="stylesheet" href="styles/steps.css?v=23">
     <link rel="stylesheet" href="styles/panels.css?v=15">
     <link rel="stylesheet" href="styles/components.css?v=18">
 </head>
@@ -117,7 +117,7 @@
                 <span class="doc-type-hint">（选择后上传文件，将自动应用对应的提取模板）</span>
             </div>
             
-            <div class="upload-area" id="uploadArea">
+            <div class="upload-area" id="uploadArea" onclick="document.getElementById('fileInput').click()">
                 <p>📄 拖拽 PDF、JPG 或 PNG 文件到此处，或点击选择</p>
                 <p><small>最大文件: 50MB | 支持: PDF, JPG, PNG</small></p>
             </div>
@@ -213,10 +213,10 @@
     </div>
     
     <!-- 全局函数 -->
-    <script src="utils/globalFunctions.js?v=24"></script>
+    <script src="utils/globalFunctions.js?v=26"></script>
     
-    <!-- 主应用 -->
-    <script type="module" src="index.js?v=33"></script>
+    <!-- 主应用 - 添加时间戳强制刷新 -->
+    <script type="module" src="index.js?v=51&t=20260127j"></script>
     
     <!-- 智能文档理解组件 -->
     <script src="components/SmartExtract.js?v=2"></script>
@@ -228,7 +228,7 @@
     <script type="module">
         import { Step4PreEntry } from './components/steps/Step4PreEntry.js?v=17';
         import { Step5DataExtract } from './components/steps/Step5DataExtract.js?v=37';
-        import { Step6Confirmation } from './components/steps/Step6Confirmation.js?v=18';
+        import { Step6Confirmation } from './components/steps/Step6Confirmation.js?v=19';
         
         // 注册到全局
         window.Step4PreEntry = Step4PreEntry;
@@ -363,25 +363,10 @@
                     window.chatOCR = initChatOCRIntegration({ apiBaseUrl: '' });
                     console.log('ChatOCR integration initialized');
                     
-                    // 监听 jobId 变化
-                    var originalHandleComplete = window.app.handleProcessingComplete.bind(window.app);
-                    window.app.handleProcessingComplete = async function(data, jobId) {
-                        await originalHandleComplete(data, jobId);
-                        if (window.chatOCR) {
-                            window.chatOCR.setJobId(jobId);
-                        }
-                        // 确保确认按钮显示
-                        var confirmBtn = document.getElementById('confirmStep5Btn');
-                        if (confirmBtn) {
-                            confirmBtn.style.display = 'inline-block';
-                            console.log('Confirm button shown via wrapper');
-                        }
-                        // 隐藏上传区域（进入步骤3后）
-                        var uploadSection = document.getElementById('uploadSection');
-                        if (uploadSection) {
-                            uploadSection.style.display = 'none';
-                        }
-                    };
+                    // 监听 jobId 变化 - 包装 handleProcessingComplete
+                    // 注意：不再包装 handleProcessingComplete，因为会导致方法不被正确调用
+                    // 改为在 handleProcessingComplete 完成后通过事件通知
+                    console.log('ChatOCR: Skipping handleProcessingComplete wrapper (causes issues)');
                     
                     if (window.app && window.app.currentJobId) {
                         window.chatOCR.setJobId(window.app.currentJobId);
@@ -445,6 +430,531 @@
                 }
             });
         }
+    </script>
+    
+    <!-- 方案B：内联上传脚本 - 绑过模块化复杂性 -->
+    <script>
+    (function() {
+        console.log('=== INLINE UPLOAD SCRIPT v6 LOADED ===');
+        
+        // ============================================================
+        // 内联辅助函数 - 绕过可能被缓存的 index.js
+        // ============================================================
+        
+        // 显示步骤4界面
+        function showStep4UIInline() {
+            console.log('showStep4UIInline: Switching to Step 4 layout');
+            
+            // 隐藏上传区域
+            var uploadSection = document.querySelector('.upload-section');
+            if (uploadSection) uploadSection.style.display = 'none';
+            
+            // 显示主内容区域
+            var mainContent = document.getElementById('mainContent');
+            if (mainContent) {
+                mainContent.classList.add('visible');
+                mainContent.style.display = 'flex';
+            }
+            
+            // 显示图像面板
+            var imagePanel = document.querySelector('.image-panel');
+            if (imagePanel) imagePanel.style.display = 'flex';
+            
+            // 显示编辑器面板
+            var editorPanel = document.querySelector('.editor-panel');
+            if (editorPanel) editorPanel.style.display = 'flex';
+            
+            // 显示 blockList
+            var blockList = document.getElementById('blockList');
+            if (blockList) blockList.style.display = 'flex';
+        }
+        
+        // 提取 OCR 区域
+        function extractOCRRegionsInline(blocks) {
+            var regions = [];
+            blocks.forEach(function(block, i) {
+                var coords = block.metadata ? block.metadata.originalCoordinates : null;
+                var confidence = block.metadata ? block.metadata.confidence : null;
+                var originalStructType = block.metadata ? block.metadata.originalStructType : block.type;
+                var editType = block.metadata ? block.metadata.editType : (block.type === 'table' ? 'table' : 'text');
+                var text = '';
+                if (block.data && block.data.text) text = block.data.text;
+                else if (block.data && block.data.items) text = block.data.items.join(', ');
+                
+                regions.push({
+                    index: i,
+                    blockId: block.id,
+                    type: block.type,
+                    text: text,
+                    coordinates: coords || {x:0, y:0, width:100, height:30},
+                    hasCoordinates: !!coords,
+                    tableHtml: block.data ? block.data.tableHtml : null,
+                    confidence: confidence,
+                    originalStructType: originalStructType,
+                    editType: editType
+                });
+            });
+            return regions;
+        }
+        
+        // 渲染 Block 列表
+        function renderBlockListInline(blocks) {
+            console.log('=== renderBlockListInline CALLED ===');
+            console.log('blocks count:', blocks.length);
+            
+            var list = document.getElementById('blockList');
+            if (!list) {
+                console.error('blockList element NOT FOUND!');
+                return;
+            }
+            
+            list.innerHTML = '';
+            
+            if (blocks.length === 0) {
+                list.innerHTML = '<div style="padding:20px;color:#666;text-align:center;">No blocks</div>';
+                return;
+            }
+            
+            var regions = extractOCRRegionsInline(blocks);
+            console.log('Rendering', regions.length, 'blocks');
+            
+            regions.forEach(function(region, idx) {
+                var item = document.createElement('div');
+                item.className = 'block-item';
+                item.setAttribute('data-region-index', idx);
+                
+                // Header
+                var hdr = document.createElement('div');
+                hdr.className = 'block-header';
+                
+                // Edit type badge
+                var editTypeBadge = document.createElement('span');
+                editTypeBadge.className = 'block-edit-type ' + region.editType;
+                editTypeBadge.textContent = region.editType.toUpperCase();
+                
+                // Struct type badge
+                var structTypeBadge = document.createElement('span');
+                structTypeBadge.className = 'block-struct-type';
+                structTypeBadge.textContent = region.originalStructType || region.type;
+                
+                // Index
+                var num = document.createElement('span');
+                num.className = 'block-index';
+                num.textContent = '#' + (idx + 1);
+                
+                hdr.appendChild(editTypeBadge);
+                hdr.appendChild(structTypeBadge);
+                hdr.appendChild(num);
+                
+                // Content
+                var cnt = document.createElement('div');
+                cnt.className = 'block-content';
+                if (region.type === 'table' && region.tableHtml) {
+                    cnt.classList.add('table-preview');
+                    cnt.innerHTML = region.tableHtml;
+                } else {
+                    cnt.textContent = region.text || '(empty)';
+                }
+                
+                // Meta
+                var meta = document.createElement('div');
+                meta.className = 'block-meta';
+                var co = region.coordinates;
+                var metaText = 'Pos:(' + Math.round(co.x) + ',' + Math.round(co.y) + ') Size:' + Math.round(co.width) + 'x' + Math.round(co.height);
+                if (region.confidence !== null && region.confidence !== undefined) {
+                    metaText += ' Conf:' + region.confidence;
+                } else {
+                    metaText += ' Conf:-';
+                }
+                meta.textContent = metaText;
+                
+                item.appendChild(hdr);
+                item.appendChild(cnt);
+                item.appendChild(meta);
+                
+                list.appendChild(item);
+            });
+            
+            console.log('renderBlockListInline: Done, rendered', regions.length, 'items');
+        }
+        
+        // 显示置信度报告
+        function showConfidenceReportInline(cr) {
+            if (!cr || !cr.confidence_breakdown) return;
+            
+            var div = document.getElementById('confidenceReport');
+            if (!div) return;
+            
+            var o = cr.confidence_breakdown.overall;
+            var scoreDisplay = String(o.score);
+            
+            var levelMap = {
+                'excellent': '优秀',
+                'good': '良好',
+                'fair': '一般',
+                'poor': '较差'
+            };
+            var descMap = {
+                'Excellent - Very high accuracy expected': '优秀 - 预期准确率非常高',
+                'Good - High accuracy with minimal errors': '良好 - 准确率高，错误极少',
+                'Fair - Moderate accuracy, review recommended': '一般 - 准确率中等，建议复核',
+                'Poor - Low accuracy, manual review required': '较差 - 准确率低，需人工复核'
+            };
+            
+            var levelCn = levelMap[o.level] || o.level;
+            var descCn = descMap[o.description] || o.description;
+            
+            div.innerHTML = '<div class="confidence-info"><h4>置信度: ' + scoreDisplay + ' (' + levelCn + ')</h4><p>' + descCn + '</p></div>';
+        }
+        
+        // ============================================================
+        // 原有上传处理逻辑
+        // ============================================================
+        
+        // 等待 DOM 完全就绪
+        function initUploadHandler() {
+            var uploadArea = document.getElementById('uploadArea');
+            var fileInput = document.getElementById('fileInput');
+            
+            console.log('initUploadHandler: uploadArea=', !!uploadArea, 'fileInput=', !!fileInput);
+            
+            if (!uploadArea || !fileInput) {
+                console.error('Upload elements not found!');
+                return;
+            }
+            
+            // 移除可能存在的旧事件（通过克隆节点）
+            var newFileInput = fileInput.cloneNode(true);
+            fileInput.parentNode.replaceChild(newFileInput, fileInput);
+            fileInput = newFileInput;
+            
+            // 绑定文件选择事件
+            fileInput.addEventListener('change', function(e) {
+                console.log('=== INLINE: fileInput change event ===');
+                var file = e.target.files[0];
+                if (file) {
+                    console.log('File selected:', file.name, file.type, file.size);
+                    handleFileUploadInline(file);
+                }
+            });
+            
+            // 绑定拖拽事件
+            uploadArea.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                uploadArea.classList.add('dragover');
+            });
+            
+            uploadArea.addEventListener('dragleave', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                uploadArea.classList.remove('dragover');
+            });
+            
+            uploadArea.addEventListener('drop', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                uploadArea.classList.remove('dragover');
+                console.log('=== INLINE: drop event ===');
+                var file = e.dataTransfer.files[0];
+                if (file) {
+                    console.log('File dropped:', file.name, file.type, file.size);
+                    handleFileUploadInline(file);
+                }
+            });
+            
+            console.log('Inline upload handlers bound successfully');
+        }
+        
+        // 内联上传处理函数
+        async function handleFileUploadInline(file) {
+            console.log('=== handleFileUploadInline START ===');
+            
+            // 验证文件类型
+            var allowedTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
+            var allowedExtensions = ['.pdf', '.jpg', '.jpeg', '.png'];
+            var fileName = file.name.toLowerCase();
+            var isValidType = allowedTypes.includes(file.type) || 
+                              allowedExtensions.some(function(ext) { return fileName.endsWith(ext); });
+            
+            if (!isValidType) {
+                alert('不支持的文件类型！请上传 PDF、JPG 或 PNG 文件。');
+                return;
+            }
+            
+            // 验证文件大小 (50MB)
+            if (file.size > 50 * 1024 * 1024) {
+                alert('文件太大！最大支持 50MB。');
+                return;
+            }
+            
+            // 显示上传状态
+            var statusDiv = document.getElementById('status');
+            var progressBar = document.getElementById('progressBar');
+            var progressBarFill = document.getElementById('progressBarFill');
+            
+            if (statusDiv) {
+                statusDiv.textContent = '正在上传: ' + file.name;
+                statusDiv.className = 'status processing';
+                statusDiv.style.display = 'block';
+            }
+            if (progressBar) {
+                progressBar.style.display = 'block';
+                progressBarFill.style.width = '10%';
+            }
+            
+            try {
+                // 准备上传数据
+                var formData = new FormData();
+                formData.append('file', file);
+                
+                // 获取选中的单据类型
+                var docTypeSelect = document.getElementById('documentTypeSelect');
+                if (docTypeSelect && docTypeSelect.value) {
+                    formData.append('document_type_id', docTypeSelect.value);
+                    console.log('Document type ID:', docTypeSelect.value);
+                }
+                
+                console.log('Uploading to /api/convert...');
+                
+                // 上传文件
+                var response = await fetch('/api/convert', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                var data = await response.json();
+                console.log('Upload response:', data);
+                
+                if (progressBarFill) progressBarFill.style.width = '30%';
+                
+                // 后端返回 job_id（下划线），状态码 202 表示成功
+                if (response.ok && data.job_id) {
+                    var jobId = data.job_id;
+                    console.log('Upload successful, jobId:', jobId);
+                    
+                    // 保存 jobId 到全局
+                    window.currentJobId = jobId;
+                    if (window.app) window.app.currentJobId = jobId;
+                    
+                    // 更新步骤状态：步骤2完成，步骤3激活
+                    console.log('Updating step status: step2=completed, step3=active');
+                    if (window.updateStepStatus) {
+                        window.updateStepStatus(2, 'completed', '✓');
+                        window.updateStepStatus(3, 'active');
+                    }
+                    
+                    // 隐藏上传区域，但保留状态显示
+                    var uploadSection = document.getElementById('uploadSection');
+                    var uploadArea = document.getElementById('uploadArea');
+                    var documentTypeSelector = document.getElementById('documentTypeSelector');
+                    
+                    // 只隐藏上传区域和单据类型选择器，保留状态和进度条
+                    if (uploadArea) uploadArea.style.display = 'none';
+                    if (documentTypeSelector) documentTypeSelector.style.display = 'none';
+                    
+                    // 显示处理中状态
+                    if (statusDiv) {
+                        statusDiv.textContent = 'OCR 识别处理中...';
+                        statusDiv.className = 'status processing';
+                        statusDiv.style.display = 'block';
+                    }
+                    if (progressBar) {
+                        progressBar.style.display = 'block';
+                    }
+                    
+                    // 发布事件（如果 EventBus 可用）
+                    if (window.eventBus && window.EVENTS) {
+                        window.eventBus.emit(window.EVENTS.UPLOAD_COMPLETED, { jobId: jobId, file: file });
+                    }
+                    
+                    // 开始轮询 OCR 状态
+                    pollOcrStatusInline(jobId);
+                    
+                } else {
+                    throw new Error(data.error || '上传失败');
+                }
+                
+            } catch (error) {
+                console.error('Upload error:', error);
+                if (statusDiv) {
+                    statusDiv.textContent = '上传失败: ' + error.message;
+                    statusDiv.className = 'status error';
+                }
+                if (progressBar) progressBar.style.display = 'none';
+            }
+        }
+        
+        // 内联轮询 OCR 状态
+        async function pollOcrStatusInline(jobId) {
+            console.log('=== pollOcrStatusInline START ===', jobId);
+            
+            var statusDiv = document.getElementById('status');
+            var progressBarFill = document.getElementById('progressBarFill');
+            var maxAttempts = 120; // 最多轮询 120 次（约 2 分钟）
+            var attempt = 0;
+            var pollInterval = 1000; // 1 秒
+            
+            async function poll() {
+                attempt++;
+                console.log('Polling attempt', attempt, 'for job', jobId);
+                
+                try {
+                    var response = await fetch('/api/convert/' + jobId + '/status');
+                    var data = await response.json();
+                    console.log('Status response:', data);
+                    
+                    // 更新进度条
+                    // 注意：后端返回的 progress 已经是百分比（0-100）
+                    var progress = data.progress || 0;
+                    if (progressBarFill) {
+                        // 进度条：30% 是上传完成，剩余 70% 用于 OCR 处理
+                        progressBarFill.style.width = (30 + progress * 0.7) + '%';
+                    }
+                    
+                    if (data.status === 'completed') {
+                        console.log('OCR completed!');
+                        if (progressBarFill) progressBarFill.style.width = '100%';
+                        if (statusDiv) {
+                            statusDiv.textContent = 'OCR 识别完成！';
+                            statusDiv.className = 'status success';
+                        }
+                        
+                        // 更新步骤状态：步骤3完成，步骤4激活
+                        if (window.updateStepStatus) {
+                            window.updateStepStatus(3, 'completed', '✓');
+                            window.updateStepStatus(4, 'active');
+                        }
+                        
+                        // 隐藏整个上传区域（识别完成后）
+                        var uploadSection = document.getElementById('uploadSection');
+                        if (uploadSection) uploadSection.style.display = 'none';
+                        
+                        // 获取完整结果
+                        var resultResponse = await fetch('/api/convert/' + jobId + '/result');
+                        var resultData = await resultResponse.json();
+                        console.log('Result data:', resultData);
+                        console.log('Result data keys:', Object.keys(resultData));
+                        console.log('Result data.result:', resultData.result);
+                        console.log('Result data.result.blocks:', resultData.result ? resultData.result.blocks : 'N/A');
+                        
+                        // 发布识别完成事件
+                        if (window.eventBus && window.EVENTS) {
+                            window.eventBus.emit(window.EVENTS.RECOGNITION_COMPLETED, {
+                                jobId: jobId,
+                                data: resultData
+                            });
+                        }
+                        
+                        // 直接在内联脚本中处理结果，绕过可能被缓存的 index.js
+                        console.log('=== INLINE: Processing result directly ===');
+                        
+                        // 提取 blocks
+                        var blocks = resultData.blocks || (resultData.result && resultData.result.blocks) || [];
+                        console.log('INLINE: blocks count:', blocks.length);
+                        
+                        // 显示步骤4界面
+                        showStep4UIInline();
+                        
+                        // 加载文档图片
+                        var docImg = document.getElementById('documentImage');
+                        if (docImg) {
+                            docImg.src = '/api/convert/' + jobId + '/image?t=' + Date.now();
+                        }
+                        
+                        // 渲染 Block 列表
+                        renderBlockListInline(blocks);
+                        
+                        // 显示置信度报告
+                        if (resultData.confidence_report) {
+                            showConfidenceReportInline(resultData.confidence_report);
+                        }
+                        
+                        // 显示下载按钮
+                        var downloadButtons = document.getElementById('downloadButtons');
+                        if (downloadButtons) downloadButtons.style.display = 'flex';
+                        
+                        // 显示确认按钮
+                        var confirmBtn = document.getElementById('confirmStep5Btn');
+                        if (confirmBtn) confirmBtn.style.display = 'inline-block';
+                        
+                        // 同步数据到 window.app（如果存在）
+                        if (window.app) {
+                            window.app.currentJobId = jobId;
+                            window.app.ocrData = resultData;
+                            window.app.ocrRegions = extractOCRRegionsInline(blocks);
+                            console.log('INLINE: Synced data to window.app');
+                        }
+                        
+                        // 同步数据到 stateManager（如果存在）
+                        if (window.stateManager) {
+                            window.stateManager.set('jobId', jobId);
+                            window.stateManager.set('ocrData', resultData);
+                            window.stateManager.set('ocrRegions', extractOCRRegionsInline(blocks));
+                        }
+                        
+                        return; // 停止轮询
+                        
+                    } else if (data.status === 'failed' || data.status === 'error') {
+                        console.error('OCR failed:', data.error);
+                        if (statusDiv) {
+                            statusDiv.textContent = 'OCR 识别失败: ' + (data.error || '未知错误');
+                            statusDiv.className = 'status error';
+                        }
+                        if (window.updateStepStatus) {
+                            window.updateStepStatus(3, 'error', '失败');
+                        }
+                        return; // 停止轮询
+                        
+                    } else if (attempt < maxAttempts) {
+                        // 继续轮询
+                        // 注意：后端返回的 progress 已经是百分比（0-100）
+                        if (statusDiv) {
+                            statusDiv.textContent = 'OCR 识别处理中... (' + Math.round(progress) + '%)';
+                        }
+                        setTimeout(poll, pollInterval);
+                        
+                    } else {
+                        // 超时
+                        console.error('Polling timeout');
+                        if (statusDiv) {
+                            statusDiv.textContent = 'OCR 处理超时，请刷新页面重试';
+                            statusDiv.className = 'status error';
+                        }
+                        if (window.updateStepStatus) {
+                            window.updateStepStatus(3, 'error', '超时');
+                        }
+                    }
+                    
+                } catch (error) {
+                    console.error('Polling error:', error);
+                    if (attempt < maxAttempts) {
+                        setTimeout(poll, pollInterval);
+                    } else {
+                        if (statusDiv) {
+                            statusDiv.textContent = '状态查询失败: ' + error.message;
+                            statusDiv.className = 'status error';
+                        }
+                    }
+                }
+            }
+            
+            // 开始轮询
+            poll();
+        }
+        
+        // 页面加载完成后初始化
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initUploadHandler);
+        } else {
+            // DOM 已经加载完成
+            initUploadHandler();
+        }
+        
+        // 额外延迟初始化，确保所有模块都加载完成
+        setTimeout(initUploadHandler, 500);
+        
+    })();
     </script>
 </body>
 </html>

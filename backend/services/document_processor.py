@@ -238,6 +238,7 @@ class DocumentProcessor(DocumentProcessorInterface):
             # 保存到任务缓存
             try:
                 cache = get_job_cache()
+                logger.info(f"Job cache instance: {cache}, document_type_id: {document.document_type_id}")
                 if cache:
                     # 提取置信度分数
                     conf_score = None
@@ -259,7 +260,7 @@ class DocumentProcessor(DocumentProcessorInterface):
                         document_type_id=document.document_type_id
                     )
             except Exception as cache_error:
-                logger.warning(f"Failed to save job to cache: {cache_error}")
+                logger.warning(f"Failed to save job to cache: {cache_error}", exc_info=True)
             
             # 构建 RAG 向量索引（异步，不阻塞主流程）
             self._build_rag_index_async(document.id, editor_data)

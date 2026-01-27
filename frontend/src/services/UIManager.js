@@ -1,6 +1,17 @@
 /**
- * Enhanced UI Manager for better user experience
+ * UIManager - UI 辅助管理器 (V3 重构版)
+ * 
+ * 职责：
+ * - 模型状态检查和显示
+ * - 进度条显示
+ * - 状态消息显示
+ * - 编辑器显示/隐藏
+ * 
+ * 注意：上传事件处理已移至 Step2FileUpload 组件
  */
+
+import { eventBus, EVENTS } from './EventBus.js';
+
 export class UIManager {
     constructor() {
         this.uploadArea = null;
@@ -16,6 +27,7 @@ export class UIManager {
 
     /**
      * Initialize UI components
+     * 注意：不再绑定上传事件，由 Step2FileUpload 处理
      */
     initialize() {
         // Get DOM elements after DOM is ready
@@ -24,14 +36,14 @@ export class UIManager {
         this.statusDiv = document.getElementById('status');
         this.editorSection = document.querySelector('.editor-section');
         
-        console.log('UIManager initialize:', {
+        console.log('UIManager initialize (V3 - no upload events):', {
             uploadArea: !!this.uploadArea,
             fileInput: !!this.fileInput,
             statusDiv: !!this.statusDiv
         });
         
+        // 只创建进度指示器，不绑定上传事件
         this.createProgressIndicator();
-        this.setupEventListeners();
         
         // 检查模型加载状态
         this.checkModelsStatus();
@@ -54,7 +66,9 @@ export class UIManager {
                         clearInterval(this.modelCheckInterval);
                         this.modelCheckInterval = null;
                     }
-                    this.showStatus('OCR 模型已就绪，可以上传 PDF 文件', 'success');
+                    this.showStatus('OCR 模型已就绪，可以上传文件', 'success');
+                    // 发布模型就绪事件
+                    eventBus.emit(EVENTS.MODELS_READY, { ready: true });
                 } else if (data.loading) {
                     this.disableUpload('OCR 模型加载中，请稍候...');
                 } else {
@@ -62,15 +76,12 @@ export class UIManager {
                 }
             } catch (error) {
                 console.log('Model status check failed:', error);
-                // 如果无法连接后端，可能后端还没启动
                 this.disableUpload('等待后端服务启动...');
             }
         };
         
-        // 立即检查一次
         await checkStatus();
         
-        // 每 2 秒检查一次，直到模型加载完成
         if (!this.modelsReady) {
             this.modelCheckInterval = setInterval(checkStatus, 2000);
         }
@@ -78,33 +89,37 @@ export class UIManager {
 
     /**
      * Disable upload functionality
+     * 注意：不修改 innerHTML，只修改样式，避免破坏 Step2FileUpload 绑定的事件
      */
     disableUpload(message) {
         this.modelsReady = false;
         if (this.uploadArea) {
             this.uploadArea.style.opacity = '0.5';
             this.uploadArea.style.pointerEvents = 'none';
-            this.uploadArea.innerHTML = `
-                <div class="upload-icon">⏳</div>
-                <p>${message}</p>
-                <p class="upload-hint">模型加载完成后将自动启用上传功能</p>
-            `;
+            // 更新提示文字（如果存在）
+            const hint = this.uploadArea.querySelector('p');
+            if (hint) {
+                hint.textContent = message;
+            }
         }
+        // 显示状态消息
+        this.showStatus(message, 'info');
     }
 
     /**
      * Enable upload functionality
+     * 注意：不修改 innerHTML，只修改样式，避免破坏 Step2FileUpload 绑定的事件
      */
     enableUpload() {
         this.modelsReady = true;
         if (this.uploadArea) {
             this.uploadArea.style.opacity = '1';
             this.uploadArea.style.pointerEvents = 'auto';
-            this.uploadArea.innerHTML = `
-                <div class="upload-icon">📄</div>
-                <p>点击或拖拽 PDF 文件到此处</p>
-                <p class="upload-hint">支持 PDF 格式，最大 50MB</p>
-            `;
+            // 恢复提示文字（如果存在）
+            const hint = this.uploadArea.querySelector('p');
+            if (hint) {
+                hint.textContent = '点击或拖拽文件到此处';
+            }
         }
     }
 
@@ -119,6 +134,11 @@ export class UIManager {
      * Create progress indicator for file processing
      */
     createProgressIndicator() {
+        if (!this.uploadArea || !this.uploadArea.parentNode) {
+            console.log('UIManager: uploadArea not ready for progress indicator');
+            return;
+        }
+        
         const progressContainer = document.createElement('div');
         progressContainer.id = 'progressContainer';
         progressContainer.style.cssText = `
@@ -153,131 +173,6 @@ export class UIManager {
         this.progressText = progressText;
 
         this.uploadArea.parentNode.insertBefore(progressContainer, this.uploadArea.nextSibling);
-    }
-
-    /**
-     * Setup event listeners
-     */
-    setupEventListeners() {
-        if (!this.uploadArea || !this.fileInput) {
-            console.error('UIManager: uploadArea or fileInput not found!');
-            return;
-        }
-
-        console.log('UIManager: Setting up event listeners');
-
-        this.uploadArea.addEventListener('click', () => {
-            console.log('Upload area clicked');
-            this.fileInput.click();
-        });
-
-        this.fileInput.addEventListener('change', (e) => {
-            console.log('File input changed');
-            const file = e.target.files[0];
-            if (file) {
-                this.onFileSelected(file);
-            }
-        });
-
-        this.uploadArea.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            this.uploadArea.classList.add('dragover');
-        });
-
-        this.uploadArea.addEventListener('dragleave', () => {
-            this.uploadArea.classList.remove('dragover');
-        });
-
-        this.uploadArea.addEventListener('drop', (e) => {
-            e.preventDefault();
-            this.uploadArea.classList.remove('dragover');
-            const file = e.dataTransfer.files[0];
-            if (file) {
-                this.onFileSelected(file);
-            }
-        });
-    }
-
-    /**
-     * Handle file selection
-     */
-    onFileSelected(file) {
-        // 检查模型是否已加载
-        if (!this.modelsReady) {
-            this.showStatus('OCR 模型尚未加载完成，请稍候再试', 'error');
-            return;
-        }
-        
-        this.showFilePreview(file);
-        this.showStatus(`Selected: ${file.name} (${this.formatFileSize(file.size)})`, 'info');
-        
-        // Trigger file upload through the app
-        if (window.app && typeof window.app.handleFileUpload === 'function') {
-            window.app.handleFileUpload(file);
-        }
-    }
-
-    /**
-     * Show file preview
-     */
-    showFilePreview(file) {
-        const existingPreview = document.getElementById('filePreview');
-        if (existingPreview) {
-            existingPreview.remove();
-        }
-
-        const preview = document.createElement('div');
-        preview.id = 'filePreview';
-        preview.style.cssText = `
-            margin-top: 15px;
-            padding: 10px;
-            background: #f8f9fa;
-            border-radius: 4px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        `;
-
-        const icon = this.getFileIcon(file.type);
-        const info = document.createElement('div');
-        info.innerHTML = `
-            <div style="font-weight: 500;">${file.name}</div>
-            <div style="font-size: 12px; color: #666;">${this.formatFileSize(file.size)}</div>
-        `;
-
-        preview.appendChild(icon);
-        preview.appendChild(info);
-
-        this.uploadArea.parentNode.insertBefore(preview, this.uploadArea.nextSibling);
-    }
-
-    /**
-     * Get file icon based on type
-     */
-    getFileIcon(type) {
-        const icon = document.createElement('div');
-        icon.style.cssText = `
-            width: 40px;
-            height: 40px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 20px;
-            border-radius: 4px;
-        `;
-
-        if (type === 'application/pdf') {
-            icon.style.background = '#dc2626';
-            icon.textContent = '📄';
-        } else if (type.startsWith('image/')) {
-            icon.style.background = '#2563eb';
-            icon.textContent = '🖼️';
-        } else {
-            icon.style.background = '#6b7280';
-            icon.textContent = '📄';
-        }
-
-        return icon;
     }
 
     /**
@@ -400,7 +295,7 @@ export class UIManager {
      * Show timeout message
      */
     showTimeout(message) {
-        this.showStatus(message || 'Processing timeout. The operation took too long to complete.', 'error');
+        this.showStatus(message || 'Processing timeout.', 'error');
         this.hideProgress();
     }
     

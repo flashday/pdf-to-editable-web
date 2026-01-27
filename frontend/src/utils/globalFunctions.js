@@ -443,17 +443,24 @@ window.switchViewMode = async function(mode) {
     var mdView = document.getElementById('markdownView');
     var ocrRegions = document.querySelectorAll('.ocr-region');
     
+    console.log('switchViewMode elements:', {
+        blockBtn: !!blockBtn,
+        mdBtn: !!mdBtn,
+        blockList: !!blockList,
+        mdView: !!mdView
+    });
+    
     if (mode === 'block') {
-        blockBtn.classList.add('active');
-        mdBtn.classList.remove('active');
-        blockList.style.display = 'flex';
-        mdView.style.display = 'none';
+        if (blockBtn) blockBtn.classList.add('active');
+        if (mdBtn) mdBtn.classList.remove('active');
+        if (blockList) blockList.style.display = 'flex';
+        if (mdView) mdView.style.display = 'none';
         ocrRegions.forEach(function(r) { r.style.display = 'block'; });
     } else {
-        blockBtn.classList.remove('active');
-        mdBtn.classList.add('active');
-        blockList.style.display = 'none';
-        mdView.style.display = 'block';
+        if (blockBtn) blockBtn.classList.remove('active');
+        if (mdBtn) mdBtn.classList.add('active');
+        if (blockList) blockList.style.display = 'none';
+        if (mdView) mdView.style.display = 'block';
         ocrRegions.forEach(function(r) { r.style.display = 'none'; });
         await window.loadMarkdownView();
     }

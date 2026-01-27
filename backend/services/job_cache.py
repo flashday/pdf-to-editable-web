@@ -88,10 +88,27 @@ class JobCacheService:
     
     def _verify_job_files(self, job_id: str) -> bool:
         """验证任务的关键文件是否存在"""
-        # 至少需要图片和 ppstructure.json
-        image_path = self.temp_folder / f"{job_id}_page1.png"
-        ppstructure_path = self.temp_folder / f"{job_id}_ppstructure.json"
-        return image_path.exists() and ppstructure_path.exists()
+        # 检查 ppstructure.json（可能在 temp 或 uploads 目录）
+        ppstructure_in_temp = self.temp_folder / f"{job_id}_ppstructure.json"
+        ppstructure_in_uploads = Path('uploads') / f"{job_id}_ppstructure.json"
+        has_ppstructure = ppstructure_in_temp.exists() or ppstructure_in_uploads.exists()
+        
+        if not has_ppstructure:
+            return False
+        
+        # 检查图片文件（PDF 转换的在 temp，直接上传的图片在 uploads）
+        # temp 目录：PDF 转换后的 _page1.png
+        image_in_temp = self.temp_folder / f"{job_id}_page1.png"
+        if image_in_temp.exists():
+            return True
+        
+        # uploads 目录：直接上传的图片文件（支持多种格式）
+        for ext in ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp']:
+            image_in_uploads = Path('uploads') / f"{job_id}.{ext}"
+            if image_in_uploads.exists():
+                return True
+        
+        return False
     
     def save_job(self, job_id: str, filename: str, processing_time: float,
                  confidence_score: Optional[float] = None, block_count: int = 0,
@@ -171,16 +188,21 @@ class JobCacheService:
             return None
         
         try:
-            # 加载 ppstructure.json
+            # 加载 ppstructure.json（可能在 temp 或 uploads 目录）
             ppstructure_path = self.temp_folder / f"{job_id}_ppstructure.json"
+            if not ppstructure_path.exists():
+                ppstructure_path = Path('uploads') / f"{job_id}_ppstructure.json"
+            
             with open(ppstructure_path, 'r', encoding='utf-8') as f:
                 ppstructure_data = json.load(f)
             
             # 从 ppstructure 数据重建 Editor.js 格式
             blocks = self._rebuild_editor_blocks(ppstructure_data)
             
-            # 加载置信度日志（如果有）
+            # 加载置信度日志（如果有，可能在 temp 或 uploads 目录）
             confidence_log_path = self.temp_folder / f"{job_id}_confidence_log.md"
+            if not confidence_log_path.exists():
+                confidence_log_path = Path('uploads') / f"{job_id}_confidence_log.md"
             confidence_log = None
             if confidence_log_path.exists():
                 with open(confidence_log_path, 'r', encoding='utf-8') as f:
@@ -188,6 +210,8 @@ class JobCacheService:
             
             # 加载 Markdown 内容（如果有）
             markdown_path = self.temp_folder / f"{job_id}_raw_ocr.md"
+            if not markdown_path.exists():
+                markdown_path = Path('uploads') / f"{job_id}_raw_ocr.md"
             markdown_content = None
             if markdown_path.exists():
                 with open(markdown_path, 'r', encoding='utf-8') as f:

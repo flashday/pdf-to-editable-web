@@ -108,6 +108,21 @@ export class DocumentProcessor {
     async uploadFile(file) {
         const formData = new FormData();
         formData.append('file', file);
+        
+        // 获取单据类型ID - 优先从文件对象获取，其次从下拉框获取
+        let documentTypeId = file._documentTypeId || null;
+        if (!documentTypeId) {
+            const documentTypeSelect = document.getElementById('documentTypeSelect');
+            documentTypeId = documentTypeSelect ? documentTypeSelect.value : null;
+        }
+        
+        // 空字符串视为 null
+        if (documentTypeId && documentTypeId.trim() !== '') {
+            formData.append('document_type_id', documentTypeId);
+            console.log('DocumentProcessor: Uploading with document_type_id:', documentTypeId);
+        } else {
+            console.log('DocumentProcessor: No document_type_id to send');
+        }
 
         try {
             const response = await axios.post(`${this.baseURL}/convert`, formData, {

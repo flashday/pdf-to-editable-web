@@ -56,8 +56,8 @@ class FileValidator:
                 else:
                     raise ValidationError("Invalid filename")
             
-            # Check file extension
-            file_ext = cls._get_file_extension(filename)
+            # Check file extension - use original filename for extension detection
+            file_ext = cls._get_file_extension(original_filename)
             if file_ext not in cls.SUPPORTED_TYPES:
                 supported_formats = ', '.join(cls.SUPPORTED_TYPES.keys()).upper()
                 raise ValidationError(f"Unsupported file type. Supported formats: {supported_formats}")

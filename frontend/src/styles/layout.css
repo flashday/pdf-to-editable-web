@@ -341,12 +341,12 @@
     }
     
     .step-label {
-        font-size: 10px;
-        max-width: 60px;
+        font-size: 11px;
+        max-width: 70px;
     }
     
     .step-time {
-        font-size: 9px;
+        display: none;
     }
     
     .llm-status-bar {
@@ -448,8 +448,8 @@
     }
     
     .step-label {
-        font-size: 9px;
-        max-width: 50px;
+        font-size: 10px;
+        max-width: 55px;
     }
     
     .llm-status-bar {
