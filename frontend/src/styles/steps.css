@@ -1,14 +1,16 @@
-/* steps.css - 工作流步骤进度条样式 (V3 Enhanced) */
+/* steps.css - 工作流步骤进度条样式 (V3 Enhanced - 紧凑版) */
 
-/* 流程进度条容器 */
+/* 流程进度条容器 - 三栏布局：状态 | 步骤 | 按钮 */
 .workflow-container {
     display: flex;
+    align-items: center;
     gap: 20px;
-    padding: 15px 20px;
+    padding: 10px 20px;
     background: var(--bg-secondary);
     border-bottom: 1px solid var(--border-light);
 }
 
+/* 中间：工作流步骤区域 */
 .workflow-progress {
     flex: 1;
 }
@@ -18,17 +20,18 @@
     align-items: center;
     justify-content: space-between;
     position: relative;
-    padding: 0 10px;
+    padding: 0 20px;
+    width: 100%;
 }
 
 /* 步骤连接线 - 增强版 */
 .workflow-steps::before {
     content: '';
     position: absolute;
-    top: 20px;
-    left: 40px;
-    right: 40px;
-    height: 3px;
+    top: 16px;
+    left: 35px;
+    right: 35px;
+    height: 2px;
     background: linear-gradient(90deg, #dee2e6 0%, #dee2e6 100%);
     z-index: 0;
     transition: background 0.5s ease;
@@ -38,9 +41,9 @@
 .workflow-steps::after {
     content: '';
     position: absolute;
-    top: 20px;
-    left: 40px;
-    height: 3px;
+    top: 16px;
+    left: 35px;
+    height: 2px;
     background: linear-gradient(90deg, var(--success-color), #007bff);
     z-index: 0;
     width: 0;
@@ -48,13 +51,13 @@
 }
 
 /* 根据当前步骤动态调整进度线 */
-.workflow-steps[data-current-step="2"]::after { width: calc((100% - 80px) * 0.2); }
-.workflow-steps[data-current-step="3"]::after { width: calc((100% - 80px) * 0.4); }
-.workflow-steps[data-current-step="4"]::after { width: calc((100% - 80px) * 0.6); }
-.workflow-steps[data-current-step="5"]::after { width: calc((100% - 80px) * 0.8); }
-.workflow-steps[data-current-step="6"]::after { width: calc(100% - 80px); }
+.workflow-steps[data-current-step="2"]::after { width: calc((100% - 70px) * 0.2); }
+.workflow-steps[data-current-step="3"]::after { width: calc((100% - 70px) * 0.4); }
+.workflow-steps[data-current-step="4"]::after { width: calc((100% - 70px) * 0.6); }
+.workflow-steps[data-current-step="5"]::after { width: calc((100% - 70px) * 0.8); }
+.workflow-steps[data-current-step="6"]::after { width: calc(100% - 70px); }
 
-/* 单个步骤 */
+/* 单个步骤 - 紧凑 */
 .workflow-step {
     display: flex;
     flex-direction: column;
@@ -66,12 +69,12 @@
 }
 
 .workflow-step:hover {
-    transform: translateY(-2px);
+    transform: translateY(-1px);
 }
 
 .step-icon {
-    width: 40px;
-    height: 40px;
+    width: 32px;
+    height: 32px;
     border-radius: var(--radius-full);
     background: #dee2e6;
     color: #6c757d;
@@ -79,10 +82,10 @@
     align-items: center;
     justify-content: center;
     font-weight: 600;
-    font-size: 14px;
-    margin-bottom: 8px;
+    font-size: 12px;
+    margin-bottom: 4px;
     transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-    border: 3px solid #fff;
+    border: 2px solid #fff;
     box-shadow: var(--shadow-sm);
     position: relative;
     overflow: hidden;
@@ -109,17 +112,17 @@
 }
 
 .step-label {
-    font-size: 12px;
+    font-size: 11px;
     color: #6c757d;
     text-align: center;
-    max-width: 80px;
+    max-width: 70px;
     transition: all 0.3s ease;
 }
 
 .step-time {
-    font-size: 10px;
+    font-size: 9px;
     color: var(--text-light);
-    margin-top: 2px;
+    margin-top: 1px;
     transition: all 0.3s ease;
     opacity: 0;
     transform: translateY(-5px);
@@ -209,16 +212,17 @@
     40%, 80% { transform: translateX(3px); }
 }
 
-/* LLM 状态指示器 */
+/* LLM 状态指示器 - 左侧垂直排列 */
 .llm-status-bar {
     display: flex;
-    gap: 20px;
-    padding: 8px 15px;
+    flex-direction: column;
+    gap: 4px;
+    padding: 6px 12px;
     background: linear-gradient(135deg, #f0f4f8, #e8ecf0);
     border-radius: var(--radius-md);
-    margin-top: 10px;
-    font-size: 12px;
+    font-size: 10px;
     box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.05);
+    min-width: 140px;
 }
 
 .llm-status-item {
@@ -300,17 +304,24 @@
    工具栏按钮样式 (单据设定 & 历史缓存)
    ============================================ */
 
+/* 右侧工具按钮容器 - 垂直排列 */
+.toolbar-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
 .toolbar-btn {
     padding: 8px 16px;
     border: none;
-    border-radius: 20px;
-    font-size: 13px;
+    border-radius: 16px;
+    font-size: 12px;
     font-weight: 600;
     cursor: pointer;
     transition: all 0.3s ease;
     white-space: nowrap;
     z-index: 2;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
 }
 
 .toolbar-btn:hover {

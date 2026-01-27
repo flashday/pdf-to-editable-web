@@ -10,23 +10,26 @@
     overflow: hidden;
 }
 
-/* 头部 */
+/* 头部 - 紧凑版 */
 .header {
     background: var(--bg-dark);
     color: white;
-    padding: 15px 20px;
+    padding: 8px 20px;
     text-align: center;
 }
 
 .header h1 {
-    margin: 0 0 5px 0;
-    font-size: 1.5em;
+    margin: 0;
+    font-size: 1.2em;
+    display: inline;
 }
 
 .header p {
     margin: 0;
     opacity: 0.8;
-    font-size: 0.9em;
+    font-size: 0.8em;
+    display: inline;
+    margin-left: 15px;
 }
 
 /* 上传区域 */
@@ -237,8 +240,9 @@
     }
     
     .workflow-container {
-        flex-direction: column;
-        gap: 15px;
+        flex-direction: row;
+        flex-wrap: nowrap;
+        gap: 12px;
     }
     
     .history-panel {

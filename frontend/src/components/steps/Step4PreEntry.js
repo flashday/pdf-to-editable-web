@@ -108,9 +108,6 @@ export class Step4PreEntry {
             const item = this.createBlockItem(region, idx, text, html, isModified);
             blockList.appendChild(item);
         });
-        
-        // 显示确认按钮
-        this.renderConfirmButton();
     }
 
     /**
@@ -173,31 +170,6 @@ export class Step4PreEntry {
         item.addEventListener('dblclick', () => this.editBlock(idx));
         
         return item;
-    }
-
-    /**
-     * 渲染确认按钮
-     */
-    renderConfirmButton() {
-        let confirmArea = document.getElementById('preEntryConfirmArea');
-        if (!confirmArea) {
-            confirmArea = document.createElement('div');
-            confirmArea.id = 'preEntryConfirmArea';
-            confirmArea.style.cssText = 'padding: 15px; border-top: 1px solid #ddd; background: #f8f9fa; text-align: center;';
-            
-            const confirmBtn = document.createElement('button');
-            confirmBtn.id = 'preEntryConfirmBtn';
-            confirmBtn.textContent = '✓ 确认并进入下一步';
-            confirmBtn.style.cssText = 'background: #28a745; color: white; border: none; padding: 10px 24px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600;';
-            confirmBtn.onclick = () => this.confirmAndProceed();
-            
-            confirmArea.appendChild(confirmBtn);
-            
-            const editorContainer = document.querySelector('.editor-container');
-            if (editorContainer && editorContainer.parentNode) {
-                editorContainer.parentNode.appendChild(confirmArea);
-            }
-        }
     }
 
     /**

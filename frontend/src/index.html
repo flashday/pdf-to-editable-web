@@ -10,8 +10,8 @@
     
     <!-- CSS 模块 -->
     <link rel="stylesheet" href="styles/base.css?v=15">
-    <link rel="stylesheet" href="styles/layout.css?v=16">
-    <link rel="stylesheet" href="styles/steps.css?v=16">
+    <link rel="stylesheet" href="styles/layout.css?v=18">
+    <link rel="stylesheet" href="styles/steps.css?v=21">
     <link rel="stylesheet" href="styles/panels.css?v=15">
     <link rel="stylesheet" href="styles/components.css?v=18">
 </head>
@@ -25,13 +25,28 @@
         
         <!-- 流程进度条 -->
         <div class="workflow-container">
+            <!-- 左侧：服务状态指示器 -->
+            <div class="llm-status-bar" id="llmStatusBar">
+                <div class="llm-status-item" id="llmOcrStatus">
+                    <span class="status-dot checking"></span>
+                    <span class="status-label">OCR模型</span>
+                    <span class="status-text" id="llmOcrText">检测中...</span>
+                </div>
+                <div class="llm-status-item" id="llmLlmStatus">
+                    <span class="status-dot checking"></span>
+                    <span class="status-label">LLM服务</span>
+                    <span class="status-text" id="llmLlmText">检测中...</span>
+                </div>
+                <div class="llm-status-item" id="llmRagStatus">
+                    <span class="status-dot checking"></span>
+                    <span class="status-label">RAG服务</span>
+                    <span class="status-text" id="llmRagText">检测中...</span>
+                </div>
+            </div>
+            
+            <!-- 中间：工作流步骤 -->
             <div class="workflow-progress">
                 <div class="workflow-steps" id="workflowSteps">
-                    <!-- 单据设定按钮 -->
-                    <button class="toolbar-btn toolbar-btn-config" id="toolbarDocTypeBtn" title="单据设定">
-                        ⚙️ 单据设定
-                    </button>
-                    
                     <div class="workflow-step" id="step1" data-step="1">
                         <div class="step-icon">1</div>
                         <div class="step-label">模型加载</div>
@@ -52,12 +67,6 @@
                         <div class="step-label">预录入</div>
                         <div class="step-time" id="step4Time"></div>
                     </div>
-                    
-                    <!-- 历史缓存按钮 -->
-                    <button class="toolbar-btn toolbar-btn-history" id="toolbarHistoryBtn" title="历史缓存">
-                        📂 历史缓存
-                    </button>
-                    
                     <div class="workflow-step" id="step5" data-step="5">
                         <div class="step-icon">5</div>
                         <div class="step-label">数据提取</div>
@@ -69,25 +78,16 @@
                         <div class="step-time" id="step6Time"></div>
                     </div>
                 </div>
-                
-                <!-- 服务状态指示器 -->
-                <div class="llm-status-bar" id="llmStatusBar">
-                    <div class="llm-status-item" id="llmOcrStatus">
-                        <span class="status-dot checking"></span>
-                        <span class="status-label">OCR模型</span>
-                        <span class="status-text" id="llmOcrText">检测中...</span>
-                    </div>
-                    <div class="llm-status-item" id="llmLlmStatus">
-                        <span class="status-dot checking"></span>
-                        <span class="status-label">LLM服务</span>
-                        <span class="status-text" id="llmLlmText">检测中...</span>
-                    </div>
-                    <div class="llm-status-item" id="llmRagStatus">
-                        <span class="status-dot checking"></span>
-                        <span class="status-label">RAG服务</span>
-                        <span class="status-text" id="llmRagText">检测中...</span>
-                    </div>
-                </div>
+            </div>
+            
+            <!-- 右侧：工具按钮 -->
+            <div class="toolbar-buttons">
+                <button class="toolbar-btn toolbar-btn-config" id="toolbarDocTypeBtn" title="单据设定">
+                    ⚙️ 单据设定
+                </button>
+                <button class="toolbar-btn toolbar-btn-history" id="toolbarHistoryBtn" title="历史缓存">
+                    📂 历史缓存
+                </button>
             </div>
         </div>
         
@@ -154,8 +154,8 @@
                         <button id="blockModeBtn" class="mode-btn active" onclick="window.switchViewMode('block')" title="Block 视图">📦 Block</button>
                         <button id="markdownModeBtn" class="mode-btn" onclick="window.switchViewMode('markdown')" title="Markdown 视图">📝 Markdown</button>
                     </div>
-                    <!-- 智能提取和问答按钮 -->
-                    <div class="smart-buttons" id="smartButtons">
+                    <!-- 智能提取和问答按钮 - 暂时隐藏 -->
+                    <div class="smart-buttons" id="smartButtons" style="display: none;">
                         <button class="smart-btn extract-btn" id="smartExtractBtn" onclick="window.openSmartExtract && window.openSmartExtract()" title="智能提取关键信息">🔮 智能提取</button>
                         <button class="smart-btn qa-btn" id="smartQaBtn" onclick="window.openDocumentQA && window.openDocumentQA()" title="文档问答">💬 问答</button>
                     </div>
@@ -213,7 +213,7 @@
     </div>
     
     <!-- 全局函数 -->
-    <script src="utils/globalFunctions.js?v=22"></script>
+    <script src="utils/globalFunctions.js?v=23"></script>
     
     <!-- 主应用 -->
     <script type="module" src="index.js?v=33"></script>
@@ -226,7 +226,7 @@
     
     <!-- 步骤组件 -->
     <script type="module">
-        import { Step4PreEntry } from './components/steps/Step4PreEntry.js?v=16';
+        import { Step4PreEntry } from './components/steps/Step4PreEntry.js?v=17';
         import { Step5DataExtract } from './components/steps/Step5DataExtract.js?v=36';
         import { Step6Confirmation } from './components/steps/Step6Confirmation.js?v=18';
         

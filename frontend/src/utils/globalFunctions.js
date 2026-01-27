@@ -606,61 +606,14 @@ window.downloadBlob = function(blob, filename) {
 // ============================================================
 
 window.createStep4ConfirmButton = function() {
-    console.log('createStep4ConfirmButton: Creating confirm button');
-    var confirmArea = document.getElementById('step4ConfirmArea');
+    console.log('createStep4ConfirmButton: Showing top confirm button only');
     
-    // 如果已存在，先移除
-    if (confirmArea) {
-        confirmArea.remove();
-    }
-    
-    // 创建确认区域
-    confirmArea = document.createElement('div');
-    confirmArea.id = 'step4ConfirmArea';
-    confirmArea.style.cssText = 'padding: 15px; border-top: 2px solid #28a745; background: linear-gradient(to right, #f8f9fa, #e8f5e9); text-align: center; display: flex; justify-content: center; gap: 15px; align-items: center; flex-shrink: 0; min-height: 60px; position: sticky; bottom: 0; z-index: 100;';
-    
-    // 提示文字
-    var hint = document.createElement('span');
-    hint.style.cssText = 'color: #666; font-size: 13px;';
-    hint.textContent = '预录入完成后，点击确认进入下一步 →';
-    
-    // 确认按钮
-    var confirmBtn = document.createElement('button');
-    confirmBtn.id = 'step4ConfirmBtn';
-    confirmBtn.textContent = '✓ 确认并进入步骤5（数据提取）';
-    confirmBtn.style.cssText = 'background: #28a745; color: white; border: none; padding: 12px 28px; border-radius: 6px; cursor: pointer; font-size: 15px; font-weight: 600; transition: all 0.2s; box-shadow: 0 2px 4px rgba(40,167,69,0.3);';
-    confirmBtn.onmouseover = function() { 
-        this.style.background = '#218838'; 
-        this.style.transform = 'translateY(-1px)';
-        this.style.boxShadow = '0 4px 8px rgba(40,167,69,0.4)';
-    };
-    confirmBtn.onmouseout = function() { 
-        this.style.background = '#28a745'; 
-        this.style.transform = 'translateY(0)';
-        this.style.boxShadow = '0 2px 4px rgba(40,167,69,0.3)';
-    };
-    confirmBtn.onclick = function(e) { 
-        e.preventDefault();
-        e.stopPropagation();
-        console.log('Step 4 confirm button clicked!');
-        window.confirmStep4AndProceed();
-    };
-    
-    confirmArea.appendChild(hint);
-    confirmArea.appendChild(confirmBtn);
-    
-    // 添加到编辑器面板底部
-    var editorPanel = document.querySelector('.editor-panel');
-    if (editorPanel) {
-        editorPanel.appendChild(confirmArea);
-        console.log('createStep4ConfirmButton: Button added to editor panel');
-        
-        // 确保按钮可见 - 滚动到底部
-        setTimeout(function() {
-            confirmArea.scrollIntoView({ behavior: 'smooth', block: 'end' });
-        }, 100);
-    } else {
-        console.error('createStep4ConfirmButton: editor-panel not found!');
+    // 只显示顶部的蓝色确认按钮，不再创建底部的绿色按钮
+    var confirmBtn = document.getElementById('confirmStep5Btn');
+    if (confirmBtn) {
+        confirmBtn.style.display = 'inline-block';
+        confirmBtn.style.visibility = 'visible';
+        console.log('createStep4ConfirmButton: Top button shown');
     }
 };
 

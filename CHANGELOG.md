@@ -8,6 +8,49 @@
 
 ---
 
+## [2026-01-27] - 工作流容器布局优化与UI调整
+
+### 优化：工作流容器三栏布局
+
+**需求**：优化顶部工作流区域布局，使状态栏、步骤、按钮更合理排列
+
+**实现内容**：
+
+1. `frontend/src/styles/steps.css`
+   - 工作流容器改为三栏布局：左侧状态栏 | 中间步骤1-6 | 右侧按钮
+   - 左侧状态栏（OCR模型、LLM服务、RAG服务）垂直排列
+   - 右侧按钮（单据设定、历史缓存）垂直排列
+   - 6个步骤均匀分布在进度线上（`justify-content: space-between`）
+   - 版本号：`steps.css?v=21`
+
+2. `frontend/src/styles/layout.css`
+   - 修复中等屏幕媒体查询导致的换行问题
+   - 保持三栏布局在不同屏幕尺寸下正常显示
+   - 版本号：`layout.css?v=18`
+
+3. `frontend/src/components/steps/Step4PreEntry.js`
+   - 删除 `renderConfirmButton()` 方法（底部绿色确认按钮）
+   - 只保留顶部蓝色"确认进入步骤5"按钮
+   - 版本号：`Step4PreEntry.js?v=17`
+
+4. `frontend/src/utils/globalFunctions.js`
+   - 简化 `createStep4ConfirmButton()` 函数
+   - 不再动态创建底部按钮，只显示顶部按钮
+   - 版本号：`globalFunctions.js?v=23`
+
+5. `frontend/src/index.html`
+   - 隐藏"智能提取"和"问答"按钮（暂时不需要）
+   - 更新各组件版本号
+
+**修改的文件**：
+- `frontend/src/styles/steps.css`
+- `frontend/src/styles/layout.css`
+- `frontend/src/components/steps/Step4PreEntry.js`
+- `frontend/src/utils/globalFunctions.js`
+- `frontend/src/index.html`
+
+---
+
 ## [2026-01-27] - LLM 调用日志记录功能
 
 ### 新增：LLM 调用日志记录与下载
