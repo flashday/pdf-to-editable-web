@@ -94,6 +94,15 @@
         
         <!-- 上传区域 -->
         <div class="upload-section">
+            <!-- 单据类型选择 -->
+            <div class="document-type-selector" id="documentTypeSelector">
+                <label for="documentTypeSelect">📋 单据类型：</label>
+                <select id="documentTypeSelect" class="doc-type-select">
+                    <option value="">加载中...</option>
+                </select>
+                <button id="docTypeConfigBtn" class="doc-type-config-btn" title="单据设定">⚙️ 设定</button>
+            </div>
+            
             <div class="upload-area" id="uploadArea">
                 <p>📄 拖拽 PDF、JPG 或 PNG 文件到此处，或点击选择</p>
                 <p><small>最大文件: 50MB | 支持: PDF, JPG, PNG</small></p>
@@ -190,6 +199,7 @@
     <script src="components/SmartExtract.js"></script>
     <script src="components/DocumentQA.js"></script>
     <script src="components/ChatOCRIntegration.js"></script>
+    <script src="components/DocumentTypeConfig.js"></script>
     
     <!-- 步骤组件 -->
     <script type="module">
@@ -213,6 +223,37 @@
     <!-- 初始化 -->
     <script>
         document.addEventListener('DOMContentLoaded', function() {
+            // 初始化单据类型配置
+            if (typeof initDocumentTypeConfig === 'function') {
+                window.docTypeConfig = initDocumentTypeConfig({ apiBaseUrl: '' });
+                console.log('DocumentTypeConfig initialized');
+                
+                // 加载单据类型到下拉框
+                loadDocumentTypeSelect();
+            }
+            
+            // 单据设定按钮点击事件
+            var configBtn = document.getElementById('docTypeConfigBtn');
+            if (configBtn) {
+                configBtn.addEventListener('click', function() {
+                    if (window.docTypeConfig) {
+                        window.docTypeConfig.show();
+                    }
+                });
+            }
+            
+            // 单据类型选择变化事件
+            var typeSelect = document.getElementById('documentTypeSelect');
+            if (typeSelect) {
+                typeSelect.addEventListener('change', function() {
+                    var selectedTypeId = this.value;
+                    if (window.stateManager) {
+                        window.stateManager.set('selectedDocumentTypeId', selectedTypeId);
+                    }
+                    console.log('Selected document type:', selectedTypeId);
+                });
+            }
+            
             setTimeout(function() {
                 // 初始化智能功能
                 if (typeof initChatOCRIntegration === 'function' && window.app) {
@@ -234,6 +275,34 @@
                 }
             }, 800);
         });
+        
+        // 加载单据类型到下拉框
+        async function loadDocumentTypeSelect() {
+            var select = document.getElementById('documentTypeSelect');
+            if (!select) return;
+            
+            try {
+                var response = await fetch('/api/document-types');
+                var data = await response.json();
+                
+                if (data.success && data.data) {
+                    select.innerHTML = data.data.map(function(type) {
+                        return '<option value="' + type.id + '">' + type.name + '</option>';
+                    }).join('');
+                    
+                    // 默认选中第一个
+                    if (data.data.length > 0 && window.stateManager) {
+                        window.stateManager.set('selectedDocumentTypeId', data.data[0].id);
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to load document types:', error);
+                select.innerHTML = '<option value="">加载失败</option>';
+            }
+        }
+        
+        // 刷新单据类型下拉框（供外部调用）
+        window.refreshDocumentTypeSelect = loadDocumentTypeSelect;
     </script>
 </body>
 </html>

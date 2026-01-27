@@ -14,6 +14,7 @@ from flask import Flask, send_from_directory, jsonify
 from flask_cors import CORS
 from backend.api import api_bp
 from backend.api.chatocr_routes import chatocr_bp
+from backend.api.document_type_routes import document_type_bp
 from backend.config import Config, ChatOCRConfig
 from backend.services.ocr_service import preload_models, is_models_loaded, is_models_loading
 from backend.services.job_cache import init_job_cache
@@ -84,6 +85,10 @@ def create_app(config_class=Config):
     if ChatOCRConfig.ENABLE_CHATOCR:
         app.register_blueprint(chatocr_bp)
         logger.info("ChatOCR API routes registered")
+    
+    # Register Document Type API blueprint (单据类型配置)
+    app.register_blueprint(document_type_bp)
+    logger.info("Document Type API routes registered")
     
     # Health check endpoint at root level
     @app.route('/health')

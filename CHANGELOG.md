@@ -8,6 +8,47 @@
 
 ---
 
+## [2026-01-27] - 单据设定功能开发
+
+### 新增：单据类型配置功能
+
+**功能描述**：
+在步骤2上传文件前，用户可以选择单据类型（发票、合同、收据、身份证、出差报告等），步骤5数据提取时会自动加载对应的关键词模板和检查点问题。
+
+**新增文件**：
+- `backend/api/document_type_routes.py` - 单据类型配置 API
+  - `GET /api/document-types` - 获取所有单据类型
+  - `POST /api/document-types` - 创建新单据类型
+  - `PUT /api/document-types/{id}` - 更新单据类型
+  - `DELETE /api/document-types/{id}` - 删除单据类型
+  - `POST /api/document-types/reset` - 重置为默认配置
+- `frontend/src/components/DocumentTypeConfig.js` - 单据设定弹窗组件
+  - 左侧：单据类型列表（支持新增/删除）
+  - 右侧：编辑关键词字段和检查点问题
+  - 数据持久化到 `config/document_types.json`
+
+**修改文件**：
+- `backend/app.py` - 注册 `document_type_bp` 蓝图
+- `frontend/src/index.html`
+  - 上传区域添加单据类型下拉选择器
+  - 添加"⚙️ 设定"按钮打开配置弹窗
+  - 初始化脚本加载单据类型到下拉框
+- `frontend/src/styles/components.css` - 添加单据类型选择器样式
+- `frontend/src/components/steps/Step5DataExtract.js`
+  - 从后端加载单据类型配置（`loadDocumentTypes()`）
+  - 自动选择步骤2选中的单据类型（`autoSelectDocumentType()`）
+  - 模板渲染使用后端数据而非硬编码预设
+  - 选择模板时自动填充检查点问题
+
+**默认单据类型**：
+- 发票：发票号码、发票代码、开票日期、购买方名称、销售方名称、金额、税额、价税合计
+- 合同：合同编号、甲方、乙方、签订日期、合同金额、有效期
+- 收据：收据编号、日期、付款人、收款人、金额、事由
+- 身份证：姓名、性别、民族、出生日期、住址、身份证号码
+- 出差报告：报告日期、出差人、出差目的地、出差事由、出差时间、费用合计
+
+---
+
 ## [2026-01-27] - 步骤5/6界面优化 & RAG集成修复
 
 ### 步骤5数据提取RAG集成修复

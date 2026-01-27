@@ -6,32 +6,37 @@
 import { eventBus, EVENTS } from '../../services/EventBus.js';
 import { stateManager } from '../../services/StateManager.js';
 
-// 预设模板
+// 预设模板（作为后备，优先从后端加载）
 const PRESET_TEMPLATES = [
     {
         id: 'invoice',
         name: '发票',
-        fields: ['发票号码', '发票代码', '开票日期', '购买方名称', '销售方名称', '金额', '税额', '价税合计']
+        fields: ['发票号码', '发票代码', '开票日期', '购买方名称', '销售方名称', '金额', '税额', '价税合计'],
+        checkpoints: ['发票号码是多少？', '开票日期是什么？', '金额合计是多少？']
     },
     {
         id: 'contract',
         name: '合同',
-        fields: ['合同编号', '甲方', '乙方', '签订日期', '合同金额', '有效期']
+        fields: ['合同编号', '甲方', '乙方', '签订日期', '合同金额', '有效期'],
+        checkpoints: ['合同编号是多少？', '甲方和乙方分别是谁？', '合同金额是多少？']
     },
     {
         id: 'id_card',
         name: '身份证',
-        fields: ['姓名', '性别', '民族', '出生日期', '住址', '身份证号码']
+        fields: ['姓名', '性别', '民族', '出生日期', '住址', '身份证号码'],
+        checkpoints: ['姓名是什么？', '身份证号码是多少？']
     },
     {
         id: 'receipt',
         name: '收据',
-        fields: ['收据编号', '日期', '付款人', '收款人', '金额', '事由']
+        fields: ['收据编号', '日期', '付款人', '收款人', '金额', '事由'],
+        checkpoints: ['收据编号是多少？', '金额是多少？']
     },
     {
         id: 'custom',
         name: '自定义',
-        fields: []
+        fields: [],
+        checkpoints: []
     }
 ];
 
@@ -39,6 +44,7 @@ export class Step5DataExtract {
     constructor(container) {
         this.container = container;
         this.selectedTemplate = null;
+        this.documentTypes = [];  // 从后端加载的单据类型
         this.extractedData = null;
         this.checkpointResults = [];
         this.isExtracting = false;
@@ -48,7 +54,7 @@ export class Step5DataExtract {
     /**
      * 显示组件
      */
-    show() {
+    async show() {
         console.log('Step5DataExtract: Showing Step 5 UI');
         
         // 隐藏步骤4相关界面
@@ -72,8 +78,53 @@ export class Step5DataExtract {
         const step6Container = document.getElementById('step6Container');
         if (step6Container) step6Container.style.display = 'none';
         
+        // 加载单据类型配置
+        await this.loadDocumentTypes();
+        
+        // 自动选择步骤2选中的单据类型
+        this.autoSelectDocumentType();
+        
         this.render();
         this.bindEvents();
+    }
+    
+    /**
+     * 从后端加载单据类型配置
+     */
+    async loadDocumentTypes() {
+        try {
+            const response = await fetch('/api/document-types');
+            const data = await response.json();
+            if (data.success && data.data) {
+                this.documentTypes = data.data;
+                console.log('Step5: Loaded document types:', this.documentTypes.length);
+            }
+        } catch (error) {
+            console.error('Step5: Failed to load document types:', error);
+            // 使用预设模板作为后备
+            this.documentTypes = PRESET_TEMPLATES;
+        }
+    }
+    
+    /**
+     * 自动选择步骤2选中的单据类型
+     */
+    autoSelectDocumentType() {
+        const globalStateManager = window.stateManager || stateManager;
+        const selectedTypeId = globalStateManager.get('selectedDocumentTypeId');
+        
+        if (selectedTypeId) {
+            const docType = this.documentTypes.find(t => t.id === selectedTypeId);
+            if (docType) {
+                this.selectedTemplate = docType;
+                console.log('Step5: Auto-selected document type:', docType.name);
+            }
+        }
+        
+        // 如果没有选中，默认选第一个
+        if (!this.selectedTemplate && this.documentTypes.length > 0) {
+            this.selectedTemplate = this.documentTypes[0];
+        }
     }
 
     /**
@@ -110,6 +161,9 @@ export class Step5DataExtract {
         }
         const textPreview = previewText ? previewText.substring(0, 500) + (previewText.length > 500 ? '...' : '') : '(无文本内容)';
         
+        // 使用从后端加载的单据类型，如果没有则使用预设模板
+        const templates = this.documentTypes.length > 0 ? this.documentTypes : PRESET_TEMPLATES;
+        
         step5Container.innerHTML = `
             <div class="step5-content">
                 <!-- 文档内容预览区 - 暂时隐藏 -->
@@ -126,9 +180,9 @@ export class Step5DataExtract {
                 <div class="template-section" style="margin-bottom: 20px;">
                     <h4 style="margin: 0 0 10px 0; color: #333;">📋 选择提取模板</h4>
                     <div class="template-list" id="templateList" style="display: flex; flex-wrap: wrap; gap: 8px;">
-                        ${PRESET_TEMPLATES.map(t => `
+                        ${templates.map(t => `
                             <button class="template-btn" data-template-id="${t.id}" 
-                                style="padding: 8px 16px; border: 1px solid #ddd; border-radius: 6px; background: white; cursor: pointer; transition: all 0.2s;">
+                                style="padding: 8px 16px; border: 1px solid #ddd; border-radius: 6px; background: ${this.selectedTemplate && this.selectedTemplate.id === t.id ? '#3498db' : 'white'}; color: ${this.selectedTemplate && this.selectedTemplate.id === t.id ? 'white' : '#333'}; cursor: pointer; transition: all 0.2s;">
                                 ${t.name}
                             </button>
                         `).join('')}
@@ -162,7 +216,7 @@ export class Step5DataExtract {
                     <h4 style="margin: 0 0 10px 0; color: #333;">✅ 检查点验证</h4>
                     <p style="color: #666; font-size: 13px; margin-bottom: 10px;">输入要验证的问题，系统将基于文档内容回答</p>
                     <textarea id="checkpointQuestionsInput" placeholder="每行一个检查点问题，例如：&#10;文档中的金额是多少？&#10;开票日期是什么？&#10;购买方名称是什么？"
-                        style="width: 100%; height: 100px; padding: 10px; border: 1px solid #ddd; border-radius: 6px; resize: vertical; margin-bottom: 10px;"></textarea>
+                        style="width: 100%; height: 100px; padding: 10px; border: 1px solid #ddd; border-radius: 6px; resize: vertical; margin-bottom: 10px;">${this.selectedTemplate && this.selectedTemplate.checkpoints ? this.selectedTemplate.checkpoints.join('\n') : ''}</textarea>
                     <button id="runCheckpointsBtn" style="background: #27ae60; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer;">
                         ▶ 执行检查点
                     </button>
@@ -223,7 +277,9 @@ export class Step5DataExtract {
      * 选择模板
      */
     selectTemplate(templateId) {
-        this.selectedTemplate = PRESET_TEMPLATES.find(t => t.id === templateId);
+        // 优先从后端加载的单据类型中查找，否则从预设模板中查找
+        const templates = this.documentTypes.length > 0 ? this.documentTypes : PRESET_TEMPLATES;
+        this.selectedTemplate = templates.find(t => t.id === templateId);
         
         // 更新按钮状态
         document.querySelectorAll('.template-btn').forEach(btn => {
@@ -242,6 +298,12 @@ export class Step5DataExtract {
         const customSection = document.getElementById('customFieldsSection');
         if (customSection) {
             customSection.style.display = templateId === 'custom' ? 'block' : 'none';
+        }
+        
+        // 自动填充检查点问题
+        const checkpointInput = document.getElementById('checkpointQuestionsInput');
+        if (checkpointInput && this.selectedTemplate && this.selectedTemplate.checkpoints) {
+            checkpointInput.value = this.selectedTemplate.checkpoints.join('\n');
         }
         
         stateManager.set('selectedTemplate', this.selectedTemplate);
