@@ -150,18 +150,37 @@ export class Step5DataExtract {
         const globalStateManager = window.stateManager || stateManager;
         const selectedTypeId = globalStateManager.get('selectedDocumentTypeId');
         
+        console.log('=== Step5: autoSelectDocumentType START ===');
+        console.log('Step5: selectedDocumentTypeId from stateManager:', selectedTypeId);
+        console.log('Step5: typeof selectedTypeId:', typeof selectedTypeId);
+        console.log('Step5: available documentTypes count:', this.documentTypes.length);
+        console.log('Step5: available documentTypes IDs:', this.documentTypes.map(t => t.id));
+        console.log('Step5: full stateManager state:', JSON.stringify(globalStateManager.getState ? globalStateManager.getState() : {}, null, 2));
+        
         if (selectedTypeId) {
-            const docType = this.documentTypes.find(t => t.id === selectedTypeId);
+            console.log('Step5: Looking for document type with id:', selectedTypeId);
+            const docType = this.documentTypes.find(t => {
+                console.log('Step5: Comparing', t.id, '===', selectedTypeId, ':', t.id === selectedTypeId);
+                return t.id === selectedTypeId;
+            });
             if (docType) {
                 this.selectedTemplate = docType;
-                console.log('Step5: Auto-selected document type:', docType.name);
+                console.log('Step5: ✅ Auto-selected document type:', docType.name, 'id:', docType.id);
+            } else {
+                console.log('Step5: ❌ Document type not found in list:', selectedTypeId);
+                console.log('Step5: Available IDs:', this.documentTypes.map(t => t.id).join(', '));
             }
+        } else {
+            console.log('Step5: ⚠️ No selectedDocumentTypeId in stateManager');
         }
         
         // 如果没有选中，默认选第一个
         if (!this.selectedTemplate && this.documentTypes.length > 0) {
             this.selectedTemplate = this.documentTypes[0];
+            console.log('Step5: ⚠️ Defaulting to first template:', this.selectedTemplate.name);
         }
+        
+        console.log('=== Step5: autoSelectDocumentType END, selected:', this.selectedTemplate ? this.selectedTemplate.name : 'none');
     }
 
     /**
@@ -343,7 +362,9 @@ export class Step5DataExtract {
             checkpointInput.value = this.selectedTemplate.checkpoints.join('\n');
         }
         
-        stateManager.set('selectedTemplate', this.selectedTemplate);
+        // 使用全局 stateManager 保存数据
+        const globalStateManager = window.stateManager || stateManager;
+        globalStateManager.set('selectedTemplate', this.selectedTemplate);
         eventBus.emit(EVENTS.TEMPLATE_SELECTED, this.selectedTemplate);
     }
 
@@ -468,7 +489,10 @@ export class Step5DataExtract {
                 // /api/llm/extract 返回直接的字段对象
                 this.extractedData = result.data.fields || result.data;
                 console.log('Step5DataExtract: Extracted data:', this.extractedData);
-                stateManager.set('extractedData', this.extractedData);
+                // 使用全局 stateManager 保存数据，确保 Step6 能读取到
+                globalStateManager.set('extractedData', this.extractedData);
+                globalStateManager.set('selectedTemplate', this.selectedTemplate);
+                console.log('Step5DataExtract: Saved extractedData to globalStateManager');
                 this.renderExtractedData();
                 
                 if (statusEl) statusEl.textContent = '✓ 提取完成';
@@ -685,7 +709,8 @@ export class Step5DataExtract {
      * 保存检查点结果到后端
      */
     async saveCheckpointsToBackend() {
-        const jobId = stateManager.get('jobId');
+        const globalStateManager = window.stateManager || stateManager;
+        const jobId = globalStateManager.get('jobId');
         if (!jobId) return;
         
         try {

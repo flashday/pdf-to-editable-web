@@ -8,6 +8,56 @@
 
 ---
 
+## [2026-01-27] - 步骤5/6状态管理修复 & 历史缓存单据类型恢复
+
+### 修复：步骤6财务确认未显示步骤5提取的数据
+
+**问题**：步骤6界面显示"暂无检查点结果"和空的JSON数据，没有正确读取步骤5保存的数据
+
+**根因**：
+- `Step5DataExtract.js` 中部分方法使用导入的 `stateManager` 保存数据
+- `Step6Confirmation.js` 使用 `window.stateManager` 读取数据
+- 两者不是同一个实例，导致数据无法传递
+
+**修复内容**：
+
+1. `frontend/src/components/steps/Step5DataExtract.js`
+   - `selectTemplate()` 方法：使用 `window.stateManager || stateManager` 保存 `selectedTemplate`
+   - `startExtraction()` 方法：使用 `globalStateManager` 保存 `extractedData` 和 `selectedTemplate`
+   - `saveCheckpointsToBackend()` 方法：使用 `globalStateManager` 获取 `jobId`
+
+2. `frontend/src/components/steps/Step6Confirmation.js`
+   - `saveFinalResult()` 方法：使用 `globalStateManager` 获取 `jobId`
+   - `showSuccessMessage()` 中的下载函数：使用 `globalSM` 获取 `finalResult`
+
+3. `frontend/src/index.html`
+   - 更新版本号：`Step5DataExtract.js?v=21`、`Step6Confirmation.js?v=18`
+
+---
+
+### 修复：历史缓存加载后步骤5未自动选择正确的单据类型
+
+**问题**：用户缓存的是"出差报告"，但加载后步骤5显示的是"发票"模板
+
+**根因**：
+- `index.js` 和 `globalFunctions.js` 中存在两个同名的 `loadCachedJob` 方法
+- 调用时使用了错误的方法，导致 `selectedDocumentTypeId` 未正确恢复
+
+**修复内容**：
+
+1. `frontend/src/index.js`
+   - 删除重复的 `loadCachedJob` 方法
+   - 历史面板点击事件改为调用 `window.loadCachedJob`
+
+2. `frontend/src/utils/globalFunctions.js`
+   - 统一使用 `window.loadCachedJob` 作为唯一入口
+   - 添加详细的调试日志
+
+3. `frontend/src/index.html`
+   - 更新版本号：`globalFunctions.js?v=20`、`index.js?v=32`
+
+---
+
 ## [2026-01-27] - 步骤5自动数据提取 + Job缓存增加单据类型
 
 ### 功能：步骤5自动执行提取和检查点

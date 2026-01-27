@@ -102,10 +102,18 @@ export class Step6Confirmation {
             editorContainer.appendChild(step6Container);
         }
         
-        const checkpointResults = stateManager.get('checkpointResults') || [];
-        const extractedData = stateManager.get('extractedData') || {};
-        const corrections = stateManager.get('corrections') || [];
-        const selectedTemplate = stateManager.get('selectedTemplate');
+        // 使用全局 stateManager 确保获取到步骤5保存的数据
+        const globalStateManager = window.stateManager || stateManager;
+        
+        const checkpointResults = globalStateManager.get('checkpointResults') || [];
+        const extractedData = globalStateManager.get('extractedData') || {};
+        const corrections = globalStateManager.get('corrections') || [];
+        const selectedTemplate = globalStateManager.get('selectedTemplate');
+        
+        console.log('Step6: Rendering with data from stateManager');
+        console.log('Step6: checkpointResults:', checkpointResults.length);
+        console.log('Step6: extractedData:', Object.keys(extractedData).length, 'fields');
+        console.log('Step6: selectedTemplate:', selectedTemplate ? selectedTemplate.name : 'none');
         
         // 计算统计信息
         const totalFields = Object.keys(extractedData).length;
@@ -362,7 +370,8 @@ export class Step6Confirmation {
      * 复制 JSON
      */
     async copyJson() {
-        const extractedData = stateManager.get('extractedData') || {};
+        const globalStateManager = window.stateManager || stateManager;
+        const extractedData = globalStateManager.get('extractedData') || {};
         const jsonStr = JSON.stringify(extractedData, null, 2);
         
         try {
@@ -394,13 +403,15 @@ export class Step6Confirmation {
             confirmBtn.textContent = '提交中...';
         }
         
+        const globalStateManager = window.stateManager || stateManager;
+        
         try {
             const finalResult = {
-                jobId: stateManager.get('jobId'),
-                filename: stateManager.get('filename'),
-                extractedData: stateManager.get('extractedData'),
-                checkpointResults: stateManager.get('checkpointResults'),
-                corrections: stateManager.get('corrections'),
+                jobId: globalStateManager.get('jobId'),
+                filename: globalStateManager.get('filename'),
+                extractedData: globalStateManager.get('extractedData'),
+                checkpointResults: globalStateManager.get('checkpointResults'),
+                corrections: globalStateManager.get('corrections'),
                 status: 'confirmed',
                 confirmedAt: new Date().toISOString()
             };
@@ -408,8 +419,8 @@ export class Step6Confirmation {
             // 保存到后端
             await this.saveFinalResult(finalResult);
             
-            stateManager.set('finalResult', finalResult);
-            stateManager.set('finalStatus', 'confirmed');
+            globalStateManager.set('finalResult', finalResult);
+            globalStateManager.set('finalStatus', 'confirmed');
             
             // 显示成功提示
             this.showSuccessMessage();
@@ -434,7 +445,8 @@ export class Step6Confirmation {
             return;
         }
         
-        stateManager.set('finalStatus', 'rejected');
+        const globalStateManager = window.stateManager || stateManager;
+        globalStateManager.set('finalStatus', 'rejected');
         eventBus.emit(EVENTS.FINAL_REJECTED);
         
         // 返回步骤4
@@ -478,7 +490,8 @@ export class Step6Confirmation {
      * 保存最终结果到后端
      */
     async saveFinalResult(result) {
-        const jobId = stateManager.get('jobId');
+        const globalStateManager = window.stateManager || stateManager;
+        const jobId = globalStateManager.get('jobId');
         if (!jobId) throw new Error('无任务ID');
         
         const response = await fetch(`/api/final/${jobId}`, {
@@ -520,7 +533,8 @@ export class Step6Confirmation {
         
         // 添加下载函数
         window.downloadFinalResult = () => {
-            const result = stateManager.get('finalResult');
+            const globalSM = window.stateManager || stateManager;
+            const result = globalSM.get('finalResult');
             if (result) {
                 const blob = new Blob([JSON.stringify(result, null, 2)], { type: 'application/json' });
                 const url = URL.createObjectURL(blob);

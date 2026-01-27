@@ -28,7 +28,8 @@ def get_temp_folder() -> Path:
 
 # ============== 预设模板定义 ==============
 
-EXTRACTION_TEMPLATES = {
+# 默认模板（作为后备）
+DEFAULT_EXTRACTION_TEMPLATES = {
     "invoice": {
         "name": "发票",
         "name_en": "Invoice",
@@ -64,8 +65,67 @@ EXTRACTION_TEMPLATES = {
         "name_en": "Business License",
         "fields": ["企业名称", "统一社会信用代码", "法定代表人", "注册资本", "成立日期", "营业期限", "经营范围"],
         "prompt_hint": "这是一份营业执照，请提取企业的注册信息"
+    },
+    "trip_report": {
+        "name": "出差报告",
+        "name_en": "Trip Report",
+        "fields": ["报告日期", "申请人", "出差目的地", "出差事由", "出差时间", "费用合计"],
+        "prompt_hint": "这是一份出差报告文档，请提取出差相关的信息"
     }
 }
+
+
+def load_document_types_as_templates() -> Dict[str, Dict[str, Any]]:
+    """
+    从 config/document_types.json 加载单据类型并转换为模板格式
+    
+    Returns:
+        dict: 模板字典
+    """
+    templates = dict(DEFAULT_EXTRACTION_TEMPLATES)  # 从默认模板开始
+    
+    try:
+        config_path = Path("config/document_types.json")
+        if config_path.exists():
+            with open(config_path, 'r', encoding='utf-8') as f:
+                document_types = json.load(f)
+            
+            for doc_type in document_types:
+                doc_id = doc_type.get("id")
+                if doc_id:
+                    # 转换为模板格式
+                    templates[doc_id] = {
+                        "name": doc_type.get("name", doc_id),
+                        "name_en": doc_id.replace("_", " ").title(),
+                        "fields": doc_type.get("fields", []),
+                        "prompt_hint": f"这是一份{doc_type.get('name', '文档')}，请仔细提取相关信息",
+                        "checkpoints": doc_type.get("checkpoints", [])
+                    }
+            
+            logger.info(f"Loaded {len(document_types)} document types from config")
+    except Exception as e:
+        logger.warning(f"Failed to load document types from config: {e}")
+    
+    return templates
+
+
+# 全局模板变量（延迟加载）
+EXTRACTION_TEMPLATES: Optional[Dict[str, Dict[str, Any]]] = None
+
+
+def get_extraction_templates() -> Dict[str, Dict[str, Any]]:
+    """获取提取模板（从配置文件动态加载）"""
+    global EXTRACTION_TEMPLATES
+    if EXTRACTION_TEMPLATES is None:
+        EXTRACTION_TEMPLATES = load_document_types_as_templates()
+    return EXTRACTION_TEMPLATES
+
+
+def reload_extraction_templates() -> Dict[str, Dict[str, Any]]:
+    """重新加载提取模板（配置文件更新后调用）"""
+    global EXTRACTION_TEMPLATES
+    EXTRACTION_TEMPLATES = load_document_types_as_templates()
+    return EXTRACTION_TEMPLATES
 
 
 # ============== Prompt 模板 ==============
@@ -189,9 +249,22 @@ class ChatOCRService:
         """
         self._llm_service = llm_service
         self._rag_service = rag_service
-        self.templates = EXTRACTION_TEMPLATES
+        # 使用动态加载的模板
+        self._templates = None
         
         logger.info("ChatOCR service initialized")
+    
+    @property
+    def templates(self) -> Dict[str, Dict[str, Any]]:
+        """获取模板（延迟加载，支持动态更新）"""
+        if self._templates is None:
+            self._templates = get_extraction_templates()
+        return self._templates
+    
+    def reload_templates(self) -> None:
+        """重新加载模板（配置文件更新后调用）"""
+        self._templates = reload_extraction_templates()
+        logger.info(f"Templates reloaded, {len(self._templates)} templates available")
     
     @property
     def llm_service(self) -> Optional[OllamaLLMService]:

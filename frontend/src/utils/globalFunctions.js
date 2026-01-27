@@ -134,14 +134,43 @@ window.loadCachedJob = async function(jobId) {
         var res = await fetch('/api/jobs/' + jobId + '/cached-result');
         var data = await res.json();
         console.log('Cached result:', data);
+        console.log('loadCachedJob: document_type_id from API:', data.document_type_id);
+        
         if (data.status === 'completed' && data.result) {
             console.log('✅ 缓存加载成功！blocks: ' + data.result.blocks.length);
+            
+            // 恢复单据类型选择（在 handleProcessingComplete 之前设置）
+            if (data.document_type_id && window.stateManager) {
+                console.log('=== loadCachedJob: Setting document type ===');
+                console.log('loadCachedJob: document_type_id from API:', data.document_type_id);
+                console.log('loadCachedJob: typeof document_type_id:', typeof data.document_type_id);
+                console.log('loadCachedJob: window.stateManager exists:', !!window.stateManager);
+                console.log('loadCachedJob: Before set, stateManager.get =', window.stateManager.get('selectedDocumentTypeId'));
+                
+                window.stateManager.set('selectedDocumentTypeId', data.document_type_id);
+                
+                console.log('loadCachedJob: After set, stateManager.get =', window.stateManager.get('selectedDocumentTypeId'));
+                console.log('loadCachedJob: Full state after set:', JSON.stringify(window.stateManager.getState ? window.stateManager.getState() : {}, null, 2));
+                
+                // 更新下拉框选择
+                var typeSelect = document.getElementById('documentTypeSelect');
+                if (typeSelect) {
+                    typeSelect.value = data.document_type_id;
+                    console.log('loadCachedJob: Updated documentTypeSelect to:', data.document_type_id);
+                }
+            } else {
+                console.log('loadCachedJob: ⚠️ No document_type_id or stateManager not available');
+                console.log('loadCachedJob: data.document_type_id =', data.document_type_id);
+                console.log('loadCachedJob: window.stateManager =', !!window.stateManager);
+            }
+            
             if (window.app && typeof window.app.handleProcessingComplete === 'function') {
                 var processedData = {
                     blocks: data.result.blocks,
                     confidence_report: data.confidence_report,
                     markdown: data.markdown,
-                    cached: true
+                    cached: true,
+                    document_type_id: data.document_type_id
                 };
                 await window.app.handleProcessingComplete(processedData, jobId);
                 setStepStatus(4, 'completed', '✓');

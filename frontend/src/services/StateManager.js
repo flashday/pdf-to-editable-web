@@ -12,6 +12,9 @@ export class StateManager {
             jobId: null,
             filename: null,
             
+            // 步骤 2 输出：单据类型选择
+            selectedDocumentTypeId: null,
+            
             // 步骤 3 输出：OCR 结果
             ocrResult: null,
             ocrData: null,  // 原始 OCR 数据（包含 blocks）
@@ -52,6 +55,14 @@ export class StateManager {
         if (key) {
             return this.state[key];
         }
+        return { ...this.state };
+    }
+
+    /**
+     * 获取完整状态（用于调试）
+     * @returns {Object}
+     */
+    getState() {
         return { ...this.state };
     }
 
@@ -119,6 +130,7 @@ export class StateManager {
         this.state = {
             jobId: null,
             filename: null,
+            selectedDocumentTypeId: null,
             ocrResult: null,
             ocrData: null,
             ocrRegions: [],
