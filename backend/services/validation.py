@@ -126,8 +126,13 @@ class FileValidator:
         file_size = file.tell()
         file.seek(0)
         
+        # 从原始文件名获取扩展名（避免中文文件名被secure_filename清空后丢失扩展名）
+        file_ext = cls._get_file_extension(file.filename)
         filename = secure_filename(file.filename)
-        file_ext = cls._get_file_extension(filename)
+        
+        # 如果secure_filename后文件名为空或只有扩展名，使用默认名称
+        if not filename or filename.startswith('.'):
+            filename = f"document.{file_ext}" if file_ext else "document"
         
         return {
             'filename': filename,
