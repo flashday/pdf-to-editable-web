@@ -8,6 +8,52 @@
 
 ---
 
+## [2026-01-28] - 精准作业台 PDF 预览与坐标对齐修复
+
+### 新增：react-pdf 集成
+
+**背景**：精准作业台（React Markdown Workbench）需要直接渲染 PDF 文件，而非 PNG 图片，以获得更好的显示质量和缩放效果。
+
+**修改文件**：
+- `frontend/src/workbench/components/PdfPanel/PdfPanel.tsx`
+- `frontend/src/workbench/components/PdfPanel/BoundingBoxOverlay.tsx`
+- `backend/api/workbench_routes.py`
+- `backend/api/routes.py`
+
+**实现内容**：
+
+1. **react-pdf 集成**
+   - 使用 `react-pdf` 库直接渲染 PDF 文件
+   - 自动检测文件类型（PDF/图片），智能选择渲染模式
+   - PDF 渲染失败时自动回退到图片模式
+   - 支持 PDF 页面缩放和拖拽
+
+2. **坐标转换逻辑**
+   - OCR 坐标基于 PNG 图像（后端转换生成）
+   - PDF 渲染尺寸与 PNG 图像尺寸不同
+   - 新增 `coordScaleX` 和 `coordScaleY` 计算：
+     ```typescript
+     coordScaleX = pdfPageWidth / ocrImageWidth
+     coordScaleY = pdfPageHeight / ocrImageHeight
+     ```
+   - 所有 bounding box 坐标应用转换后再渲染
+
+3. **Store 扩展**
+   - `workbenchStore` 新增 `imageWidth` 和 `imageHeight` 字段
+   - 存储 OCR 处理时的原始 PNG 图像尺寸
+   - 从后端 `/api/workbench/{jobId}/data` 接口获取
+
+4. **后端接口修改**
+   - `/api/convert/{jobId}/original-file` 支持 HEAD 请求（用于文件类型检测）
+   - `/api/workbench/{jobId}/data` 返回 `imageWidth` 和 `imageHeight`
+
+**技术细节**：
+- PDF.js worker 使用 unpkg CDN
+- 坐标转换在 `BoundingBoxOverlay` 组件中使用 `useMemo` 优化
+- 添加调试日志输出坐标转换参数
+
+---
+
 ## [2026-01-28] - 界面优化与功能修复
 
 ### 界面优化

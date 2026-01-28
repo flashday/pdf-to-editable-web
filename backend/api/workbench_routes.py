@@ -232,13 +232,13 @@ def get_markdown_with_anchors(job_id):
     获取带锚点的 Markdown 内容
     
     在 Markdown 生成时注入锚点，锚点格式：
-    <div id="block_xxx" data-coords="x,y,w,h" style="display:none;"></div>
+    <!-- anchor:block_xxx:x,y,w,h -->
     
     Response:
     {
         "success": true,
         "data": {
-            "markdown": "<div id=\"block_001\" ...></div>\n# 标题\n...",
+            "markdown": "<!-- anchor:block_001:100,50,400,30 -->\n# 标题\n...",
             "anchors": [
                 { "blockId": "block_001", "position": 0 }
             ]
@@ -346,8 +346,8 @@ def _generate_markdown_with_anchors(ppstructure_data):
         else:
             x, y, width, height = 0, 0, 0, 0
         
-        # 生成锚点 HTML
-        anchor_html = f'<div id="{block_id}" data-coords="{x},{y},{width},{height}" style="display:none;"></div>'
+        # 生成锚点 HTML 注释（在 WYSIWYG 模式下不会显示）
+        anchor_html = f'<!-- anchor:{block_id}:{x},{y},{width},{height} -->'
         
         # 记录锚点位置
         anchors.append({
@@ -396,7 +396,9 @@ def _generate_block_content(item_type, res):
     
     elif item_type == 'table':
         if isinstance(res, dict) and 'html' in res:
-            return _html_table_to_markdown(res['html'])
+            # 表格前后需要空行以确保正确渲染
+            table_md = _html_table_to_markdown(res['html'])
+            return f"\n{table_md}\n"
         return "[表格]"
     
     elif item_type == 'figure_caption':
@@ -443,21 +445,44 @@ def _html_table_to_markdown(html_content):
         
         rows = table.find_all('tr')
         markdown_rows = []
+        max_cols = 0
+        
+        # 首先计算最大列数
+        for row in rows:
+            cells = row.find_all(['td', 'th'])
+            col_count = 0
+            for cell in cells:
+                colspan = int(cell.get('colspan', 1))
+                col_count += colspan
+            max_cols = max(max_cols, col_count)
+        
+        if max_cols == 0:
+            return "[空表格]"
         
         for row_idx, row in enumerate(rows):
             cells = row.find_all(['td', 'th'])
-            cell_texts = [cell.get_text(strip=True).replace('|', '\\|').replace('\n', ' ') for cell in cells]
+            cell_texts = []
             
-            if not cell_texts:
-                continue
+            for cell in cells:
+                text = cell.get_text(strip=True).replace('|', '\\|').replace('\n', ' ')
+                colspan = int(cell.get('colspan', 1))
+                cell_texts.append(text)
+                # 为 colspan > 1 的单元格添加空单元格
+                for _ in range(colspan - 1):
+                    cell_texts.append('')
+            
+            # 补齐列数
+            while len(cell_texts) < max_cols:
+                cell_texts.append('')
             
             markdown_rows.append('| ' + ' | '.join(cell_texts) + ' |')
             
             # 第一行后添加分隔符
             if row_idx == 0:
-                separator = '| ' + ' | '.join(['---'] * len(cell_texts)) + ' |'
+                separator = '| ' + ' | '.join(['---'] * max_cols) + ' |'
                 markdown_rows.append(separator)
         
+        # 确保表格前后有空行，这对 Vditor WYSIWYG 模式很重要
         return '\n'.join(markdown_rows) if markdown_rows else "[空表格]"
     except Exception as e:
         logger.warning(f"Failed to convert HTML table to Markdown: {e}")

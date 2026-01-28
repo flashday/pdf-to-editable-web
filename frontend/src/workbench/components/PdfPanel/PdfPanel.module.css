@@ -53,6 +53,8 @@
   display: block;
   user-select: none;
   pointer-events: none;
+  position: relative;
+  z-index: 1;
 }
 
 .imagePlaceholder {

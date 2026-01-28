@@ -967,10 +967,12 @@ def get_confidence_log(job_id):
         return jsonify(response_data), status_code
 
 
-@api_bp.route('/convert/<job_id>/original-file', methods=['GET'])
+@api_bp.route('/convert/<job_id>/original-file', methods=['GET', 'HEAD'])
 def get_original_file(job_id):
     """
-    下载原始上传的文件（PDF或图片）
+    下载或获取原始上传的文件（PDF或图片）
+    支持 HEAD 请求用于检测文件类型
+    查询参数 download=true 时作为附件下载，否则直接返回内容
     """
     from flask import send_file
     from pathlib import Path
@@ -983,6 +985,9 @@ def get_original_file(job_id):
         root_temp = Path('temp')
         root_uploads = Path('uploads')
         
+        # 是否作为附件下载
+        as_download = request.args.get('download', 'false').lower() == 'true'
+        
         # 首先检查 temp 目录中的原始 PDF 缓存
         for tf in [temp_folder, root_temp]:
             pdf_path = tf / f"{job_id}_original.pdf"
@@ -991,8 +996,8 @@ def get_original_file(job_id):
                 return send_file(
                     str(pdf_path.resolve()),
                     mimetype='application/pdf',
-                    as_attachment=True,
-                    download_name=f"{job_id}_original.pdf"
+                    as_attachment=as_download,
+                    download_name=f"{job_id}_original.pdf" if as_download else None
                 )
         
         # 检查 uploads 目录
@@ -1010,8 +1015,8 @@ def get_original_file(job_id):
                     return send_file(
                         str(file_path.resolve()),
                         mimetype=mimetype,
-                        as_attachment=True,
-                        download_name=f"{job_id}_original.{ext}"
+                        as_attachment=as_download,
+                        download_name=f"{job_id}_original.{ext}" if as_download else None
                     )
         
         return jsonify({

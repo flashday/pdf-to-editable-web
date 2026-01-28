@@ -197,6 +197,8 @@ export const api = {
    * 获取 PDF 页面图像 URL
    */
   getImageUrl(jobId: string, pageNum = 1): string {
-    return `/temp/${jobId}_page${pageNum}.png`;
+    // 添加时间戳避免浏览器追踪保护和缓存问题
+    const timestamp = Date.now();
+    return `/temp/${jobId}_page${pageNum}.png?t=${timestamp}`;
   }
 };
