@@ -1,6 +1,8 @@
 import React, { useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useWorkbenchStore } from '../stores/workbenchStore';
+import { useSaveShortcut } from '../hooks/useSaveShortcut';
+import { useAutoSave } from '../hooks/useAutoSave';
 import PdfPanel from '../components/PdfPanel/PdfPanel';
 import EditorPanel from '../components/EditorPanel/EditorPanel';
 import Toolbar from '../components/Toolbar/Toolbar';
@@ -10,7 +12,13 @@ import styles from './WorkbenchPage.module.css';
 const WorkbenchPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const jobId = searchParams.get('jobId');
-  const { setJobId, loadData, isLoading, error } = useWorkbenchStore();
+  const { setJobId, loadData, isLoading, error, isDirty } = useWorkbenchStore();
+  
+  // 启用 Ctrl+S 快捷键保存
+  useSaveShortcut();
+  
+  // 启用自动保存（3 秒防抖）
+  useAutoSave({ debounceMs: 3000, enabled: true });
 
   useEffect(() => {
     if (jobId) {
@@ -18,6 +26,24 @@ const WorkbenchPage: React.FC = () => {
       loadData(jobId);
     }
   }, [jobId, setJobId, loadData]);
+
+  // 页面关闭前提示保存
+  useEffect(() => {
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (isDirty) {
+        event.preventDefault();
+        // 现代浏览器会显示标准提示，不会显示自定义消息
+        event.returnValue = '您有未保存的更改，确定要离开吗？';
+        return event.returnValue;
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [isDirty]);
 
   const handleBackToTraditional = () => {
     // 返回传统模式

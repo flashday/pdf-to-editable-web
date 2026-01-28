@@ -795,6 +795,11 @@
                         var downloadButtons = document.getElementById('downloadButtons');
                         if (downloadButtons) downloadButtons.style.display = 'flex';
                         
+                        // 添加精准编辑按钮
+                        if (window.step4Component && window.step4Component.addPrecisionEditButton) {
+                            window.step4Component.addPrecisionEditButton();
+                        }
+                        
                         // 显示确认按钮
                         var confirmBtn = document.getElementById('confirmStep5Btn');
                         if (confirmBtn) confirmBtn.style.display = 'inline-block';

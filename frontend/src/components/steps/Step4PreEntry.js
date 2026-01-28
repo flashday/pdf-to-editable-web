@@ -86,8 +86,8 @@ export class Step4PreEntry {
         
         const precisionBtn = document.createElement('button');
         precisionBtn.id = 'precisionEditBtn';
-        precisionBtn.className = 'btn btn-precision-edit';
-        precisionBtn.innerHTML = '🎯 精准编辑模式';
+        precisionBtn.className = 'btn btn-precision-edit download-btn';
+        precisionBtn.innerHTML = '🎯 精准编辑';
         precisionBtn.title = '进入精准作业台，支持 PDF 与 Markdown 双向定位编辑';
         precisionBtn.style.cssText = `
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -98,7 +98,7 @@ export class Step4PreEntry {
             cursor: pointer;
             font-size: 13px;
             font-weight: 500;
-            margin-left: 10px;
+            margin-left: 5px;
             transition: all 0.3s ease;
             box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
         `;
@@ -116,14 +116,25 @@ export class Step4PreEntry {
         // 点击事件
         precisionBtn.addEventListener('click', () => this.openPrecisionEditMode());
         
-        downloadButtons.appendChild(precisionBtn);
+        // 插入到下载按钮区域的第一个位置
+        downloadButtons.insertBefore(precisionBtn, downloadButtons.firstChild);
+        
+        console.log('Step4PreEntry: Precision Edit button added');
     }
     
     /**
      * 打开精准编辑模式
      */
     openPrecisionEditMode() {
-        const jobId = stateManager.get('jobId');
+        // 尝试从多个来源获取 jobId
+        let jobId = stateManager.get('jobId');
+        if (!jobId && window.app) {
+            jobId = window.app.currentJobId;
+        }
+        if (!jobId && window.currentJobId) {
+            jobId = window.currentJobId;
+        }
+        
         if (!jobId) {
             alert('请先完成 OCR 识别');
             return;
@@ -131,8 +142,8 @@ export class Step4PreEntry {
         
         console.log('Step4PreEntry: Opening Precision Edit Mode for job:', jobId);
         
-        // 跳转到精准作业台
-        const workbenchUrl = `/workbench/index.html?jobId=${jobId}`;
+        // 跳转到精准作业台（不带 index.html，让 Vite 处理路由）
+        const workbenchUrl = `/workbench/?jobId=${jobId}`;
         window.open(workbenchUrl, '_blank');
     }
 

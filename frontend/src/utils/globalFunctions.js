@@ -199,6 +199,19 @@ window.loadCachedJob = async function(jobId) {
                 } else {
                     window.createStep4ConfirmButton();
                 }
+                
+                // 确保下载按钮区域显示
+                var downloadButtons = document.getElementById('downloadButtons');
+                if (downloadButtons) {
+                    downloadButtons.style.display = 'flex';
+                }
+                
+                // 添加精准编辑按钮（延迟执行确保 DOM 已更新）
+                setTimeout(function() {
+                    if (window.step4Component && window.step4Component.addPrecisionEditButton) {
+                        window.step4Component.addPrecisionEditButton();
+                    }
+                }, 100);
             } else {
                 console.error('[DEBUG] window.app.handleProcessingComplete not available');
                 alert('❌ 应用未完全加载，请刷新页面后重试');

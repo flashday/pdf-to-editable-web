@@ -123,3 +123,39 @@
 .saveButton.dirty:hover:not(:disabled) {
   background: #0056b3;
 }
+
+
+/* 同步滚动按钮 */
+.syncButton {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  margin-left: 12px;
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  color: #495057;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.syncButton:hover {
+  background: #e9ecef;
+  border-color: #adb5bd;
+}
+
+.syncButton.syncActive {
+  background: #e7f3ff;
+  border-color: #007bff;
+  color: #007bff;
+}
+
+.syncButton.syncActive:hover {
+  background: #d0e8ff;
+}
+
+.syncIcon {
+  font-size: 14px;
+}

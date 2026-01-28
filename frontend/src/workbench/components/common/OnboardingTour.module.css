@@ -1,0 +1,200 @@
+/**
+ * 操作引导教程样式
+ * 任务 21.4: 添加操作引导教程（首次使用）
+ */
+
+.overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 9999;
+}
+
+/* 高亮区域 */
+.spotlight {
+  position: fixed;
+  border-radius: 8px;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+  transition: all 0.3s ease-out;
+}
+
+/* 提示框 */
+.tooltip {
+  position: fixed;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  padding: 20px;
+  max-width: 360px;
+  z-index: 10000;
+  animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* 箭头 */
+.tooltip::before {
+  content: '';
+  position: absolute;
+  width: 0;
+  height: 0;
+  border: 10px solid transparent;
+}
+
+.tooltip.top::before {
+  bottom: -20px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-top-color: #fff;
+}
+
+.tooltip.bottom::before {
+  top: -20px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-bottom-color: #fff;
+}
+
+.tooltip.left::before {
+  right: -20px;
+  top: 50%;
+  transform: translateY(-50%);
+  border-left-color: #fff;
+}
+
+.tooltip.right::before {
+  left: -20px;
+  top: 50%;
+  transform: translateY(-50%);
+  border-right-color: #fff;
+}
+
+.tooltipHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.stepIndicator {
+  font-size: 12px;
+  color: #666;
+  background: #f0f0f0;
+  padding: 4px 8px;
+  border-radius: 12px;
+}
+
+.skipButton {
+  background: none;
+  border: none;
+  color: #999;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+
+.skipButton:hover {
+  color: #666;
+}
+
+.tooltipTitle {
+  margin: 0 0 8px 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #333;
+}
+
+.tooltipContent {
+  margin: 0 0 16px 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #666;
+}
+
+.tooltipFooter {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.prevButton,
+.nextButton {
+  flex: 1;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.prevButton {
+  background: #f5f5f5;
+  border: 1px solid #ddd;
+  color: #666;
+}
+
+.prevButton:hover:not(:disabled) {
+  background: #e8e8e8;
+}
+
+.prevButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.nextButton {
+  background: #1976d2;
+  border: none;
+  color: #fff;
+}
+
+.nextButton:hover {
+  background: #1565c0;
+}
+
+/* 响应式 */
+@media (max-width: 480px) {
+  .tooltip {
+    max-width: calc(100vw - 32px);
+    left: 16px !important;
+    right: 16px !important;
+    transform: none !important;
+  }
+
+  .tooltip.top,
+  .tooltip.bottom {
+    left: 16px !important;
+  }
+
+  .tooltip.left,
+  .tooltip.right {
+    top: auto !important;
+    bottom: 16px !important;
+  }
+
+  .tooltip::before {
+    display: none;
+  }
+}
+
+/* 减少动画模式 */
+@media (prefers-reduced-motion: reduce) {
+  .tooltip,
+  .spotlight {
+    animation: none;
+    transition: none;
+  }
+}

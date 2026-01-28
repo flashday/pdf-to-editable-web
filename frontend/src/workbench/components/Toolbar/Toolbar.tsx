@@ -14,7 +14,9 @@ const Toolbar: React.FC<ToolbarProps> = ({ onBackClick }) => {
     setZoomLevel, 
     saveContent, 
     isDirty,
-    isSaving 
+    isSaving,
+    syncScrollEnabled,
+    toggleSyncScroll
   } = useWorkbenchStore();
 
   const handleZoomIn = () => {
@@ -50,6 +52,15 @@ const Toolbar: React.FC<ToolbarProps> = ({ onBackClick }) => {
           <span>{zoomLevel}%</span>
           <button onClick={handleZoomIn} disabled={zoomLevel >= 200}>+</button>
         </div>
+        
+        <button 
+          className={`${styles.syncButton} ${syncScrollEnabled ? styles.syncActive : ''}`}
+          onClick={toggleSyncScroll}
+          title={syncScrollEnabled ? '关闭同步滚动' : '开启同步滚动'}
+        >
+          <span className={styles.syncIcon}>⇄</span>
+          <span>同步滚动</span>
+        </button>
       </div>
 
       <div className={styles.rightSection}>

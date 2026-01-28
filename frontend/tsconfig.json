@@ -24,8 +24,11 @@
     "baseUrl": ".",
     "paths": {
       "@workbench/*": ["src/workbench/*"]
-    }
+    },
+    
+    /* Types */
+    "typeRoots": ["./node_modules/@types", "./src/workbench/types"]
   },
-  "include": ["src/workbench/**/*"],
+  "include": ["src/workbench/**/*", "src/workbench/types/**/*"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

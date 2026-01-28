@@ -21,6 +21,7 @@
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-router-dom": "^7.13.0",
+    "vditor": "^3.11.2",
     "zustand": "^5.0.10"
   },
   "devDependencies": {
@@ -31,6 +32,7 @@
     "@types/react": "^19.2.10",
     "@types/react-dom": "^19.2.3",
     "babel-jest": "^29.7.0",
+    "fast-check": "^4.5.3",
     "happy-dom": "^20.4.0",
     "jest": "^29.7.0",
     "jest-environment-jsdom": "^29.7.0",

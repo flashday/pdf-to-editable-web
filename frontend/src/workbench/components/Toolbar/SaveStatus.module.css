@@ -45,3 +45,30 @@
     transform: rotate(360deg);
   }
 }
+
+.retryButton {
+  margin-left: 4px;
+  padding: 2px 6px;
+  font-size: 11px;
+  background: #dc3545;
+  color: white;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.retryButton:hover:not(:disabled) {
+  background: #c82333;
+}
+
+.retryButton:disabled {
+  background: #6c757d;
+  cursor: not-allowed;
+}
+
+.shortcut {
+  font-size: 10px;
+  color: #6c757d;
+  margin-left: 2px;
+}

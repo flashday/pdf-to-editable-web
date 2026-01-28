@@ -1,0 +1,159 @@
+.container {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.editor {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+}
+
+/* Vditor 样式覆盖 */
+.editor :global(.vditor) {
+  border: none !important;
+  border-radius: 0 !important;
+}
+
+.editor :global(.vditor-toolbar) {
+  border-bottom: 1px solid #e1e4e8 !important;
+  background: #fafbfc !important;
+  padding: 4px 8px !important;
+}
+
+.editor :global(.vditor-content) {
+  padding: 16px !important;
+}
+
+.editor :global(.vditor-wysiwyg) {
+  padding: 16px !important;
+}
+
+.editor :global(.vditor-sv) {
+  padding: 16px !important;
+}
+
+/* 高亮动画 */
+.highlight {
+  animation: highlightPulse 2s ease-out;
+}
+
+@keyframes highlightPulse {
+  0% {
+    background-color: rgba(255, 235, 59, 0.6);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+/* 锚点样式 - 隐藏但保留位置 */
+.editor :global([id^="block_"]) {
+  display: block;
+  height: 0;
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+}
+
+/* 表格样式优化 */
+.editor :global(table) {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 16px 0;
+}
+
+.editor :global(th),
+.editor :global(td) {
+  border: 1px solid #dfe2e5;
+  padding: 8px 12px;
+  text-align: left;
+}
+
+.editor :global(th) {
+  background-color: #f6f8fa;
+  font-weight: 600;
+}
+
+.editor :global(tr:nth-child(even)) {
+  background-color: #fafbfc;
+}
+
+/* HTML 表格混合渲染支持 */
+.editor :global(.vditor-wysiwyg table),
+.editor :global(.vditor-ir table),
+.editor :global(.vditor-sv table) {
+  border-collapse: collapse;
+  width: auto;
+  min-width: 50%;
+  margin: 16px 0;
+  display: table;
+}
+
+.editor :global(.vditor-wysiwyg table th),
+.editor :global(.vditor-wysiwyg table td),
+.editor :global(.vditor-ir table th),
+.editor :global(.vditor-ir table td) {
+  border: 1px solid #dfe2e5;
+  padding: 8px 12px;
+  min-width: 60px;
+}
+
+.editor :global(.vditor-wysiwyg table th),
+.editor :global(.vditor-ir table th) {
+  background-color: #f6f8fa;
+  font-weight: 600;
+}
+
+/* 表格选中状态 */
+.editor :global(.vditor-wysiwyg table td.vditor-table--selected),
+.editor :global(.vditor-wysiwyg table th.vditor-table--selected) {
+  background-color: rgba(3, 102, 214, 0.1);
+}
+
+/* 表格工具栏 */
+.editor :global(.vditor-panel--none) {
+  display: none;
+}
+
+.editor :global(.vditor-panel) {
+  background: #ffffff;
+  border: 1px solid #e1e4e8;
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(149, 157, 165, 0.2);
+}
+
+/* 复杂表格（合并单元格）支持 */
+.editor :global(table[data-complex="true"]) {
+  border: 2px solid #0366d6;
+}
+
+.editor :global(td[rowspan]),
+.editor :global(td[colspan]),
+.editor :global(th[rowspan]),
+.editor :global(th[colspan]) {
+  background-color: #fff8e1;
+}
+
+/* 代码块样式 */
+.editor :global(pre) {
+  background-color: #f6f8fa;
+  border-radius: 6px;
+  padding: 16px;
+  overflow-x: auto;
+}
+
+.editor :global(code) {
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 85%;
+}
+
+/* 引用块样式 */
+.editor :global(blockquote) {
+  border-left: 4px solid #dfe2e5;
+  padding-left: 16px;
+  margin-left: 0;
+  color: #6a737d;
+}

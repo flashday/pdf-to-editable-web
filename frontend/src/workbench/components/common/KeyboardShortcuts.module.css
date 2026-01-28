@@ -1,0 +1,215 @@
+/**
+ * 键盘快捷键提示样式
+ * 任务 21.3: 添加键盘快捷键提示
+ */
+
+.overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.dialog {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  max-width: 600px;
+  width: 90%;
+  max-height: 80vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  animation: slideUp 0.2s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.header h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #333;
+}
+
+.closeButton {
+  background: none;
+  border: none;
+  font-size: 24px;
+  color: #666;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.closeButton:hover {
+  background-color: #f0f0f0;
+}
+
+.content {
+  padding: 16px 20px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.category {
+  margin-bottom: 20px;
+}
+
+.category:last-child {
+  margin-bottom: 0;
+}
+
+.category h3 {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.category ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.category li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.category li:last-child {
+  border-bottom: none;
+}
+
+.keys {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.keys kbd {
+  display: inline-block;
+  padding: 4px 8px;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+  font-size: 12px;
+  color: #333;
+  background: #f5f5f5;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.keys span {
+  color: #999;
+  font-size: 12px;
+}
+
+.description {
+  color: #666;
+  font-size: 14px;
+}
+
+.footer {
+  padding: 12px 20px;
+  background: #f9f9f9;
+  border-top: 1px solid #e0e0e0;
+  text-align: center;
+  font-size: 13px;
+  color: #666;
+}
+
+.footer kbd {
+  display: inline-block;
+  padding: 2px 6px;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+  font-size: 11px;
+  color: #333;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 3px;
+}
+
+/* 帮助按钮 */
+.helpButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: #f5f5f5;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.helpButton:hover {
+  background: #e8e8e8;
+  border-color: #ccc;
+}
+
+.helpIcon {
+  font-size: 18px;
+}
+
+/* 响应式 */
+@media (max-width: 480px) {
+  .dialog {
+    width: 95%;
+    max-height: 90vh;
+  }
+
+  .category li {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .keys {
+    order: 2;
+  }
+
+  .description {
+    order: 1;
+  }
+}

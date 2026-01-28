@@ -3,7 +3,7 @@ import { useWorkbenchStore } from '../../stores/workbenchStore';
 import styles from './SaveStatus.module.css';
 
 const SaveStatus: React.FC = () => {
-  const { isDirty, isSaving, lastSavedAt, saveError } = useWorkbenchStore();
+  const { isDirty, isSaving, lastSavedAt, saveError, saveContent } = useWorkbenchStore();
 
   const formatTime = (date: Date | null) => {
     if (!date) return '';
@@ -13,11 +13,23 @@ const SaveStatus: React.FC = () => {
     });
   };
 
+  const handleRetry = async () => {
+    await saveContent();
+  };
+
   if (saveError) {
     return (
       <div className={`${styles.status} ${styles.error}`}>
         <span className={styles.icon}>⚠</span>
         <span>保存失败</span>
+        <button 
+          className={styles.retryButton}
+          onClick={handleRetry}
+          disabled={isSaving}
+          title={saveError}
+        >
+          重试
+        </button>
       </div>
     );
   }
@@ -36,6 +48,7 @@ const SaveStatus: React.FC = () => {
       <div className={`${styles.status} ${styles.dirty}`}>
         <span className={styles.icon}>●</span>
         <span>未保存更改</span>
+        <span className={styles.shortcut}>(Ctrl+S)</span>
       </div>
     );
   }

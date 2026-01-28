@@ -1,0 +1,208 @@
+/**
+ * 响应式布局样式
+ * 任务 21.2: 优化响应式布局
+ */
+
+/* 基础变量 */
+:root {
+  --workbench-min-panel-width: 300px;
+  --workbench-header-height: 56px;
+  --workbench-toolbar-height: 48px;
+}
+
+/* 大屏幕 (>= 1200px) */
+@media (min-width: 1200px) {
+  .workbench-container {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+  }
+
+  .workbench-content {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  .workbench-pdf-panel {
+    flex: 1;
+    min-width: var(--workbench-min-panel-width);
+    border-right: 1px solid #e0e0e0;
+  }
+
+  .workbench-editor-panel {
+    flex: 1;
+    min-width: var(--workbench-min-panel-width);
+  }
+}
+
+/* 中等屏幕 (768px - 1199px) */
+@media (min-width: 768px) and (max-width: 1199px) {
+  .workbench-container {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+  }
+
+  .workbench-content {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  .workbench-pdf-panel {
+    flex: 0 0 45%;
+    min-width: 280px;
+    border-right: 1px solid #e0e0e0;
+  }
+
+  .workbench-editor-panel {
+    flex: 1;
+    min-width: 280px;
+  }
+
+  /* 缩小工具栏按钮 */
+  .workbench-toolbar button {
+    padding: 6px 10px;
+    font-size: 13px;
+  }
+}
+
+/* 小屏幕 (< 768px) - 堆叠布局 */
+@media (max-width: 767px) {
+  .workbench-container {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+  }
+
+  .workbench-content {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* 标签切换模式 */
+  .workbench-content.tab-mode .workbench-pdf-panel,
+  .workbench-content.tab-mode .workbench-editor-panel {
+    display: none;
+  }
+
+  .workbench-content.tab-mode .workbench-pdf-panel.active,
+  .workbench-content.tab-mode .workbench-editor-panel.active {
+    display: flex;
+    flex: 1;
+  }
+
+  /* 分屏模式 */
+  .workbench-content.split-mode .workbench-pdf-panel {
+    flex: 0 0 50%;
+    border-bottom: 1px solid #e0e0e0;
+  }
+
+  .workbench-content.split-mode .workbench-editor-panel {
+    flex: 1;
+  }
+
+  /* 移动端标签栏 */
+  .workbench-mobile-tabs {
+    display: flex;
+    background: #fff;
+    border-bottom: 1px solid #e0e0e0;
+  }
+
+  .workbench-mobile-tabs button {
+    flex: 1;
+    padding: 12px;
+    border: none;
+    background: transparent;
+    font-size: 14px;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+  }
+
+  .workbench-mobile-tabs button.active {
+    color: #1976d2;
+    border-bottom-color: #1976d2;
+  }
+
+  /* 隐藏桌面端标签栏 */
+  .workbench-desktop-only {
+    display: none;
+  }
+}
+
+/* 大屏幕隐藏移动端元素 */
+@media (min-width: 768px) {
+  .workbench-mobile-tabs {
+    display: none;
+  }
+
+  .workbench-mobile-only {
+    display: none;
+  }
+}
+
+/* 触摸设备优化 */
+@media (hover: none) and (pointer: coarse) {
+  /* 增大点击区域 */
+  .workbench-toolbar button {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* 增大 Bounding Box 点击区域 */
+  .bounding-box {
+    min-width: 20px;
+    min-height: 20px;
+  }
+
+  /* 禁用悬停效果 */
+  .bounding-box:hover {
+    transform: none;
+  }
+}
+
+/* 高对比度模式 */
+@media (prefers-contrast: high) {
+  .workbench-container {
+    border: 2px solid #000;
+  }
+
+  .bounding-box {
+    border-width: 3px;
+  }
+
+  .workbench-toolbar button {
+    border: 2px solid #000;
+  }
+}
+
+/* 减少动画模式 */
+@media (prefers-reduced-motion: reduce) {
+  .bounding-box,
+  .skeleton,
+  .highlight-animation {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* 打印样式 */
+@media print {
+  .workbench-toolbar,
+  .workbench-mobile-tabs,
+  .workbench-header {
+    display: none;
+  }
+
+  .workbench-content {
+    display: block;
+  }
+
+  .workbench-pdf-panel,
+  .workbench-editor-panel {
+    page-break-inside: avoid;
+  }
+}
