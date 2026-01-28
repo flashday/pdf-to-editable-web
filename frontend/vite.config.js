@@ -1,14 +1,34 @@
 import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+import { resolve } from 'path'
 
 export default defineConfig({
   root: 'src',
+  plugins: [
+    react({
+      // 只对 workbench 目录下的文件启用 React 转换
+      include: /workbench\/.*\.(tsx|ts|jsx|js)$/
+    })
+  ],
   build: {
     outDir: '../dist',
-    emptyOutDir: true
+    emptyOutDir: true,
+    rollupOptions: {
+      input: {
+        main: resolve(__dirname, 'src/index.html'),
+        workbench: resolve(__dirname, 'src/workbench/index.html')
+      }
+    }
   },
   // 禁用依赖预构建缓存
   optimizeDeps: {
-    force: true
+    force: true,
+    include: ['react', 'react-dom', 'react-router-dom', 'zustand']
+  },
+  resolve: {
+    alias: {
+      '@workbench': resolve(__dirname, 'src/workbench')
+    }
   },
   server: {
     port: 3000,

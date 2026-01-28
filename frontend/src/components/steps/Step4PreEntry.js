@@ -66,8 +66,74 @@ export class Step4PreEntry {
         if (step5Container) step5Container.style.display = 'none';
         if (step6Container) step6Container.style.display = 'none';
         
+        // 添加精准编辑模式按钮
+        this.addPrecisionEditButton();
+        
         this.render();
         this.bindEvents();
+    }
+    
+    /**
+     * 添加精准编辑模式按钮
+     */
+    addPrecisionEditButton() {
+        // 检查按钮是否已存在
+        if (document.getElementById('precisionEditBtn')) return;
+        
+        // 在下载按钮区域添加精准编辑按钮
+        const downloadButtons = document.getElementById('downloadButtons');
+        if (!downloadButtons) return;
+        
+        const precisionBtn = document.createElement('button');
+        precisionBtn.id = 'precisionEditBtn';
+        precisionBtn.className = 'btn btn-precision-edit';
+        precisionBtn.innerHTML = '🎯 精准编辑模式';
+        precisionBtn.title = '进入精准作业台，支持 PDF 与 Markdown 双向定位编辑';
+        precisionBtn.style.cssText = `
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            margin-left: 10px;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+        `;
+        
+        // 悬停效果
+        precisionBtn.addEventListener('mouseenter', () => {
+            precisionBtn.style.transform = 'translateY(-2px)';
+            precisionBtn.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.4)';
+        });
+        precisionBtn.addEventListener('mouseleave', () => {
+            precisionBtn.style.transform = 'translateY(0)';
+            precisionBtn.style.boxShadow = '0 2px 8px rgba(102, 126, 234, 0.3)';
+        });
+        
+        // 点击事件
+        precisionBtn.addEventListener('click', () => this.openPrecisionEditMode());
+        
+        downloadButtons.appendChild(precisionBtn);
+    }
+    
+    /**
+     * 打开精准编辑模式
+     */
+    openPrecisionEditMode() {
+        const jobId = stateManager.get('jobId');
+        if (!jobId) {
+            alert('请先完成 OCR 识别');
+            return;
+        }
+        
+        console.log('Step4PreEntry: Opening Precision Edit Mode for job:', jobId);
+        
+        // 跳转到精准作业台
+        const workbenchUrl = `/workbench/index.html?jobId=${jobId}`;
+        window.open(workbenchUrl, '_blank');
     }
 
     /**

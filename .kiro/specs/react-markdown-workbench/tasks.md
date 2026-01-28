@@ -2,24 +2,24 @@
 
 ## 阶段一：项目基础搭建（2-3 天）
 
-- [ ] 1. React 项目初始化
-  - [ ] 1.1 在 frontend/src/workbench 目录创建 React 项目结构
-  - [ ] 1.2 配置 Vite 多入口（原有入口 + workbench 入口）
-  - [ ] 1.3 安装核心依赖：react, react-dom, zustand, react-router-dom
-  - [ ] 1.4 配置 TypeScript（可选，推荐）
-  - [ ] 1.5 创建基础 App.tsx 和路由配置
+- [x] 1. React 项目初始化
+  - [x] 1.1 在 frontend/src/workbench 目录创建 React 项目结构
+  - [x] 1.2 配置 Vite 多入口（原有入口 + workbench 入口）
+  - [x] 1.3 安装核心依赖：react, react-dom, zustand, react-router-dom
+  - [x] 1.4 配置 TypeScript（可选，推荐）
+  - [x] 1.5 创建基础 App.tsx 和路由配置
 
 - [ ] 2. Zustand Store 搭建
-  - [ ] 2.1 创建 workbenchStore.ts 定义状态结构
-  - [ ] 2.2 实现基础 actions：setJobId, setLayoutBlocks, setMarkdownContent
-  - [ ] 2.3 实现 UI 状态 actions：setActiveBlockId, setZoomLevel
-  - [ ] 2.4 编写 Store 单元测试
+  - [x] 2.1 创建 workbenchStore.ts 定义状态结构
+  - [x] 2.2 实现基础 actions：setJobId, setLayoutBlocks, setMarkdownContent
+  - [x] 2.3 实现 UI 状态 actions：setActiveBlockId, setZoomLevel
+  - [x] 2.4 编写 Store 单元测试
 
-- [ ] 3. 模式切换入口
-  - [ ] 3.1 在 Step4PreEntry.js 添加"精准编辑模式"按钮
-  - [ ] 3.2 实现跳转逻辑：传递 jobId 到 /workbench?jobId=xxx
-  - [ ] 3.3 在 workbench 页面添加"返回传统模式"按钮
-  - [ ] 3.4 测试模式切换流程
+- [x] 3. 模式切换入口
+  - [x] 3.1 在 Step4PreEntry.js 添加"精准编辑模式"按钮
+  - [x] 3.2 实现跳转逻辑：传递 jobId 到 /workbench?jobId=xxx
+  - [x] 3.3 在 workbench 页面添加"返回传统模式"按钮
+  - [x] 3.4 测试模式切换流程
 
 ## 阶段二：PDF 渲染与 Bounding Box（3-4 天）
 

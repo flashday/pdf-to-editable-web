@@ -1,0 +1,47 @@
+.status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.icon {
+  font-size: 10px;
+}
+
+.saved {
+  color: #28a745;
+  background: #d4edda;
+}
+
+.dirty {
+  color: #856404;
+  background: #fff3cd;
+}
+
+.saving {
+  color: #0c5460;
+  background: #d1ecf1;
+}
+
+.error {
+  color: #721c24;
+  background: #f8d7da;
+}
+
+.spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid #0c5460;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
