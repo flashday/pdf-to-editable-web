@@ -58,6 +58,8 @@ export class Step5DataExtract {
         // 状态跟踪
         this.extractionCompleted = false;
         this.checkpointCompleted = false;
+        // 临时新增字段列表
+        this.tempFields = [];
     }
     
     /**
@@ -165,59 +167,14 @@ export class Step5DataExtract {
         // 自动选择步骤2选中的单据类型
         this.autoSelectDocumentType();
         
+        // 重置临时字段
+        this.tempFields = [];
+        
         this.render();
         this.bindEvents();
         
-        // 自动执行提取和检查点
-        await this.autoExecute();
-    }
-    
-    /**
-     * 自动执行提取和检查点
-     */
-    async autoExecute() {
-        console.log('Step5DataExtract: Auto-executing extraction and checkpoints');
-        
-        // 确保有选中的模板
-        if (!this.selectedTemplate) {
-            console.log('Step5DataExtract: No template selected, skipping auto-execute');
-            return;
-        }
-        
-        // 显示自动执行状态
-        const statusEl = document.getElementById('extractStatus');
-        if (statusEl) statusEl.textContent = '🤖 自动提取中...';
-        
-        try {
-            // 1. 自动执行提取
-            await this.startExtraction();
-            
-            // 2. 如果有检查点，自动执行检查点
-            if (this.selectedTemplate.checkpoints && this.selectedTemplate.checkpoints.length > 0) {
-                // 等待一小段时间让UI更新
-                await new Promise(resolve => setTimeout(resolve, 500));
-                await this.runCheckpoints();
-            } else {
-                // 没有检查点时，自动标记为完成
-                console.log('Step5DataExtract: No checkpoints defined, marking as completed');
-                this.checkpointCompleted = true;
-                this.updateSubmitButtonState();
-                
-                // 更新UI显示
-                const checkpointStatusIcon = document.getElementById('checkpointStatusIcon');
-                const checkpointStatusText = document.getElementById('checkpointStatusText');
-                if (checkpointStatusIcon) checkpointStatusIcon.textContent = '⏭️';
-                if (checkpointStatusText) {
-                    checkpointStatusText.textContent = '无需验证';
-                    checkpointStatusText.style.color = '#17a2b8';
-                }
-            }
-            
-            console.log('Step5DataExtract: Auto-execution completed');
-        } catch (error) {
-            console.error('Step5DataExtract: Auto-execution failed:', error);
-            if (statusEl) statusEl.textContent = '❌ 自动提取失败: ' + error.message;
-        }
+        // 不再自动执行，等待用户手动点击"开始提取"
+        // await this.autoExecute();  // 已移除自动执行
     }
     
     /**
@@ -300,15 +257,11 @@ export class Step5DataExtract {
         // 设置容器样式 - 使用绝对定位确保占满整个编辑区域
         step5Container.style.cssText = 'display: none; position: absolute; top: 0; left: 0; right: 0; bottom: 0; padding: 15px; box-sizing: border-box; background: white; z-index: 10;';
         
-        // 获取当前文档文本用于预览
-        const globalStateManager = window.stateManager || stateManager;
-        let previewText = globalStateManager.get('finalText') || globalStateManager.getFinalText() || '';
-        if (!previewText && window.app && window.app.ocrRegions) {
-            previewText = window.app.ocrRegions.map(r => r.text || '').filter(t => t).join('\n');
-        }
-        
         // 使用从后端加载的单据类型，如果没有则使用预设模板
         const templates = this.documentTypes.length > 0 ? this.documentTypes : PRESET_TEMPLATES;
+        
+        // 生成预定义字段列表HTML
+        const predefinedFieldsHtml = this.renderPredefinedFields();
         
         step5Container.innerHTML = `
             <!-- 顶部操作栏 -->
@@ -317,6 +270,12 @@ export class Step5DataExtract {
                     <span id="extractStatusIcon">⏳</span> 数据提取: <span id="extractStatusText">待执行</span> &nbsp;|&nbsp;
                     <span id="checkpointStatusIcon">⏳</span> 检查点验证: <span id="checkpointStatusText">待执行</span>
                 </div>
+                <button id="step5DownloadOriginalBtn" style="background: #e74c3c; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; margin-right: 10px;" title="下载原始上传文件">
+                    📄 原始文件
+                </button>
+                <button id="step5DownloadMdBtn" style="background: #9b59b6; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; margin-right: 10px;" title="下载 Markdown 格式">
+                    📝 MD
+                </button>
                 <button id="downloadLlmLogBtn" style="background: #6c5ce7; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; margin-right: 10px;" title="下载 LLM 调用日志">
                     📋 LLM日志
                 </button>
@@ -333,7 +292,28 @@ export class Step5DataExtract {
                     <!-- 模板选择区 - 显示选中的单据类型 -->
                     <div class="template-section" style="margin-bottom: 15px; flex-shrink: 0;">
                         <div style="font-size: 13px; color: #586069; margin-bottom: 8px;">提取的单据类型：<strong style="color: #3498db;">${this.selectedTemplate ? this.selectedTemplate.name : '未选择'}</strong></div>
-                        <div class="template-list" id="templateList" style="display: none;">
+                    </div>
+                    
+                    <!-- 预定义字段列表 -->
+                    <div class="predefined-fields-section" style="margin-bottom: 15px; flex-shrink: 0;">
+                        <div style="font-size: 13px; color: #586069; margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between;">
+                            <span>📝 提取字段列表：</span>
+                            <button id="addTempFieldBtn" style="background: #17a2b8; color: white; border: none; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px;">
+                                ➕ 新增字段
+                            </button>
+                        </div>
+                        <div id="predefinedFieldsList" style="background: white; border: 1px solid #d1d5da; border-radius: 6px; padding: 10px; max-height: 150px; overflow-y: auto;">
+                            ${predefinedFieldsHtml}
+                        </div>
+                    </div>
+                    
+                    <!-- 临时新增字段输入区（默认隐藏） -->
+                    <div id="tempFieldInputArea" style="display: none; margin-bottom: 15px; flex-shrink: 0; background: #e8f4fd; border: 1px dashed #3498db; border-radius: 6px; padding: 10px;">
+                        <div style="font-size: 12px; color: #3498db; margin-bottom: 6px;">输入新字段名称：</div>
+                        <div style="display: flex; gap: 8px;">
+                            <input type="text" id="tempFieldInput" placeholder="例如：审批人" style="flex: 1; padding: 6px 10px; border: 1px solid #b8daff; border-radius: 4px; font-size: 13px;">
+                            <button id="confirmAddFieldBtn" style="background: #28a745; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">确认</button>
+                            <button id="cancelAddFieldBtn" style="background: #6c757d; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">取消</button>
                         </div>
                     </div>
                     
@@ -392,6 +372,104 @@ export class Step5DataExtract {
         
         // 显示容器 - 保持绝对定位样式
         step5Container.style.display = 'block';
+        
+        // 如果是自定义模板，显示自定义字段区
+        if (this.selectedTemplate && this.selectedTemplate.id === 'custom') {
+            const customSection = document.getElementById('customFieldsSection');
+            if (customSection) customSection.style.display = 'block';
+        }
+    }
+
+    /**
+     * 渲染预定义字段列表
+     */
+    renderPredefinedFields() {
+        if (!this.selectedTemplate || !this.selectedTemplate.fields) {
+            return '<div style="color: #999; font-style: italic;">未选择单据类型</div>';
+        }
+        
+        const fields = this.selectedTemplate.fields;
+        if (fields.length === 0) {
+            return '<div style="color: #999; font-style: italic;">该单据类型没有预定义字段</div>';
+        }
+        
+        let html = '<div style="display: flex; flex-wrap: wrap; gap: 6px;">';
+        
+        // 预定义字段
+        fields.forEach(field => {
+            html += `<span class="field-tag predefined-field" style="background: #e3f2fd; color: #1976d2; padding: 4px 10px; border-radius: 12px; font-size: 12px; border: 1px solid #90caf9;">${field}</span>`;
+        });
+        
+        // 临时新增字段
+        this.tempFields.forEach((field, idx) => {
+            html += `<span class="field-tag temp-field" data-idx="${idx}" style="background: #fff3e0; color: #e65100; padding: 4px 10px; border-radius: 12px; font-size: 12px; border: 1px solid #ffcc80; cursor: pointer;" title="点击删除">
+                ${field} <span style="margin-left: 4px; color: #999;">×</span>
+            </span>`;
+        });
+        
+        html += '</div>';
+        return html;
+    }
+    
+    /**
+     * 更新预定义字段列表显示
+     */
+    updatePredefinedFieldsList() {
+        const container = document.getElementById('predefinedFieldsList');
+        if (container) {
+            container.innerHTML = this.renderPredefinedFields();
+            // 重新绑定临时字段删除事件
+            this.bindTempFieldDeleteEvents();
+        }
+    }
+    
+    /**
+     * 绑定临时字段删除事件
+     */
+    bindTempFieldDeleteEvents() {
+        document.querySelectorAll('.temp-field').forEach(el => {
+            el.addEventListener('click', (e) => {
+                const idx = parseInt(e.currentTarget.dataset.idx);
+                if (!isNaN(idx)) {
+                    this.removeTempField(idx);
+                }
+            });
+        });
+    }
+    
+    /**
+     * 添加临时字段
+     */
+    addTempField(fieldName) {
+        if (!fieldName || fieldName.trim() === '') return;
+        
+        const trimmed = fieldName.trim();
+        
+        // 检查是否已存在（预定义或临时）
+        const allFields = [...(this.selectedTemplate?.fields || []), ...this.tempFields];
+        if (allFields.includes(trimmed)) {
+            alert('该字段已存在');
+            return;
+        }
+        
+        this.tempFields.push(trimmed);
+        this.updatePredefinedFieldsList();
+        
+        // 清空输入框并隐藏
+        const input = document.getElementById('tempFieldInput');
+        const inputArea = document.getElementById('tempFieldInputArea');
+        if (input) input.value = '';
+        if (inputArea) inputArea.style.display = 'none';
+    }
+    
+    /**
+     * 删除临时字段
+     */
+    removeTempField(idx) {
+        if (idx >= 0 && idx < this.tempFields.length) {
+            this.tempFields.splice(idx, 1);
+            this.updatePredefinedFieldsList();
+        }
     }
 
     /**
@@ -435,8 +513,80 @@ export class Step5DataExtract {
         if (downloadLlmLogBtn) {
             downloadLlmLogBtn.addEventListener('click', () => this.downloadLlmLog());
         }
+        
+        // 下载原始文件按钮 - 直接调用全局函数（与步骤4一致）
+        const downloadOriginalBtn = document.getElementById('step5DownloadOriginalBtn');
+        if (downloadOriginalBtn) {
+            downloadOriginalBtn.addEventListener('click', () => {
+                if (window.downloadOriginalFile) {
+                    window.downloadOriginalFile();
+                } else {
+                    alert('下载功能不可用');
+                }
+            });
+        }
+        
+        // 下载 MD 按钮 - 直接调用全局函数（与步骤4一致）
+        const downloadMdBtn = document.getElementById('step5DownloadMdBtn');
+        if (downloadMdBtn) {
+            downloadMdBtn.addEventListener('click', () => {
+                if (window.downloadMarkdown) {
+                    window.downloadMarkdown();
+                } else {
+                    alert('下载功能不可用');
+                }
+            });
+        }
+        
+        // 新增字段按钮
+        const addTempFieldBtn = document.getElementById('addTempFieldBtn');
+        if (addTempFieldBtn) {
+            addTempFieldBtn.addEventListener('click', () => {
+                const inputArea = document.getElementById('tempFieldInputArea');
+                if (inputArea) {
+                    inputArea.style.display = 'block';
+                    const input = document.getElementById('tempFieldInput');
+                    if (input) input.focus();
+                }
+            });
+        }
+        
+        // 确认添加字段按钮
+        const confirmAddFieldBtn = document.getElementById('confirmAddFieldBtn');
+        if (confirmAddFieldBtn) {
+            confirmAddFieldBtn.addEventListener('click', () => {
+                const input = document.getElementById('tempFieldInput');
+                if (input) {
+                    this.addTempField(input.value);
+                }
+            });
+        }
+        
+        // 取消添加字段按钮
+        const cancelAddFieldBtn = document.getElementById('cancelAddFieldBtn');
+        if (cancelAddFieldBtn) {
+            cancelAddFieldBtn.addEventListener('click', () => {
+                const inputArea = document.getElementById('tempFieldInputArea');
+                const input = document.getElementById('tempFieldInput');
+                if (inputArea) inputArea.style.display = 'none';
+                if (input) input.value = '';
+            });
+        }
+        
+        // 输入框回车确认
+        const tempFieldInput = document.getElementById('tempFieldInput');
+        if (tempFieldInput) {
+            tempFieldInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    this.addTempField(tempFieldInput.value);
+                }
+            });
+        }
+        
+        // 绑定临时字段删除事件
+        this.bindTempFieldDeleteEvents();
     }
-    
+
     /**
      * 下载 LLM 调用日志
      */
@@ -484,6 +634,72 @@ export class Step5DataExtract {
     }
     
     /**
+     * 下载原始文件
+     */
+    async downloadOriginalFile() {
+        const globalStateManager = window.stateManager || stateManager;
+        const jobId = globalStateManager.get('jobId') || (window.app ? window.app.currentJobId : null);
+        
+        if (!jobId) {
+            alert('无法获取 Job ID，请确保已完成文档处理');
+            return;
+        }
+        
+        try {
+            // 直接打开下载链接
+            window.open(`/api/convert/${jobId}/original-file`, '_blank');
+        } catch (error) {
+            console.error('Failed to download original file:', error);
+            alert('下载原始文件失败: ' + error.message);
+        }
+    }
+    
+    /**
+     * 下载 Markdown 格式
+     */
+    async downloadMarkdown() {
+        const globalStateManager = window.stateManager || stateManager;
+        const jobId = globalStateManager.get('jobId') || (window.app ? window.app.currentJobId : null);
+        
+        if (!jobId) {
+            alert('无法获取 Job ID，请确保已完成文档处理');
+            return;
+        }
+        
+        try {
+            const response = await fetch(`/api/convert/${jobId}/markdown`);
+            
+            if (!response.ok) {
+                if (response.status === 404) {
+                    alert('Markdown 文件不存在');
+                    return;
+                }
+                throw new Error(`HTTP ${response.status}`);
+            }
+            
+            const data = await response.json();
+            
+            if (data.success && data.markdown) {
+                // 创建下载
+                const blob = new Blob([data.markdown], { type: 'text/markdown' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${jobId}_ocr.md`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            } else {
+                alert(data.error || 'Markdown 内容为空');
+            }
+        } catch (error) {
+            console.error('Failed to download markdown:', error);
+            alert('下载 Markdown 失败: ' + error.message);
+        }
+    }
+    
+    /**
      * 提交到步骤6
      */
     submitToStep6() {
@@ -527,6 +743,10 @@ export class Step5DataExtract {
             checkpointInput.value = this.selectedTemplate.checkpoints.join('\n');
         }
         
+        // 重置临时字段
+        this.tempFields = [];
+        this.updatePredefinedFieldsList();
+        
         // 使用全局 stateManager 保存数据
         const globalStateManager = window.stateManager || stateManager;
         globalStateManager.set('selectedTemplate', this.selectedTemplate);
@@ -550,6 +770,7 @@ export class Step5DataExtract {
         if (statusEl) statusEl.textContent = '提取中...';
         if (extractBtn) extractBtn.disabled = true;
         
+        this.updateSubmitButtonState();
         eventBus.emit(EVENTS.EXTRACTION_STARTED);
         
         try {
@@ -595,13 +816,21 @@ export class Step5DataExtract {
                 throw new Error('text 不能为空，请确保已完成 OCR 识别');
             }
             
-            let fields = this.selectedTemplate.fields;
+            // 合并预定义字段和临时新增字段
+            let fields = [...(this.selectedTemplate.fields || [])];
+            
+            // 添加临时新增字段
+            if (this.tempFields.length > 0) {
+                fields = [...fields, ...this.tempFields];
+                console.log('Step5DataExtract: Added temp fields:', this.tempFields);
+            }
             
             // 自定义模板从输入框获取字段
             if (this.selectedTemplate.id === 'custom') {
                 const customInput = document.getElementById('customFieldsInput');
                 if (customInput) {
-                    fields = customInput.value.split('\n').map(f => f.trim()).filter(f => f);
+                    const customFields = customInput.value.split('\n').map(f => f.trim()).filter(f => f);
+                    fields = [...fields, ...customFields];
                 }
             }
             
@@ -609,11 +838,13 @@ export class Step5DataExtract {
                 throw new Error('请输入至少一个提取字段');
             }
             
+            console.log('Step5DataExtract: Final fields to extract:', fields);
+            
             // 调用 LLM 提取 - 使用正确的 extract-info API（支持 RAG）
             console.log('Step5DataExtract: Calling /api/extract-info with text length:', finalText.length);
             console.log('Step5DataExtract: Text content (first 500 chars):', finalText.substring(0, 500));
             
-            // 获取 jobId（使用已声明的 globalStateManager）
+            // 获取 jobId
             const jobId = globalStateManager.get('jobId') || (window.app ? window.app.currentJobId : null);
             
             let response;
@@ -650,8 +881,6 @@ export class Step5DataExtract {
             
             if (result.success) {
                 // result.data 包含提取的字段数据
-                // /api/extract-info 返回 { fields: {...}, confidence: 0.x, ... }
-                // /api/llm/extract 返回直接的字段对象
                 this.extractedData = result.data.fields || result.data;
                 console.log('Step5DataExtract: Extracted data:', this.extractedData);
                 // 使用全局 stateManager 保存数据，确保 Step6 能读取到
@@ -709,7 +938,11 @@ export class Step5DataExtract {
                 const displayValue = isEmpty ? '<span style="color: #999; font-style: italic;">未找到</span>' : value;
                 const rowStyle = isEmpty ? 'background: #fff8e1;' : '';
                 
-                html += `<tr style="${rowStyle}"><td style="padding: 8px; border: 1px solid #ddd; font-weight: 500;">${key}</td><td style="padding: 8px; border: 1px solid #ddd;">${displayValue}</td></tr>`;
+                // 检查是否是临时新增字段
+                const isTempField = this.tempFields.includes(key);
+                const fieldLabel = isTempField ? `${key} <span style="color: #e65100; font-size: 10px;">(新增)</span>` : key;
+                
+                html += `<tr style="${rowStyle}"><td style="padding: 8px; border: 1px solid #ddd; font-weight: 500;">${fieldLabel}</td><td style="padding: 8px; border: 1px solid #ddd;">${displayValue}</td></tr>`;
             });
             
             html += '</table>';
@@ -749,6 +982,7 @@ export class Step5DataExtract {
         }
         if (statusEl) statusEl.textContent = '';
         
+        this.updateSubmitButtonState();
         eventBus.emit(EVENTS.CHECKPOINT_STARTED);
         
         try {

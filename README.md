@@ -775,6 +775,24 @@ LLM_CONTEXT_LIMIT=32000                   # 发送给 LLM 的最大字符数
 - **RAG 不可用**：回退到全文发送模式（可能影响长文档处理）
 - **超时处理**：60 秒超时后返回错误，允许用户重试
 
+## 待办事项 (TODO)
+
+### 多页 PDF 支持
+
+当前系统只处理 PDF 首页，这是有意的设计决策（财务单据通常是单页）。后续计划支持多页 PDF 处理。
+
+**详细分析报告**: [MDFiles/implementation/MULTIPAGE_PDF_SUPPORT_ANALYSIS.md](MDFiles/implementation/MULTIPAGE_PDF_SUPPORT_ANALYSIS.md)
+
+**主要工作项**:
+- [ ] 后端：新增 `extract_all_pages_as_images()` 方法
+- [ ] 后端：重构 `document_processor.py` 支持多页循环处理
+- [ ] 后端：OCR 结果合并和多页置信度计算
+- [ ] 前端：多页预览切换和页码导航
+- [ ] 前端：多页编辑界面
+- [ ] RAG：多页文档分块索引和页码元数据
+
+**预估工期**: 6-10 个工作日
+
 ## License
 
 MIT
