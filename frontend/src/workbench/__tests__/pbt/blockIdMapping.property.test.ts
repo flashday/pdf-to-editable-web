@@ -8,8 +8,8 @@ import { describe, it, expect } from 'vitest';
 import * as fc from 'fast-check';
 import { parseAnchors, AnchorInfo } from '../../utils/anchorParser';
 
-// 生成有效的 Block ID
-const blockIdArb = fc.stringMatching(/^[0-9a-f]{3,8}$/);
+// 生成有效的 Block ID（使用新格式 block_xxx）
+const blockIdArb = fc.stringMatching(/^block_[0-9a-f]{3,8}$/);
 
 // 生成有效的坐标
 const coordArb = fc.record({
@@ -28,10 +28,11 @@ const layoutBlockArb = fc.record({
   pageNum: fc.integer({ min: 1, max: 10 }),
 });
 
-// 生成带锚点的 Markdown 内容
+// 生成带锚点的 Markdown 内容（使用 V2 新格式）
 function generateMarkdownWithAnchors(blocks: Array<{ id: string; bbox: { x: number; y: number; width: number; height: number } }>): string {
   return blocks.map((block, index) => {
-    const anchor = `<div id="block_${block.id}" data-coords="${block.bbox.x},${block.bbox.y},${block.bbox.width},${block.bbox.height}" style="display:none;"></div>`;
+    // 使用新的统一锚点格式 <!-- @block:block_xxx x,y,width,height -->
+    const anchor = `<!-- @block:${block.id} ${block.bbox.x},${block.bbox.y},${block.bbox.width},${block.bbox.height} -->`;
     const content = index === 0 ? '# 标题\n' : `段落 ${index} 内容\n`;
     return anchor + '\n' + content;
   }).join('\n');
@@ -137,7 +138,7 @@ describe('PBT-1: Block ID 映射一致性', () => {
         fc.string({ minLength: 0, maxLength: 1000 }),
         (content) => {
           // 过滤掉可能意外匹配锚点格式的内容
-          const safeContent = content.replace(/<div id="block_/g, '');
+          const safeContent = content.replace(/@block:/g, '');
           const anchors = parseAnchors(safeContent);
           expect(anchors).toEqual([]);
           return true;

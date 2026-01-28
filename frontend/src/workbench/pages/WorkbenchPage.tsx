@@ -1,8 +1,9 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useWorkbenchStore } from '../stores/workbenchStore';
 import { useSaveShortcut } from '../hooks/useSaveShortcut';
 import { useAutoSave } from '../hooks/useAutoSave';
+import { useSyncScroll } from '../hooks/useSyncScroll';
 import PdfPanel from '../components/PdfPanel/PdfPanel';
 import EditorPanel from '../components/EditorPanel/EditorPanel';
 import Toolbar from '../components/Toolbar/Toolbar';
@@ -12,13 +13,50 @@ import styles from './WorkbenchPage.module.css';
 const WorkbenchPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const jobId = searchParams.get('jobId');
-  const { setJobId, loadData, isLoading, error, isDirty } = useWorkbenchStore();
+  const { 
+    setJobId, 
+    loadData, 
+    isLoading, 
+    error, 
+    isDirty,
+    anchors,
+    layoutBlocks,
+    setActiveBlockId
+  } = useWorkbenchStore();
+  
+  // 容器引用（用于同步滚动）
+  const pdfContainerRef = useRef<HTMLDivElement>(null);
+  const editorContainerRef = useRef<HTMLDivElement>(null);
   
   // 启用 Ctrl+S 快捷键保存
   useSaveShortcut();
   
   // 启用自动保存（3 秒防抖）
   useAutoSave({ debounceMs: 3000, enabled: true });
+  
+  // V2 优化：基于锚点的同步滚动
+  const { syncToBlock, syncToAnchor } = useSyncScroll({
+    pdfContainerRef,
+    editorContainerRef,
+    anchors,
+    layoutBlocks,
+    debounceDelay: 50,
+    enabled: true
+  });
+  
+  // 处理 Block 点击事件（从预览面板同步到编辑器）
+  const handleBlockClick = (blockId: string) => {
+    setActiveBlockId(blockId);
+    syncToAnchor(blockId);
+  };
+  
+  // 处理编辑器光标变化事件（从编辑器同步到预览面板）
+  const handleEditorCursorChange = (blockId: string | null) => {
+    if (blockId) {
+      setActiveBlockId(blockId);
+      syncToBlock(blockId);
+    }
+  };
 
   useEffect(() => {
     if (jobId) {
@@ -79,8 +117,16 @@ const WorkbenchPage: React.FC = () => {
       <Toolbar onBackClick={handleBackToTraditional} />
       <div className={styles.mainContent}>
         <SplitPane
-          left={<PdfPanel />}
-          right={<EditorPanel />}
+          left={
+            <div ref={pdfContainerRef} style={{ height: '100%', overflow: 'auto' }}>
+              <PdfPanel onBlockClick={handleBlockClick} />
+            </div>
+          }
+          right={
+            <div ref={editorContainerRef} style={{ height: '100%', overflow: 'auto' }}>
+              <EditorPanel onCursorBlockChange={handleEditorCursorChange} />
+            </div>
+          }
           defaultLeftWidth={50}
           minLeftWidth={30}
           maxLeftWidth={70}

@@ -116,7 +116,10 @@ const VditorWrapper: React.FC<VditorWrapperProps> = ({
               toc: true,
               mark: true,
               footnotes: true,
-              autoSpace: true
+              autoSpace: true,
+              // 允许 HTML 表格标签通过，不进行过滤
+              // 这样可以正确渲染包含 colspan/rowspan 的复杂表格
+              sanitize: false
             },
             hljs: {
               enable: true,

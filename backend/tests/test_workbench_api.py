@@ -179,9 +179,9 @@ class TestMarkdownWithAnchorsAPI:
         markdown = data['data']['markdown']
         anchors = data['data']['anchors']
         
-        # 验证锚点存在（使用 HTML 注释格式）
-        assert '<!-- anchor:block_001:' in markdown
-        assert '<!-- anchor:block_002:' in markdown
+        # 验证锚点存在（使用新的统一格式：<!-- @block:block_xxx x,y,width,height -->）
+        assert '<!-- @block:block_001 ' in markdown
+        assert '<!-- @block:block_002 ' in markdown
         
         # 验证内容
         assert '# 文档标题' in markdown
@@ -215,9 +215,9 @@ class TestMarkdownWithAnchorsAPI:
         
         markdown = data['data']['markdown']
         
-        # 验证锚点格式：<!-- anchor:block_xxx:x,y,w,h -->
+        # 验证锚点格式：<!-- @block:block_xxx x,y,width,height -->
         import re
-        anchor_pattern = r'<!-- anchor:block_\d{3}:\d+,\d+,\d+,\d+ -->'
+        anchor_pattern = r'<!-- @block:block_\d{3} \d+,\d+,\d+,\d+ -->'
         matches = re.findall(anchor_pattern, markdown)
         assert len(matches) == 1
     

@@ -232,13 +232,19 @@ def get_markdown_with_anchors(job_id):
     获取带锚点的 Markdown 内容
     
     在 Markdown 生成时注入锚点，锚点格式：
-    <!-- anchor:block_xxx:x,y,w,h -->
+    <!-- @block:block_xxx x,y,width,height -->
+    
+    新格式说明：
+    - 以 "<!-- @block:" 开头，便于区分普通注释
+    - Block ID 紧跟冒号，无空格
+    - 坐标以逗号分隔：x,y,width,height
+    - 以 " -->" 结尾
     
     Response:
     {
         "success": true,
         "data": {
-            "markdown": "<!-- anchor:block_001:100,50,400,30 -->\n# 标题\n...",
+            "markdown": "<!-- @block:block_001 100,50,400,30 -->\n# 标题\n...",
             "anchors": [
                 { "blockId": "block_001", "position": 0 }
             ]
@@ -304,6 +310,26 @@ def get_markdown_with_anchors(job_id):
         }), 500
 
 
+def _generate_anchor(block_id: str, bbox: dict) -> str:
+    """
+    生成统一格式的锚点
+    
+    新格式: <!-- @block:block_xxx x,y,width,height -->
+    - 以 "<!-- @block:" 开头，便于区分普通注释
+    - Block ID 紧跟冒号，无空格
+    - 坐标以逗号分隔：x,y,width,height
+    - 以 " -->" 结尾
+    
+    Args:
+        block_id: Block ID，如 "block_001"
+        bbox: 坐标字典，包含 x, y, width, height
+        
+    Returns:
+        格式化的锚点字符串
+    """
+    return f"<!-- @block:{block_id} {bbox['x']},{bbox['y']},{bbox['width']},{bbox['height']} -->"
+
+
 def _generate_markdown_with_anchors(ppstructure_data):
     """
     从 PPStructure 数据生成带锚点的 Markdown
@@ -346,14 +372,17 @@ def _generate_markdown_with_anchors(ppstructure_data):
         else:
             x, y, width, height = 0, 0, 0, 0
         
-        # 生成锚点 HTML 注释（在 WYSIWYG 模式下不会显示）
-        anchor_html = f'<!-- anchor:{block_id}:{x},{y},{width},{height} -->'
+        # 构建 bbox 字典
+        bbox_dict = {'x': x, 'y': y, 'width': width, 'height': height}
+        
+        # 生成统一格式的锚点（新格式：<!-- @block:block_xxx x,y,width,height -->）
+        anchor_html = _generate_anchor(block_id, bbox_dict)
         
         # 记录锚点位置
         anchors.append({
             'blockId': block_id,
             'position': current_position,
-            'coords': {'x': x, 'y': y, 'width': width, 'height': height}
+            'coords': bbox_dict
         })
         
         # 添加锚点
@@ -377,7 +406,15 @@ def _generate_markdown_with_anchors(ppstructure_data):
 
 
 def _generate_block_content(item_type, res):
-    """根据 Block 类型生成 Markdown 内容"""
+    """
+    根据 Block 类型生成内容
+    
+    对于表格类型：
+    - 复杂表格（包含 colspan/rowspan）：保留 HTML 格式
+    - 简单表格（无合并单元格）：转换为 Markdown 格式
+    
+    Validates: Requirements 3.1, 3.4, 3.5
+    """
     from bs4 import BeautifulSoup
     
     item_type = str(item_type).lower()
@@ -396,9 +433,14 @@ def _generate_block_content(item_type, res):
     
     elif item_type == 'table':
         if isinstance(res, dict) and 'html' in res:
-            # 表格前后需要空行以确保正确渲染
-            table_md = _html_table_to_markdown(res['html'])
-            return f"\n{table_md}\n"
+            html_content = res['html']
+            if _is_complex_table(html_content):
+                # 复杂表格：保留 HTML 格式（Requirements 3.1, 3.4）
+                return f"\n{html_content}\n"
+            else:
+                # 简单表格：转换为 Markdown（Requirements 3.5）
+                table_md = _html_table_to_markdown(html_content)
+                return f"\n{table_md}\n"
         return "[表格]"
     
     elif item_type == 'figure_caption':
@@ -427,6 +469,46 @@ def _generate_block_content(item_type, res):
     else:
         text = _extract_block_text(res)
         return text if text else ""
+
+
+def _is_complex_table(html_content: str) -> bool:
+    """
+    检测表格是否包含 colspan 或 rowspan
+    
+    复杂表格定义：包含 colspan > 1 或 rowspan > 1 的单元格
+    
+    Args:
+        html_content: HTML 表格内容字符串
+        
+    Returns:
+        True 如果表格包含 colspan > 1 或 rowspan > 1，否则 False
+        
+    Validates: Requirements 3.3
+    """
+    from bs4 import BeautifulSoup
+    
+    if not html_content:
+        return False
+    
+    try:
+        soup = BeautifulSoup(html_content, 'html.parser')
+        cells = soup.find_all(['td', 'th'])
+        
+        for cell in cells:
+            if cell.get('colspan') or cell.get('rowspan'):
+                try:
+                    colspan = int(cell.get('colspan', 1))
+                    rowspan = int(cell.get('rowspan', 1))
+                    if colspan > 1 or rowspan > 1:
+                        return True
+                except (ValueError, TypeError):
+                    # 如果无法解析为整数，跳过该单元格
+                    continue
+        
+        return False
+    except Exception as e:
+        logger.warning(f"Failed to detect complex table: {e}")
+        return False
 
 
 def _html_table_to_markdown(html_content):

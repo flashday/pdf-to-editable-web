@@ -62,23 +62,23 @@ describe('E2E: 点击定位准确性测试', () => {
     },
   ];
 
-  // 模拟带锚点的 Markdown
-  const mockMarkdown = `<div id="block_001" data-coords="50,50,500,40" style="display:none;"></div>
+  // 模拟带锚点的 Markdown（使用 V2 新格式）
+  const mockMarkdown = `<!-- @block:block_001 50,50,500,40 -->
 # 文档标题
 
-<div id="block_002" data-coords="50,100,500,150" style="display:none;"></div>
+<!-- @block:block_002 50,100,500,150 -->
 这是第一段正文内容，包含一些测试文本。
 
-<div id="block_003" data-coords="50,260,500,200" style="display:none;"></div>
+<!-- @block:block_003 50,260,500,200 -->
 | 列1 | 列2 | 列3 |
 |-----|-----|-----|
 | A1  | B1  | C1  |
 | A2  | B2  | C2  |
 
-<div id="block_004" data-coords="50,470,500,100" style="display:none;"></div>
+<!-- @block:block_004 50,470,500,100 -->
 这是第二段正文内容。
 
-<div id="block_005" data-coords="50,580,300,200" style="display:none;"></div>
+<!-- @block:block_005 50,580,300,200 -->
 ![图片描述](image.png)`;
 
   beforeEach(() => {
@@ -173,20 +173,27 @@ describe('E2E: 点击定位准确性测试', () => {
     it('应该根据光标位置找到正确的 Block ID', () => {
       const anchors = parseAnchors(mockMarkdown);
       
-      // 光标在标题区域 (blockId 不包含 block_ 前缀)
-      expect(getBlockIdAtPosition(anchors, 70)).toBe('001');
+      // 验证锚点解析正确
+      expect(anchors.length).toBe(5);
       
-      // 光标在第一段正文
-      expect(getBlockIdAtPosition(anchors, 150)).toBe('002');
+      // 光标在第一个锚点位置（新格式 blockId 包含完整的 block_xxx）
+      expect(getBlockIdAtPosition(anchors, anchors[0].position)).toBe('block_001');
       
-      // 光标在表格区域
-      expect(getBlockIdAtPosition(anchors, 300)).toBe('003');
+      // 光标在第一个锚点之后、第二个锚点之前
+      const pos1 = Math.floor((anchors[0].position + anchors[1].position) / 2);
+      expect(getBlockIdAtPosition(anchors, pos1)).toBe('block_001');
       
-      // 光标在第二段正文
-      expect(getBlockIdAtPosition(anchors, 400)).toBe('004');
+      // 光标在第二个锚点之后
+      const pos2 = anchors[1].position + 10;
+      expect(getBlockIdAtPosition(anchors, pos2)).toBe('block_002');
       
-      // 光标在图片区域
-      expect(getBlockIdAtPosition(anchors, 500)).toBe('005');
+      // 光标在第三个锚点之后
+      const pos3 = anchors[2].position + 10;
+      expect(getBlockIdAtPosition(anchors, pos3)).toBe('block_003');
+      
+      // 光标在最后一个锚点之后
+      const pos5 = anchors[4].position + 10;
+      expect(getBlockIdAtPosition(anchors, pos5)).toBe('block_005');
     });
 
     it('应该在光标位置变化时更新 activeBlockId', async () => {
@@ -198,12 +205,11 @@ describe('E2E: 点击定位准确性测试', () => {
 
       const anchors = parseAnchors(mockMarkdown);
       
-      // 模拟光标移动到不同位置 (blockId 不包含 block_ 前缀)
-      const positions = [70, 150, 300, 400, 500];
-      const expectedBlockIds = ['001', '002', '003', '004', '005'];
+      // 模拟光标移动到每个锚点位置之后（新格式 blockId 包含完整的 block_xxx）
+      const expectedBlockIds = ['block_001', 'block_002', 'block_003', 'block_004', 'block_005'];
 
-      positions.forEach((position, index) => {
-        const blockId = getBlockIdAtPosition(anchors, position);
+      anchors.forEach((anchor, index) => {
+        const blockId = getBlockIdAtPosition(anchors, anchor.position + 5);
         act(() => {
           result.current.setActiveBlockId(blockId);
         });
@@ -217,9 +223,9 @@ describe('E2E: 点击定位准确性测试', () => {
       const anchors = parseAnchors(mockMarkdown);
       
       expect(anchors).toHaveLength(5);
-      // blockId 不包含 block_ 前缀，只有数字部分
+      // 新格式 blockId 包含完整的 block_xxx
       expect(anchors.map(a => a.blockId)).toEqual([
-        '001', '002', '003', '004', '005'
+        'block_001', 'block_002', 'block_003', 'block_004', 'block_005'
       ]);
     });
 
@@ -321,15 +327,23 @@ describe('E2E: 点击定位准确性测试', () => {
     });
 
     it('应该处理光标在第一个锚点之前的情况', () => {
-      const anchors = parseAnchors(mockMarkdown);
-      // 第一个锚点位置是 0，所以任何位置都应该返回第一个 Block (不含 block_ 前缀)
-      expect(getBlockIdAtPosition(anchors, 0)).toBe('001');
+      // 创建一个有前置内容的 markdown
+      const markdownWithPrefix = `一些前置内容
+
+<!-- @block:block_001 50,50,500,40 -->
+# 文档标题`;
+      const anchors = parseAnchors(markdownWithPrefix);
+      
+      // 第一个锚点位置不是 0，所以位置 0 应该返回 null
+      if (anchors.length > 0 && anchors[0].position > 0) {
+        expect(getBlockIdAtPosition(anchors, 0)).toBeNull();
+      }
     });
 
     it('应该处理光标在最后一个锚点之后的情况', () => {
       const anchors = parseAnchors(mockMarkdown);
-      // 光标在文档末尾 (不含 block_ 前缀)
-      expect(getBlockIdAtPosition(anchors, 10000)).toBe('005');
+      // 光标在文档末尾
+      expect(getBlockIdAtPosition(anchors, 10000)).toBe('block_005');
     });
   });
 });

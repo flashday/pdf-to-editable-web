@@ -43,14 +43,15 @@ function generateLargeBlockSet(count: number) {
   return blocks;
 }
 
-// 生成大量锚点的 Markdown
+// 生成大量锚点的 Markdown（使用 V2 新格式）
 function generateLargeMarkdown(count: number) {
   let markdown = '';
   
   for (let i = 0; i < count; i++) {
     const blockId = `block_${String(i + 1).padStart(3, '0')}`;
     const y = 50 + i * 100;
-    markdown += `<div id="${blockId}" data-coords="50,${y},500,80" style="display:none;"></div>\n`;
+    // 使用新的统一锚点格式 <!-- @block:block_xxx x,y,width,height -->
+    markdown += `<!-- @block:${blockId} 50,${y},500,80 -->\n`;
     
     if (i % 5 === 0) {
       markdown += `# 标题 ${i + 1}\n\n`;
@@ -219,8 +220,8 @@ describe('E2E: 大文档性能测试', () => {
       const anchors = parseAnchors(largeMarkdown);
 
       const lastBlockId = getBlockIdAtPosition(anchors, 1000000);
-      // blockId 不包含 block_ 前缀
-      expect(lastBlockId).toBe(`${String(BLOCK_COUNT).padStart(3, '0')}`);
+      // 新格式 blockId 包含完整的 block_xxx
+      expect(lastBlockId).toBe(`block_${String(BLOCK_COUNT).padStart(3, '0')}`);
     });
   });
 

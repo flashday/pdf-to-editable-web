@@ -13,6 +13,7 @@
   background: #f6f8fa;
   border-bottom: 1px solid #e1e4e8;
   min-height: 44px;
+  box-sizing: border-box;
 }
 
 .title {

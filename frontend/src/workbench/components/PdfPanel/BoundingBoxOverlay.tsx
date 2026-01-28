@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { LayoutBlock } from '../../stores/types';
 import { useVirtualizedBlocks } from '../../hooks/useVirtualizedBlocks';
 import styles from './BoundingBoxOverlay.module.css';
@@ -7,8 +7,8 @@ interface BoundingBoxOverlayProps {
   blocks: LayoutBlock[];
   activeBlockId: string | null;
   hoveredBlockId: string | null;
-  imageWidth: number;
-  imageHeight: number;
+  imageWidth: number;      // 现在等于 OCR 图像宽度
+  imageHeight: number;     // 现在等于 OCR 图像高度
   zoomLevel: number;
   onBlockClick: (blockId: string) => void;
   onBlockHover: (blockId: string | null) => void;
@@ -18,9 +18,7 @@ interface BoundingBoxOverlayProps {
   /** 父容器尺寸（用于虚拟渲染） */
   containerWidth?: number;
   containerHeight?: number;
-  /** OCR 坐标基于的原始 PNG 图像尺寸（用于坐标转换） */
-  ocrImageWidth?: number;
-  ocrImageHeight?: number;
+  // 移除: ocrImageWidth, ocrImageHeight - 不再需要坐标转换
 }
 
 // 置信度颜色映射
@@ -76,41 +74,12 @@ const BoundingBoxOverlay: React.FC<BoundingBoxOverlayProps> = ({
   scrollLeft = 0,
   containerWidth = 0,
   containerHeight = 0,
-  ocrImageWidth = 0,
-  ocrImageHeight = 0,
 }) => {
   const [tooltipBlock, setTooltipBlock] = useState<LayoutBlock | null>(null);
   const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
 
+  // 简化后的缩放计算：仅应用 zoomLevel 缩放因子
   const scale = zoomLevel / 100;
-
-  // 计算 OCR 坐标到 PDF 坐标的缩放因子
-  // OCR 坐标是基于 PNG 图像的，PDF 坐标是基于 PDF 页面的
-  const coordScaleX = useMemo(() => {
-    if (ocrImageWidth > 0 && imageWidth > 0) {
-      return imageWidth / ocrImageWidth;
-    }
-    return 1;
-  }, [imageWidth, ocrImageWidth]);
-
-  const coordScaleY = useMemo(() => {
-    if (ocrImageHeight > 0 && imageHeight > 0) {
-      return imageHeight / ocrImageHeight;
-    }
-    return 1;
-  }, [imageHeight, ocrImageHeight]);
-
-  // 调试日志
-  useEffect(() => {
-    if (ocrImageWidth > 0 && imageWidth > 0) {
-      console.log('BoundingBoxOverlay: 坐标转换参数', {
-        ocrImageSize: `${ocrImageWidth}x${ocrImageHeight}`,
-        pdfPageSize: `${imageWidth}x${imageHeight}`,
-        coordScale: `${coordScaleX.toFixed(3)}x${coordScaleY.toFixed(3)}`,
-        zoomScale: scale
-      });
-    }
-  }, [ocrImageWidth, ocrImageHeight, imageWidth, imageHeight, coordScaleX, coordScaleY, scale]);
 
   // 使用虚拟渲染 Hook
   const { visibleBlocks, updateViewport, isVirtualized, totalCount, visibleCount } = useVirtualizedBlocks({
@@ -173,11 +142,8 @@ const BoundingBoxOverlay: React.FC<BoundingBoxOverlayProps> = ({
         const isHovered = block.id === hoveredBlockId;
         const isLowConfidence = block.confidence < 0.8;
 
-        // 应用坐标转换：OCR 坐标 -> PDF 坐标
-        const transformedX = block.bbox.x * coordScaleX;
-        const transformedY = block.bbox.y * coordScaleY;
-        const transformedWidth = block.bbox.width * coordScaleX;
-        const transformedHeight = block.bbox.height * coordScaleY;
+        // 简化后的坐标计算：直接使用 OCR 坐标 * scale
+        // 不再需要 coordScaleX/coordScaleY 转换
 
         return (
           <div
@@ -189,10 +155,10 @@ const BoundingBoxOverlay: React.FC<BoundingBoxOverlayProps> = ({
               ${isLowConfidence ? styles.lowConfidence : ''}
             `}
             style={{
-              left: transformedX * scale,
-              top: transformedY * scale,
-              width: transformedWidth * scale,
-              height: transformedHeight * scale,
+              left: block.bbox.x * scale,
+              top: block.bbox.y * scale,
+              width: block.bbox.width * scale,
+              height: block.bbox.height * scale,
               backgroundColor: getConfidenceColor(block.confidence),
               borderColor: isActive 
                 ? '#007bff' 
@@ -246,13 +212,13 @@ const BoundingBoxOverlay: React.FC<BoundingBoxOverlayProps> = ({
             <div className={styles.tooltipRow}>
               <span>位置:</span>
               <span>
-                ({Math.round(tooltipBlock.bbox.x * coordScaleX)}, {Math.round(tooltipBlock.bbox.y * coordScaleY)})
+                ({Math.round(tooltipBlock.bbox.x)}, {Math.round(tooltipBlock.bbox.y)})
               </span>
             </div>
             <div className={styles.tooltipRow}>
               <span>尺寸:</span>
               <span>
-                {Math.round(tooltipBlock.bbox.width * coordScaleX)} × {Math.round(tooltipBlock.bbox.height * coordScaleY)}
+                {Math.round(tooltipBlock.bbox.width)} × {Math.round(tooltipBlock.bbox.height)}
               </span>
             </div>
           </div>

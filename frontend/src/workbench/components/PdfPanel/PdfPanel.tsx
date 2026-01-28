@@ -1,16 +1,23 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { Document, Page, pdfjs } from 'react-pdf';
-import 'react-pdf/dist/Page/AnnotationLayer.css';
-import 'react-pdf/dist/Page/TextLayer.css';
+import React, { useState, useRef, useCallback, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { useWorkbenchStore } from '../../stores/workbenchStore';
 import BoundingBoxOverlay from './BoundingBoxOverlay';
 import ZoomControls from './ZoomControls';
 import styles from './PdfPanel.module.css';
 
-// 设置 PDF.js worker
-pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+// V2 优化：移除 react-pdf 依赖，直接使用 OCR 生成的 PNG 图片
+// 这消除了 PDF.js worker 加载延迟和坐标转换复杂性
 
-const PdfPanel: React.FC = () => {
+export interface PdfPanelRef {
+  /** 获取滚动容器元素 */
+  getScrollContainer: () => HTMLDivElement | null;
+}
+
+export interface PdfPanelProps {
+  /** Block 点击回调 */
+  onBlockClick?: (blockId: string) => void;
+}
+
+const PdfPanel = forwardRef<PdfPanelRef, PdfPanelProps>(({ onBlockClick }, ref) => {
   const { 
     jobId, 
     layoutBlocks, 
@@ -20,125 +27,60 @@ const PdfPanel: React.FC = () => {
     hoveredBlockId,
     setActiveBlockId,
     setHoveredBlockId,
-    isLoading,
-    imageWidth: ocrImageWidth,  // OCR 坐标基于的 PNG 图像尺寸
-    imageHeight: ocrImageHeight
+    isLoading
   } = useWorkbenchStore();
 
-  const [numPages, setNumPages] = useState<number>(0);
-  const [pageNumber, setPageNumber] = useState<number>(1);
-  const [pdfLoaded, setPdfLoaded] = useState(false);
-  const [pdfError, setPdfError] = useState<string | null>(null);
-  const [pageDimensions, setPageDimensions] = useState({ width: 0, height: 0 });
+  // V2 优化：移除 numPages, pageNumber, pdfUrl, fileType 状态
+  // 统一使用图片模式，简化状态管理
+  const [imageLoaded, setImageLoaded] = useState(false);
+  const [imageError, setImageError] = useState<string | null>(null);
+  const [imageDimensions, setImageDimensions] = useState({ width: 0, height: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [scrollPosition, setScrollPosition] = useState({ x: 0, y: 0 });
   const [scrollState, setScrollState] = useState({ top: 0, left: 0 });
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
-  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
-  const [fileType, setFileType] = useState<'pdf' | 'image' | null>(null);
-  const [imageUrl, setImageUrl] = useState<string | null>(null);
   
   const containerRef = useRef<HTMLDivElement>(null);
-  const pageRef = useRef<HTMLDivElement>(null);
 
-  // 检测文件类型并设置 URL
+  // 暴露滚动容器给父组件（用于同步滚动）
+  useImperativeHandle(ref, () => ({
+    getScrollContainer: () => containerRef.current
+  }), []);
+
+  // V2 优化：直接构建图片 URL，无需文件类型检测
+  const imageUrl = jobId ? `/api/convert/${jobId}/image?t=${Date.now()}` : null;
+
+  // 重置状态当 jobId 变化
   useEffect(() => {
-    if (!jobId) return;
-    
-    const checkFileType = async () => {
-      try {
-        // 先尝试获取原始文件信息
-        const response = await fetch(`/api/convert/${jobId}/original-file`, {
-          method: 'HEAD'
-        });
-        
-        const contentType = response.headers.get('Content-Type') || '';
-        console.log('PdfPanel: 文件类型检测', contentType);
-        
-        if (contentType.includes('pdf')) {
-          setFileType('pdf');
-          setPdfUrl(`/api/convert/${jobId}/original-file`);
-          console.log('PdfPanel: 使用 PDF 渲染模式');
-        } else {
-          // 如果不是 PDF，回退到图片模式
-          setFileType('image');
-          setImageUrl(`/api/convert/${jobId}/image?t=${Date.now()}`);
-          console.log('PdfPanel: 使用图片渲染模式');
-        }
-      } catch (error) {
-        console.error('PdfPanel: 文件类型检测失败，回退到图片模式', error);
-        setFileType('image');
-        setImageUrl(`/api/convert/${jobId}/image?t=${Date.now()}`);
-      }
-    };
-    
-    checkFileType();
-    
-    return () => {
-      setPdfUrl(null);
-      setImageUrl(null);
-      setPdfLoaded(false);
-      setPdfError(null);
-    };
+    setImageLoaded(false);
+    setImageError(null);
+    setImageDimensions({ width: 0, height: 0 });
   }, [jobId]);
 
-  // PDF 加载成功回调
-  const onDocumentLoadSuccess = useCallback(({ numPages }: { numPages: number }) => {
-    console.log('PdfPanel: PDF 加载成功，共', numPages, '页');
-    setNumPages(numPages);
-    setPdfLoaded(true);
-    setPdfError(null);
-  }, []);
-
-  // PDF 加载失败回调
-  const onDocumentLoadError = useCallback((error: Error) => {
-    console.error('PdfPanel: PDF 加载失败', error);
-    setPdfError(`PDF 加载失败: ${error.message}`);
-    // 回退到图片模式
-    setFileType('image');
-    setImageUrl(`/api/convert/${jobId}/image?t=${Date.now()}`);
-  }, [jobId]);
-
-  // PDF 页面渲染成功回调
-  const onPageLoadSuccess = useCallback((page: any) => {
-    const { width, height } = page;
-    console.log('PdfPanel: PDF 页面渲染成功', width, 'x', height);
-    setPageDimensions({ width, height });
-  }, []);
-
-  // 图片加载成功回调（回退模式）
+  // 图片加载成功回调
   const handleImageLoad = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
     const img = e.currentTarget;
     console.log('PdfPanel: 图片加载成功', img.naturalWidth, 'x', img.naturalHeight);
-    setPageDimensions({ width: img.naturalWidth, height: img.naturalHeight });
-    setPdfLoaded(true);
+    setImageDimensions({ width: img.naturalWidth, height: img.naturalHeight });
+    setImageLoaded(true);
+    setImageError(null);
   }, []);
 
   // 图片加载失败回调
   const handleImageError = useCallback(() => {
     console.error('PdfPanel: 图片加载失败');
-    setPdfError('无法加载文档预览');
+    setImageError('无法加载文档预览');
+    setImageLoaded(false);
   }, []);
 
   // 重试加载
   const handleRetry = useCallback(() => {
-    setPdfError(null);
-    setPdfLoaded(false);
-    
-    if (jobId) {
-      // 重新检测文件类型
-      setFileType(null);
-      setPdfUrl(null);
-      setImageUrl(null);
-      
-      // 触发重新加载
-      setTimeout(() => {
-        setFileType('pdf');
-        setPdfUrl(`/api/convert/${jobId}/original-file?t=${Date.now()}`);
-      }, 100);
-    }
-  }, [jobId]);
+    setImageError(null);
+    setImageLoaded(false);
+    // 通过更新 key 强制重新加载图片
+    setImageDimensions({ width: 0, height: 0 });
+  }, []);
 
   // 拖拽开始
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
@@ -184,7 +126,11 @@ const PdfPanel: React.FC = () => {
   // Block 点击
   const handleBlockClick = useCallback((blockId: string) => {
     setActiveBlockId(blockId);
-  }, [setActiveBlockId]);
+    // 通知父组件（用于同步滚动）
+    if (onBlockClick) {
+      onBlockClick(blockId);
+    }
+  }, [setActiveBlockId, onBlockClick]);
 
   // Block 悬停
   const handleBlockHover = useCallback((blockId: string | null) => {
@@ -238,28 +184,26 @@ const PdfPanel: React.FC = () => {
 
   // 计算缩放后的尺寸
   const scale = zoomLevel / 100;
-  const scaledWidth = pageDimensions.width * scale;
-  const scaledHeight = pageDimensions.height * scale;
+  const scaledWidth = imageDimensions.width * scale;
+  const scaledHeight = imageDimensions.height * scale;
 
   if (isLoading) {
     return (
       <div className={styles.container}>
         <div className={styles.loading}>
           <div className={styles.spinner}></div>
-          <p>加载 PDF 预览...</p>
+          <p>加载预览...</p>
         </div>
       </div>
     );
   }
 
-
   return (
     <div className={styles.container}>
       <div className={styles.header}>
-        <span className={styles.title}>PDF 预览</span>
+        <span className={styles.title}>文档预览</span>
         <span className={styles.blockCount}>
           {layoutBlocks.length} 个区块
-          {numPages > 1 && ` · 第 ${pageNumber}/${numPages} 页`}
         </span>
         <ZoomControls 
           zoomLevel={zoomLevel} 
@@ -276,95 +220,49 @@ const PdfPanel: React.FC = () => {
         onMouseLeave={handleMouseLeave}
         onWheel={handleWheel}
       >
-        {pdfError ? (
+        {imageError ? (
           <div className={styles.error}>
             <span className={styles.errorIcon}>⚠</span>
-            <p>{pdfError}</p>
+            <p>{imageError}</p>
             <button onClick={handleRetry}>重试</button>
           </div>
-        ) : fileType === 'pdf' && pdfUrl ? (
-          <div 
-            ref={pageRef}
-            className={styles.imageWrapper}
-            style={{
-              width: pdfLoaded ? scaledWidth : 'auto',
-              height: pdfLoaded ? scaledHeight : 'auto',
-            }}
-          >
-            <Document
-              file={pdfUrl}
-              onLoadSuccess={onDocumentLoadSuccess}
-              onLoadError={onDocumentLoadError}
-              loading={
-                <div className={styles.imagePlaceholder}>
-                  <div className={styles.spinner}></div>
-                  <p>正在加载 PDF...</p>
-                </div>
-              }
-            >
-              <Page
-                pageNumber={pageNumber}
-                scale={scale}
-                onLoadSuccess={onPageLoadSuccess}
-                renderTextLayer={false}
-                renderAnnotationLayer={false}
-              />
-            </Document>
-            
-            {pdfLoaded && pageDimensions.width > 0 && (
-              <BoundingBoxOverlay
-                blocks={layoutBlocks}
-                activeBlockId={activeBlockId}
-                hoveredBlockId={hoveredBlockId}
-                imageWidth={pageDimensions.width}
-                imageHeight={pageDimensions.height}
-                zoomLevel={zoomLevel}
-                onBlockClick={handleBlockClick}
-                onBlockHover={handleBlockHover}
-                scrollTop={scrollState.top}
-                scrollLeft={scrollState.left}
-                containerWidth={containerSize.width}
-                containerHeight={containerSize.height}
-                ocrImageWidth={ocrImageWidth}
-                ocrImageHeight={ocrImageHeight}
-              />
-            )}
-          </div>
-        ) : fileType === 'image' && imageUrl ? (
+        ) : imageUrl ? (
           <div 
             className={styles.imageWrapper}
             style={{
-              width: pdfLoaded ? scaledWidth : 'auto',
-              height: pdfLoaded ? scaledHeight : 'auto',
+              width: imageLoaded ? scaledWidth : 'auto',
+              height: imageLoaded ? scaledHeight : 'auto',
             }}
           >
             <img
+              key={jobId} // 强制在 jobId 变化时重新加载
               src={imageUrl}
               alt="文档预览"
               className={styles.image}
               onLoad={handleImageLoad}
               onError={handleImageError}
               style={{
-                width: pdfLoaded ? scaledWidth : 'auto',
-                height: pdfLoaded ? scaledHeight : 'auto',
-                display: pdfLoaded ? 'block' : 'none',
+                width: imageLoaded ? scaledWidth : 'auto',
+                height: imageLoaded ? scaledHeight : 'auto',
+                display: imageLoaded ? 'block' : 'none',
               }}
             />
             
-            {!pdfLoaded && (
+            {!imageLoaded && (
               <div className={styles.imagePlaceholder}>
                 <div className={styles.spinner}></div>
                 <p>正在加载图片...</p>
               </div>
             )}
             
-            {pdfLoaded && pageDimensions.width > 0 && (
+            {/* V2 优化：BoundingBoxOverlay 直接使用图片尺寸，无需 ocrImageWidth/ocrImageHeight */}
+            {imageLoaded && imageDimensions.width > 0 && (
               <BoundingBoxOverlay
                 blocks={layoutBlocks}
                 activeBlockId={activeBlockId}
                 hoveredBlockId={hoveredBlockId}
-                imageWidth={pageDimensions.width}
-                imageHeight={pageDimensions.height}
+                imageWidth={imageDimensions.width}
+                imageHeight={imageDimensions.height}
                 zoomLevel={zoomLevel}
                 onBlockClick={handleBlockClick}
                 onBlockHover={handleBlockHover}
@@ -372,15 +270,12 @@ const PdfPanel: React.FC = () => {
                 scrollLeft={scrollState.left}
                 containerWidth={containerSize.width}
                 containerHeight={containerSize.height}
-                ocrImageWidth={ocrImageWidth}
-                ocrImageHeight={ocrImageHeight}
               />
             )}
           </div>
         ) : (
           <div className={styles.imagePlaceholder}>
-            <div className={styles.spinner}></div>
-            <p>正在检测文件类型...</p>
+            <p>请选择一个任务以预览文档</p>
           </div>
         )}
       </div>
@@ -389,3 +284,5 @@ const PdfPanel: React.FC = () => {
 };
 
 export default PdfPanel;
+
+export type { PdfPanelRef, PdfPanelProps };

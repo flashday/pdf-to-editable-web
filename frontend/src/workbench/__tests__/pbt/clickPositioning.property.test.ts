@@ -8,8 +8,8 @@ import { describe, it, expect } from 'vitest';
 import * as fc from 'fast-check';
 import { parseAnchors, getBlockIdAtPosition } from '../../utils/anchorParser';
 
-// 生成有效的 Block ID
-const blockIdArb = fc.stringMatching(/^[0-9]{3,6}$/);
+// 生成有效的 Block ID（使用新格式 block_xxx）
+const blockIdArb = fc.stringMatching(/^block_[0-9]{3,6}$/);
 
 // 生成有效的坐标
 const coordArb = fc.record({
@@ -19,9 +19,10 @@ const coordArb = fc.record({
   height: fc.integer({ min: 10, max: 500 }),
 });
 
-// 生成带锚点的 Markdown 段落
+// 生成带锚点的 Markdown 段落（使用 V2 新格式）
 function generateMarkdownParagraph(blockId: string, coords: { x: number; y: number; width: number; height: number }, content: string): string {
-  return `<div id="block_${blockId}" data-coords="${coords.x},${coords.y},${coords.width},${coords.height}" style="display:none;"></div>\n${content}\n\n`;
+  // 使用新的统一锚点格式 <!-- @block:block_xxx x,y,width,height -->
+  return `<!-- @block:${blockId} ${coords.x},${coords.y},${coords.width},${coords.height} -->\n${content}\n\n`;
 }
 
 describe('PBT-2: 点击定位准确性', () => {

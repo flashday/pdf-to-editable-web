@@ -1,15 +1,22 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { useWorkbenchStore } from '../../stores/workbenchStore';
 import VditorWrapper from './VditorWrapper';
 import styles from './EditorPanel.module.css';
 
 type EditorMode = 'wysiwyg' | 'sv' | 'ir';
 
-interface EditorPanelProps {
+export interface EditorPanelRef {
+  /** 获取滚动容器元素 */
+  getScrollContainer: () => HTMLDivElement | null;
+  /** 滚动到指定锚点 */
+  scrollToAnchor: (blockId: string) => void;
+}
+
+export interface EditorPanelProps {
   onCursorBlockChange?: (blockId: string | null) => void;
 }
 
-const EditorPanel: React.FC<EditorPanelProps> = ({ onCursorBlockChange }) => {
+const EditorPanel = forwardRef<EditorPanelRef, EditorPanelProps>(({ onCursorBlockChange }, ref) => {
   const { 
     markdownContent, 
     setMarkdownContent, 
@@ -22,6 +29,17 @@ const EditorPanel: React.FC<EditorPanelProps> = ({ onCursorBlockChange }) => {
 
   const [editorMode, setEditorMode] = useState<EditorMode>('wysiwyg');
   const vditorRef = useRef<{ scrollToAnchor: (id: string) => void } | null>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  // 暴露滚动容器和方法给父组件（用于同步滚动）
+  useImperativeHandle(ref, () => ({
+    getScrollContainer: () => contentRef.current,
+    scrollToAnchor: (blockId: string) => {
+      if (vditorRef.current) {
+        vditorRef.current.scrollToAnchor(blockId);
+      }
+    }
+  }), []);
 
   // 处理内容变更
   const handleContentChange = useCallback((content: string) => {
@@ -121,7 +139,7 @@ const EditorPanel: React.FC<EditorPanelProps> = ({ onCursorBlockChange }) => {
           </button>
         </div>
       </div>
-      <div className={styles.content}>
+      <div ref={contentRef} className={styles.content}>
         <VditorWrapper
           content={markdownContent}
           onChange={handleContentChange}

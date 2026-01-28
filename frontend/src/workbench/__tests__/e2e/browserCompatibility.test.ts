@@ -40,10 +40,11 @@ describe('E2E: 浏览器兼容性测试', () => {
       },
     });
 
+    // 使用 V2 新格式锚点
     vi.mocked(api.getMarkdownWithAnchors).mockResolvedValue({
       success: true,
       data: {
-        markdown: '<div id="block_001" data-coords="0,0,100,50" style="display:none;"></div>\n# Test',
+        markdown: '<!-- @block:block_001 0,0,100,50 -->\n# Test',
         anchors: [{ blockId: 'block_001', position: 0 }],
       },
     });
@@ -204,23 +205,25 @@ describe('E2E: 浏览器兼容性测试', () => {
   });
 
   describe('正则表达式兼容性', () => {
-    it('应该正确解析锚点正则', () => {
-      const markdown = '<div id="block_001" data-coords="100,200,300,400" style="display:none;"></div>';
+    it('应该正确解析新格式锚点正则', () => {
+      // 使用 V2 新格式
+      const markdown = '<!-- @block:block_001 100,200,300,400 -->';
       const anchors = parseAnchors(markdown);
       
       expect(anchors).toHaveLength(1);
-      // blockId 不包含 block_ 前缀
-      expect(anchors[0].blockId).toBe('001');
+      // 新格式 blockId 包含完整的 block_xxx
+      expect(anchors[0].blockId).toBe('block_001');
       expect(anchors[0].coords).toEqual({ x: 100, y: 200, width: 300, height: 400 });
     });
 
     it('应该处理特殊字符', () => {
-      const markdown = '<div id="block_abc123" data-coords="0,0,100,100" style="display:none;"></div>';
+      // 使用 V2 新格式
+      const markdown = '<!-- @block:block_abc123 0,0,100,100 -->';
       const anchors = parseAnchors(markdown);
       
       expect(anchors).toHaveLength(1);
-      // blockId 不包含 block_ 前缀
-      expect(anchors[0].blockId).toBe('abc123');
+      // 新格式 blockId 包含完整的 block_xxx
+      expect(anchors[0].blockId).toBe('block_abc123');
     });
   });
 

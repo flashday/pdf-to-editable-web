@@ -1,11 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { findNearestAnchor } from '../hooks/useSyncScroll';
+import { AnchorInfo } from '../stores/types';
 
 // Mock workbenchStore
 vi.mock('../stores/workbenchStore', () => ({
   useWorkbenchStore: vi.fn(() => ({
     syncScrollEnabled: true,
     toggleSyncScroll: vi.fn(),
-    imageHeight: 1000
+    imageHeight: 1000,
+    zoomLevel: 100
   }))
 }));
 
@@ -181,5 +184,85 @@ describe('useSyncScroll', () => {
       expect(getScrollRatio(0, 0, 0)).toBe(0);
       expect(getScrollRatio(100, 0, 0)).toBe(0);
     });
+  });
+});
+
+
+describe('findNearestAnchor', () => {
+  const createAnchor = (blockId: string, position: number): AnchorInfo => ({
+    blockId,
+    coords: { x: 0, y: 0, width: 100, height: 50 },
+    position
+  });
+
+  it('应该返回 null 当锚点列表为空', () => {
+    expect(findNearestAnchor([], 100)).toBeNull();
+  });
+
+  it('应该返回 null 当光标在所有锚点之前', () => {
+    const anchors = [
+      createAnchor('block_001', 100),
+      createAnchor('block_002', 200),
+    ];
+    expect(findNearestAnchor(anchors, 50)).toBeNull();
+  });
+
+  it('应该返回第一个锚点当光标正好在第一个锚点位置', () => {
+    const anchors = [
+      createAnchor('block_001', 100),
+      createAnchor('block_002', 200),
+    ];
+    const result = findNearestAnchor(anchors, 100);
+    expect(result?.blockId).toBe('block_001');
+  });
+
+  it('应该返回最近的锚点当光标在两个锚点之间', () => {
+    const anchors = [
+      createAnchor('block_001', 100),
+      createAnchor('block_002', 200),
+      createAnchor('block_003', 300),
+    ];
+    const result = findNearestAnchor(anchors, 250);
+    expect(result?.blockId).toBe('block_002');
+  });
+
+  it('应该返回最后一个锚点当光标在所有锚点之后', () => {
+    const anchors = [
+      createAnchor('block_001', 100),
+      createAnchor('block_002', 200),
+    ];
+    const result = findNearestAnchor(anchors, 500);
+    expect(result?.blockId).toBe('block_002');
+  });
+
+  it('应该正确处理单个锚点', () => {
+    const anchors = [createAnchor('block_001', 100)];
+    
+    // 光标在锚点之前
+    expect(findNearestAnchor(anchors, 50)).toBeNull();
+    
+    // 光标在锚点位置
+    expect(findNearestAnchor(anchors, 100)?.blockId).toBe('block_001');
+    
+    // 光标在锚点之后
+    expect(findNearestAnchor(anchors, 200)?.blockId).toBe('block_001');
+  });
+
+  it('应该处理 null 或 undefined 输入', () => {
+    expect(findNearestAnchor(null as unknown as AnchorInfo[], 100)).toBeNull();
+    expect(findNearestAnchor(undefined as unknown as AnchorInfo[], 100)).toBeNull();
+  });
+
+  it('应该返回位置小于等于光标位置的最后一个锚点', () => {
+    const anchors = [
+      createAnchor('block_001', 0),
+      createAnchor('block_002', 100),
+      createAnchor('block_003', 100), // 相同位置
+      createAnchor('block_004', 200),
+    ];
+    
+    // 当有多个相同位置的锚点时，返回最后一个
+    const result = findNearestAnchor(anchors, 100);
+    expect(result?.blockId).toBe('block_003');
   });
 });

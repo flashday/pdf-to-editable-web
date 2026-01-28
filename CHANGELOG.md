@@ -8,6 +8,133 @@
 
 ---
 
+## [2026-01-29] - 精准作业台 V2 优化
+
+### 重构：统一锚点格式
+
+**背景**：精准作业台使用锚点将 Markdown 内容与 OCR 区域关联，旧版本存在多种锚点格式（div 格式、无前缀注释格式），导致解析复杂且容易出错。
+
+**修改文件**：
+- `backend/api/workbench_routes.py`
+- `frontend/src/workbench/utils/anchorParser.ts`
+
+**实现内容**：
+
+1. **统一锚点格式**
+   - 新格式：`<!-- @block:block_xxx x,y,width,height -->`
+   - 移除旧的 div 格式锚点生成逻辑
+   - 移除对旧格式（div 格式和无前缀注释格式）的解析支持
+   - 更新 `generateAnchor` 和 `generateAnchorComment` 函数
+
+2. **属性测试覆盖**
+   - Property 3: 锚点解析 Round-Trip
+   - Property 6: 锚点生成格式正确性
+   - Property 8: 旧格式锚点不被解析
+
+---
+
+### 重构：简化预览面板（移除 react-pdf）
+
+**背景**：原方案使用 react-pdf 直接渲染 PDF 文件，但存在坐标转换复杂、依赖体积大等问题。改为统一使用后端生成的 PNG 图片。
+
+**修改文件**：
+- `frontend/src/workbench/components/PdfPanel/PdfPanel.tsx`
+- `frontend/src/workbench/components/PdfPanel/BoundingBoxOverlay.tsx`
+- `frontend/src/workbench/stores/types.ts`
+- `frontend/package.json`
+
+**实现内容**：
+
+1. **移除 react-pdf 依赖**
+   - 从 `package.json` 移除 `react-pdf` 和 `pdfjs-dist`
+   - 移除 PDF.js worker 配置
+   - 减少约 2MB 依赖体积
+
+2. **简化 PdfPanel 组件**
+   - 移除 `fileType` 检测逻辑
+   - 移除 `pdfUrl` 状态和 PDF 相关回调
+   - 统一使用 `<img>` 渲染 PNG 图片
+
+3. **简化 BoundingBoxOverlay 组件**
+   - 移除 `ocrImageWidth`, `ocrImageHeight` props
+   - 移除 `coordScaleX`, `coordScaleY` 计算逻辑
+   - 直接使用 `block.bbox * scale` 计算位置
+   - 坐标计算更简单、更可靠
+
+4. **属性测试覆盖**
+   - Property 1: Bounding Box 坐标直接缩放
+
+---
+
+### 新增：基于锚点的同步滚动
+
+**背景**：编辑器和预览面板需要同步滚动，旧方案使用比例同步，精度不够。新方案基于锚点实现精确同步。
+
+**修改文件**：
+- `frontend/src/workbench/hooks/useSyncScroll.ts`
+- `frontend/src/workbench/App.tsx`
+
+**实现内容**：
+
+1. **重构 useSyncScroll Hook**
+   - 添加 `anchors` 和 `layoutBlocks` 参数
+   - 实现 `findNearestAnchor` 函数（基于光标位置查找最近锚点）
+   - 添加 `syncToBlock` 和 `syncToAnchor` 方法
+   - 保留比例同步作为回退方案
+
+2. **属性测试覆盖**
+   - Property 2: 最近锚点查找算法
+
+---
+
+### 新增：HTML 表格直接渲染
+
+**背景**：复杂表格（含 colspan/rowspan）转换为 Markdown 会丢失结构，需要保留原始 HTML。
+
+**修改文件**：
+- `backend/api/workbench_routes.py`
+- `frontend/src/workbench/components/EditorPanel/VditorWrapper.tsx`
+- `backend/tests/test_table_detection.py`
+
+**实现内容**：
+
+1. **后端复杂表格检测**
+   - 添加 `_is_complex_table(html_content)` 函数
+   - 检测 `colspan > 1` 或 `rowspan > 1`
+   - 复杂表格输出 HTML 格式，简单表格输出 Markdown 格式
+
+2. **前端 Vditor 配置**
+   - 配置 `preview.markdown.sanitize` 白名单
+   - 允许 `<table>`, `<tr>`, `<td>`, `<th>` 等 HTML 标签
+
+3. **属性测试覆盖**
+   - Property 4: 复杂表格检测与 HTML 保留
+   - Property 5: 简单表格 Markdown 输出
+
+---
+
+### 新增：锚点保存完整性验证
+
+**修改文件**：
+- `frontend/src/workbench/__tests__/pbt/anchorSaveIntegrity.property.test.ts`
+
+**实现内容**：
+
+1. **Property 7: 锚点保存完整性 Round-Trip**
+   - 验证锚点在保存/加载过程中不丢失
+   - 验证锚点坐标信息完整保留
+   - 验证 block ID 映射正确
+
+---
+
+### 测试结果
+
+- 前端测试：263 passed ✅
+- 后端测试：13 passed ✅
+- 属性测试：8 个 Property 全部通过 ✅
+
+---
+
 ## [2026-01-28] - 精准作业台 PDF 预览与坐标对齐修复
 
 ### 新增：react-pdf 集成

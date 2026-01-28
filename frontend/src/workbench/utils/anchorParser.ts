@@ -1,21 +1,17 @@
 /**
  * 锚点解析工具
  * 用于解析 Markdown 中的 Block ID 锚点，实现 PDF 与编辑器的双向定位
+ * 
+ * V2 优化：统一使用新的锚点格式 <!-- @block:block_xxx x,y,width,height -->
  */
 
 import { AnchorInfo } from '../stores/types';
 
 /**
- * 锚点正则表达式
- * 匹配格式: <div id="block_xxx" data-coords="x,y,w,h" style="display:none;"></div>
+ * 统一锚点正则表达式（V2 新格式）
+ * 匹配格式: <!-- @block:block_xxx x,y,width,height -->
  */
-const ANCHOR_REGEX = /<div\s+id="block_([^"]+)"\s+data-coords="(\d+),(\d+),(\d+),(\d+)"[^>]*><\/div>/g;
-
-/**
- * HTML 注释格式锚点正则（备用格式）
- * 匹配格式: <!-- block:xxx coords:x,y,w,h -->
- */
-const COMMENT_ANCHOR_REGEX = /<!--\s*block:([^\s]+)\s+coords:(\d+),(\d+),(\d+),(\d+)\s*-->/g;
+const ANCHOR_REGEX = /<!--\s*@block:(\S+)\s+(\d+),(\d+),(\d+),(\d+)\s*-->/g;
 
 /**
  * 解析 Markdown 中的所有锚点
@@ -25,10 +21,10 @@ const COMMENT_ANCHOR_REGEX = /<!--\s*block:([^\s]+)\s+coords:(\d+),(\d+),(\d+),(
 export function parseAnchors(markdown: string): AnchorInfo[] {
   const anchors: AnchorInfo[] = [];
   
-  // 尝试解析 div 格式锚点
+  // 使用新的统一格式解析锚点
   let match;
-  const divRegex = new RegExp(ANCHOR_REGEX.source, 'g');
-  while ((match = divRegex.exec(markdown)) !== null) {
+  const regex = new RegExp(ANCHOR_REGEX.source, 'g');
+  while ((match = regex.exec(markdown)) !== null) {
     anchors.push({
       blockId: match[1],
       coords: {
@@ -39,23 +35,6 @@ export function parseAnchors(markdown: string): AnchorInfo[] {
       },
       position: match.index
     });
-  }
-
-  // 如果没有找到 div 格式，尝试解析注释格式
-  if (anchors.length === 0) {
-    const commentRegex = new RegExp(COMMENT_ANCHOR_REGEX.source, 'g');
-    while ((match = commentRegex.exec(markdown)) !== null) {
-      anchors.push({
-        blockId: match[1],
-        coords: {
-          x: parseInt(match[2], 10),
-          y: parseInt(match[3], 10),
-          width: parseInt(match[4], 10),
-          height: parseInt(match[5], 10)
-        },
-        position: match.index
-      });
-    }
   }
 
   // 按位置排序
@@ -112,29 +91,30 @@ export function getPositionByBlockId(anchors: AnchorInfo[], blockId: string): nu
 }
 
 /**
- * 生成锚点 HTML
+ * 生成锚点（V2 统一格式）
  * @param blockId Block ID
  * @param coords 坐标信息
- * @returns 锚点 HTML 字符串
+ * @returns 锚点字符串
  */
-export function generateAnchorHtml(
+export function generateAnchor(
   blockId: string, 
   coords: { x: number; y: number; width: number; height: number }
 ): string {
-  return `<div id="block_${blockId}" data-coords="${coords.x},${coords.y},${coords.width},${coords.height}" style="display:none;"></div>`;
+  return `<!-- @block:${blockId} ${coords.x},${coords.y},${coords.width},${coords.height} -->`;
 }
 
 /**
- * 生成锚点注释（备用格式）
+ * 生成锚点注释（V2 统一格式，与 generateAnchor 相同）
  * @param blockId Block ID
  * @param coords 坐标信息
  * @returns 锚点注释字符串
+ * @deprecated 使用 generateAnchor 代替，此函数保留以保持向后兼容
  */
 export function generateAnchorComment(
   blockId: string,
   coords: { x: number; y: number; width: number; height: number }
 ): string {
-  return `<!-- block:${blockId} coords:${coords.x},${coords.y},${coords.width},${coords.height} -->`;
+  return generateAnchor(blockId, coords);
 }
 
 /**
@@ -145,11 +125,8 @@ export function generateAnchorComment(
 export function removeAnchors(markdown: string): string {
   let result = markdown;
   
-  // 移除 div 格式锚点
+  // 移除新格式锚点
   result = result.replace(new RegExp(ANCHOR_REGEX.source, 'g'), '');
-  
-  // 移除注释格式锚点
-  result = result.replace(new RegExp(COMMENT_ANCHOR_REGEX.source, 'g'), '');
   
   // 清理多余的空行
   result = result.replace(/\n{3,}/g, '\n\n');
@@ -158,12 +135,11 @@ export function removeAnchors(markdown: string): string {
 }
 
 /**
- * 验证锚点格式是否正确
- * @param anchorHtml 锚点 HTML 字符串
+ * 验证锚点格式是否正确（仅验证 V2 新格式）
+ * @param anchorStr 锚点字符串
  * @returns 是否有效
  */
-export function isValidAnchor(anchorHtml: string): boolean {
-  const divMatch = anchorHtml.match(ANCHOR_REGEX);
-  const commentMatch = anchorHtml.match(COMMENT_ANCHOR_REGEX);
-  return !!(divMatch || commentMatch);
+export function isValidAnchor(anchorStr: string): boolean {
+  const regex = new RegExp(ANCHOR_REGEX.source);
+  return regex.test(anchorStr);
 }
